@@ -16,7 +16,7 @@ const YouTubeVideo = ({ videoId, title }: YouTubeVideoProps) => {
 
   return (
     <div className="relative w-full max-w-4xl mx-auto">
-      <div className="relative aspect-video rounded-2xl overflow-hidden bg-gray-900 border border-yellow-400/20">
+      <div className="relative aspect-video rounded-2xl overflow-hidden bg-gray-900 border border-teal-400/20">
         {!isPlaying ? (
           <>
             <img 
@@ -26,15 +26,15 @@ const YouTubeVideo = ({ videoId, title }: YouTubeVideoProps) => {
             />
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center group cursor-pointer"
                  onClick={() => setIsPlaying(true)}>
-              <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 w-20 h-20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-2xl">
-                <Play className="h-8 w-8 text-black ml-1" fill="black" />
+              <div className="bg-gradient-to-r from-teal-500 to-emerald-600 w-20 h-20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-2xl">
+                <Play className="h-8 w-8 text-white ml-1" fill="white" />
               </div>
             </div>
             <div className="absolute top-4 right-4">
               <Button 
                 variant="outline" 
                 size="sm"
-                className="border-yellow-400/50 text-yellow-400 hover:bg-yellow-400 hover:text-black"
+                className="border-teal-400/50 text-teal-400 hover:bg-teal-400 hover:text-white"
                 onClick={(e) => {
                   e.stopPropagation();
                   window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');

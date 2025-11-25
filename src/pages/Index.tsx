@@ -9,6 +9,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   CheckCircle,
   Target,
@@ -29,22 +38,55 @@ import {
   Shield,
   Download,
   Play,
-  ChevronDown,
   ChevronUp,
   Zap,
   Briefcase,
-  Clock,
   Award,
+  FileCheck,
+  Handshake,
+  FileSignature,
+  Globe,
+  Camera,
+  Share2,
+  UserCheck,
+  Scale,
 } from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import DynamicBackground from "@/components/DynamicBackground";
-import InteractiveCard from "@/components/InteractiveCard";
-import YouTubeVideo from "@/components/YouTubeVideo";
-import WhatsAppChat from "@/components/WhatsAppChat";
+import DocumentAnimation from "@/components/DocumentAnimation";
+
+// Mini document animation templates
+const miniDocTemplates = [
+  {
+    title: "Waiver / Release of Liability",
+    category: "⚖️ Core Legal",
+    icon: "FileCheck"
+  },
+  {
+    title: "Service Agreement",
+    category: "⚖️ Core Legal",
+    icon: "Handshake"
+  },
+  {
+    title: "Employment Agreement",
+    category: "⚖️ Core Legal",
+    icon: "Briefcase"
+  },
+  {
+    title: "Independent Contractor",
+    category: "⚖️ Core Legal",
+    icon: "FileSignature"
+  },
+  {
+    title: "Terms & Conditions",
+    category: "⚖️ Core Legal",
+    icon: "Globe"
+  },
+  {
+    title: "Media Release Form",
+    category: "📸 Marketing",
+    icon: "Camera"
+  },
+];
 
 // Pricing Plan Interface
 interface PricingPlan {
@@ -65,10 +107,13 @@ interface PricingPlan {
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState(9 * 60); // 9 minutes in seconds
+  const [showThankYou, setShowThankYou] = useState(false);
   const [monthlyPlan, setMonthlyPlan] = useState<PricingPlan | null>(null);
   const [isLoadingPricing, setIsLoadingPricing] = useState(true);
+  const [showAllTestimonials, setShowAllTestimonials] = useState(false);
+  const [miniDocIndex, setMiniDocIndex] = useState(0);
+  const [isMiniAnimating, setIsMiniAnimating] = useState(false);
+  const [isMiniShuffling, setIsMiniShuffling] = useState(false);
 
   // Fetch pricing plans from API
   const fetchPricingPlans = async () => {
@@ -111,6 +156,37 @@ const Index = () => {
   // Load pricing data on component mount
   useEffect(() => {
     fetchPricingPlans();
+  }, []);
+
+  // Mini document icon mapping
+  const getMiniDocIcon = (iconName: string) => {
+    const iconMap: { [key: string]: JSX.Element } = {
+      FileCheck: <FileCheck className="w-4 h-4 text-teal-600" />,
+      Handshake: <Handshake className="w-4 h-4 text-emerald-600" />,
+      Briefcase: <Briefcase className="w-4 h-4 text-teal-600" />,
+      FileSignature: <FileSignature className="w-4 h-4 text-emerald-600" />,
+      Globe: <Globe className="w-4 h-4 text-teal-600" />,
+      Camera: <Camera className="w-4 h-4 text-emerald-600" />,
+    };
+    return iconMap[iconName] || <FileCheck className="w-4 h-4 text-teal-600" />;
+  };
+
+  // Mini document animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsMiniAnimating(true);
+      setIsMiniShuffling(true);
+      
+      setTimeout(() => {
+        setMiniDocIndex((prev) => (prev + 1) % miniDocTemplates.length);
+        setIsMiniAnimating(false);
+        
+        setTimeout(() => {
+          setIsMiniShuffling(false);
+        }, 100);
+      }, 400);
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   // Check for payment success query param and remove it
@@ -168,6 +244,14 @@ const Index = () => {
     window.open(getCareerProURL(), "_blank");
   };
 
+  // Handle scroll to form section
+  const handleScrollToForm = () => {
+    const formSection = document.getElementById("enter-your-info-form");
+    if (formSection) {
+      formSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   // Handle download clicks with tracking
   const handleDownloadClick = (platform: "android" | "ios") => {
     const utmParams = new URLSearchParams({
@@ -204,19 +288,6 @@ const Index = () => {
       : jobTitleMapping.generic;
   };
 
-  // Countdown timer
-  useEffect(() => {
-    if (timeLeft > 0) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [timeLeft]);
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
   // Simulate payment success for demo
   const handlePayment = () => {
     setShowPaymentSuccess(true);
@@ -225,53 +296,6 @@ const Index = () => {
       behavior: "smooth",
     });
   };
-  const benefits = [
-    {
-      icon: Target,
-      title: "Shortlist Predictor",
-      description:
-        "Know your chances before you apply with AI-powered predictions",
-    },
-    {
-      icon: Brain,
-      title: "AI Mock Interview",
-      description:
-        "Practice & get feedback like a real interview with personalized coaching",
-    },
-    {
-      icon: FileText,
-      title: "Create ATS Friendly Resume",
-      description:
-        "ATS & recruiter friendly resumes in seconds with AI optimization",
-    },
-    {
-      icon: BookOpen,
-      title: "Premium Micro Courses",
-      description:
-        "Upskill with certified courses and exclusive internship opportunities",
-    },
-    {
-      icon: Bell,
-      title: "Live Application Tracking",
-      description: "Get updates on your application within 8 hours of applying",
-    },
-    {
-      icon: Send,
-      title: "1-Click Apply to 1200+ Recruiters",
-      description: "Apply to verified openings with top companies instantly",
-    },
-    {
-      icon: TrendingUp,
-      title: "Weekly Career Insights",
-      description: "Expert analysis and trends delivered directly to your app",
-    },
-    {
-      icon: MessageCircle,
-      title: "Premium WhatsApp Communities",
-      description:
-        "Join exclusive groups with job tips, referrals & career guidance from experts",
-    },
-  ];
 
   // Dynamic job listings based on query params
   const jobListingsMap: {
@@ -543,212 +567,366 @@ const Index = () => {
       : jobListingsMap.generic;
   };
   const jobListings = getDynamicJobListings();
-  const freebies = [
-    {
-      icon: Briefcase,
-      title: "Ultimate Job Seeker Toolkit",
-      description:
-        "Interview questions, resume templates, LinkedIn optimization hacks",
-      value: "₹599",
-      bgColor: "bg-gradient-to-r from-blue-500 to-blue-600",
-    },
-    {
-      icon: Calendar,
-      title: "30-Day Job Application Planner",
-      description:
-        "Strategic planning guide to organize and track your applications",
-      value: "₹499",
-      bgColor: "bg-gradient-to-r from-green-500 to-green-600",
-    },
-    {
-      icon: GraduationCap,
-      title: "Expert Masterclass Replays",
-      description:
-        "3+ sessions on Resume, Interview & LinkedIn from industry experts",
-      value: "₹899",
-      bgColor: "bg-gradient-to-r from-purple-500 to-purple-600",
-    },
-    {
-      icon: MapPin,
-      title: "Career Roadmap for Freshers",
-      description:
-        "Complete guide on what to learn, when to apply, how to grow",
-      value: "₹599",
-      bgColor: "bg-gradient-to-r from-orange-500 to-orange-600",
-    },
-    {
-      icon: Award,
-      title: "Free Portfolio Builder Access",
-      description:
-        "Create your professional career website with premium templates",
-      value: "₹799",
-      bgColor: "bg-gradient-to-r from-cyan-500 to-cyan-600",
-    },
-    {
-      icon: Users,
-      title: "Exclusive Community Access",
-      description:
-        "Join Telegram + WhatsApp groups with mentors and successful peers",
-      value: "₹699",
-      bgColor: "bg-gradient-to-r from-pink-500 to-pink-600",
-    },
-  ];
   const testimonials = [
     {
-      name: "Priya Sharma",
-      role: "Software Engineer at Accenture",
+      name: "Daniel Nahmias",
+      handle: "Google Review",
       content:
-        "Beep Career Pro helped me crack 3 interviews in 2 weeks! The AI simulator was game-changing.",
-      rating: 5,
-      image:
-        "https://images.unsplash.com/photo-1494790108755-2616b612b192?w=150&h=150&fit=crop&crop=face",
+        "After completing an incredible week of coaching with Cory and Conscious Counsel, I truly feel unstoppable.",
+      image: "https://ui-avatars.com/api?name=Daniel+Nahmias&background=random",
+      timestamp: "2:15 PM Dec 15, 2024",
     },
     {
-      name: "Rohit Kumar",
-      role: "Marketing Associate at Boat",
+      name: "Hoala Wellness Consulting",
+      handle: "Google Review",
       content:
-        "From 0 to 5 interview calls in a month. The resume optimizer is incredible!",
-      rating: 5,
-      image:
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+        "Working with Cory and the team at Conscious Counsel was a great experience. I'm really happy with my documents and it has translated to greater confidence and security for me in my coaching practice. Everyone is extremely helpful and professional. So glad I found them!",
+      image: "https://ui-avatars.com/api?name=Hoala+Wellness&background=random",
+      timestamp: "10:30 AM Dec 12, 2024",
     },
     {
-      name: "Sneha Patel",
-      role: "Business Analyst at EY",
+      name: "Connor Daly",
+      handle: "Google Review",
       content:
-        "The shortlist predictor saved me so much time. Only applied where I had real chances.",
-      rating: 5,
-      image:
-        "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&h=150&fit=crop&crop=face",
-    },
-  ];
-  const whatsappChats = [
-    {
-      name: "Rahul Sharma",
-      avatar: "RS",
-      bgColor: "bg-blue-500",
-      messages: [
-        {
-          type: "received",
-          text: "Bro, I just got selected for Accenture SDE role! 🎉",
-          time: "2:45 PM",
-        },
-        {
-          type: "sent",
-          text: "Congratulations! How did you prepare?",
-          time: "2:46 PM",
-        },
-        {
-          type: "received",
-          text: "Beep Career Pro was a game changer. The AI mock interviews helped me practice system design questions",
-          time: "2:47 PM",
-        },
-        {
-          type: "received",
-          text: "Plus the shortlist predictor told me I had 85% chance at Accenture",
-          time: "2:47 PM",
-        },
-        {
-          type: "sent",
-          text: "That's amazing! 🚀",
-          time: "2:48 PM",
-        },
-      ],
+        "Cory and the team at Conscious Counsel worked quickly to provide the documents I needed to protect my growing business. They communicated clearly and made the legal language easy to understand, which I really appreciated.",
+      image: "https://ui-avatars.com/api?name=Connor+Daly&background=random",
+      timestamp: "4:45 PM Dec 10, 2024",
     },
     {
-      name: "Priya Patel",
-      avatar: "PP",
-      bgColor: "bg-pink-500",
-      messages: [
-        {
-          type: "received",
-          text: "Update: Got the marketing internship at Boat! 🎯",
-          time: "11:20 AM",
-        },
-        {
-          type: "sent",
-          text: "Wow! That's your dream company",
-          time: "11:22 AM",
-        },
-        {
-          type: "received",
-          text: "Yes! The ATS resume builder made my profile stand out",
-          time: "11:23 AM",
-        },
-        {
-          type: "received",
-          text: "Got interview call within 3 days of applying through Beep",
-          time: "11:23 AM",
-        },
-        {
-          type: "received",
-          text: "Worth every penny of the ₹3 trial! 😊",
-          time: "11:24 AM",
-        },
-      ],
+      name: "Parnita",
+      handle: "Google Review",
+      content:
+        "The first word that comes to mind when I reflect on my experience with Conscious Counsel is WOW! One of the best decisions I have ever made. I don't have a background in business or legal things, but they made everything clear, supportive, and easy.",
+      image: "https://ui-avatars.com/api?name=Parnita&background=random",
+      timestamp: "11:20 AM Dec 8, 2024",
     },
     {
-      name: "Arjun Kumar",
-      avatar: "AK",
-      bgColor: "bg-green-500",
-      messages: [
-        {
-          type: "received",
-          text: "Placed at EY as Business Analyst! Package: 12 LPA 💰",
-          time: "4:15 PM",
-        },
-        {
-          type: "sent",
-          text: "Congratulations! How was the interview?",
-          time: "4:16 PM",
-        },
-        {
-          type: "received",
-          text: "The AI interview practice on Beep was exactly like the real one",
-          time: "4:17 PM",
-        },
-        {
-          type: "received",
-          text: "They asked the same behavioral questions I practiced",
-          time: "4:17 PM",
-        },
-        {
-          type: "sent",
-          text: "Beep Career Pro really works! 🔥",
-          time: "4:18 PM",
-        },
-        {
-          type: "received",
-          text: "100%! Best investment for job seekers",
-          time: "4:18 PM",
-        },
-      ],
-    },
-  ];
-  // Dynamic FAQ based on pricing data
-  const getFAQs = () => [
-    {
-      question: `What happens after I pay ₹${getInitialPrice()}?`,
-      answer: `Instantly after payment, you'll get access instructions and download links for the Beep app. All Pro features will be activated within 5 minutes for your ${getTrialDays()}-day trial.`,
+      name: "Philippe Kirouac",
+      handle: "Google Review",
+      content:
+        "The team at Conscious Counsel were so easy to work with. Thank you Cory and team for truly leading with your heart and helping me solve all my legal issues with dignity and respect.",
+      image: "https://ui-avatars.com/api?name=Philippe+Kirouac&background=random",
+      timestamp: "9:10 AM Dec 5, 2024",
     },
     {
-      question: `What happens after the ${getTrialDays()}-day trial?`,
-      answer: `After ${getTrialDays()} days, your subscription continues at ₹${getMonthlyPrice()}/month. You can cancel anytime before the trial ends to avoid charges. No hidden fees!`,
+      name: "Muskoka Mermaid",
+      handle: "Google Review",
+      content:
+        "When I reached out to Conscious Counsel, I needed a legal document turned around quickly. Cory and his team connected with me right away to make sure they fully understood what I needed. They taught me so much throughout the process!",
+      image: "https://ui-avatars.com/api?name=Muskoka+Mermaid&background=random",
+      timestamp: "3:30 PM Dec 3, 2024",
     },
     {
-      question: "Can I access Pro on mobile and web?",
-      answer:
-        "Yes! Beep Career Pro works seamlessly across mobile app, web dashboard, and desktop. Your progress syncs across all devices.",
+      name: "Jake Cheney",
+      handle: "Google Review",
+      content:
+        "Conscious Counsel has been attentive, positive, and quick to answer any and all questions I've had every step of the way. Tracy and the whole team have been an indispensable resource.",
+      image: "https://ui-avatars.com/api?name=Jake+Cheney&background=random",
+      timestamp: "1:15 PM Dec 1, 2024",
     },
     {
-      question: "How is this different from the free version?",
-      answer:
-        "Free version has basic job search. Pro unlocks AI tools, premium courses, priority alerts, 1-click apply, expert insights, and exclusive community access.",
+      name: "Jessica Bartley",
+      handle: "Google Review",
+      content:
+        "We have had a wonderful experience working with Conscious Counsel. The agreements they've created for us are so easy to read and understand and truly capture the essence of what we are trying to communicate.",
+      image: "https://ui-avatars.com/api?name=Jessica+Bartley&background=random",
+      timestamp: "10:45 AM Nov 28, 2024",
     },
     {
-      question: "What if I don't like it — is it refundable?",
-      answer:
-        "100% yes! We offer a 7-day full refund policy. If you're not satisfied during your trial, we'll refund every penny, no questions asked.",
+      name: "Michelle Carter",
+      handle: "Google Review",
+      content:
+        "Working with Conscious Counsel was so easy. They provided the documents I needed in a timely manner. The team is fantastic—quick to respond to questions and provide solid advice based on my niche. Highly recommend!",
+      image: "https://ui-avatars.com/api?name=Michelle+Carter&background=random",
+      timestamp: "2:20 PM Nov 25, 2024",
+    },
+    {
+      name: "Olivia Barata Cavalcanti",
+      handle: "Google Review",
+      content:
+        "Cory has provided well-rounded, informed, and true support every step of the way and made everything more intelligible and achievable.",
+      image: "https://ui-avatars.com/api?name=Olivia+Cavalcanti&background=random",
+      timestamp: "5:00 PM Nov 22, 2024",
+    },
+    {
+      name: "Karyn Stillwell",
+      handle: "Google Review",
+      content:
+        "Working with Conscious Counsel was a pleasure. They made the arduous and stressful task of creating official documents for my retreat easy. They were understanding and flexible when I needed more time.",
+      image: "https://ui-avatars.com/api?name=Karyn+Stillwell&background=random",
+      timestamp: "8:30 AM Nov 20, 2024",
+    },
+    {
+      name: "Mahalia A",
+      handle: "Google Review",
+      content:
+        "As a first-time business owner navigating complex dynamics, working with Cory has been such a relief. He's thoughtful, encouraging, and works tirelessly to make sure I feel supported.",
+      image: "https://ui-avatars.com/api?name=Mahalia+A&background=random",
+      timestamp: "12:10 PM Nov 18, 2024",
+    },
+    {
+      name: "Ashley John",
+      handle: "Google Review",
+      content:
+        "Working with Cory and his team has been grounding and empowering. Cory is sharp, honest, and direct—exactly what you want in a lawyer when navigating something complex and emotionally charged.",
+      image: "https://ui-avatars.com/api?name=Ashley+John&background=random",
+      timestamp: "3:45 PM Nov 15, 2024",
+    },
+    {
+      name: "Joanna Mansour",
+      handle: "Google Review",
+      content:
+        "Starting a business can be scary. Cory and team have been awesome since our first interaction. I am looking forward to a very bright future working with Conscious Counsel.",
+      image: "https://ui-avatars.com/api?name=Joanna+Mansour&background=random",
+      timestamp: "11:00 AM Nov 12, 2024",
+    },
+    {
+      name: "Dana Shaked",
+      handle: "Google Review",
+      content:
+        "Opening my own Pilates studio was a big step, and I knew I needed an attorney who truly understood the unique needs of my industry. Conscious Counsel protected me and my business with clarity and care.",
+      image: "https://ui-avatars.com/api?name=Dana+Shaked&background=random",
+      timestamp: "9:25 AM Nov 10, 2024",
+    },
+    {
+      name: "Autumn Enloe",
+      handle: "Google Review",
+      content:
+        "I worked with Conscious Counsel to update my legal documents for my nutrition practice. The whole process was smooth, helpful, and quick. They made legal language easy to understand.",
+      image: "https://ui-avatars.com/api?name=Autumn+Enloe&background=random",
+      timestamp: "4:15 PM Nov 8, 2024",
+    },
+    {
+      name: "Darko Sikman",
+      handle: "Google Review",
+      content:
+        "Cory and his team are amazing. The quality of advice and service is stellar, and what sets them apart is how accessible and human they make the whole process. Clear, actionable guidance delivered with warmth.",
+      image: "https://ui-avatars.com/api?name=Darko+Sikman&background=random",
+      timestamp: "1:30 PM Nov 5, 2024",
+    },
+    {
+      name: "Zebrina Piper",
+      handle: "Google Review",
+      content:
+        "I'm so grateful nothing went wrong in my business before getting legitimate legal documents. Conscious Counsel made the process easy and enjoyable, and now I feel fully protected.",
+      image: "https://ui-avatars.com/api?name=Zebrina+Piper&background=random",
+      timestamp: "10:10 AM Nov 3, 2024",
+    },
+    {
+      name: "Tom Clancy",
+      handle: "Google Review",
+      content:
+        "Cory and his team are incredible to work with. Their efficiencies and processes make everything a breeze. Thanks for everything!",
+      image: "https://ui-avatars.com/api?name=Tom+Clancy&background=random",
+      timestamp: "2:50 PM Nov 1, 2024",
+    },
+    {
+      name: "Eshael Johnson",
+      handle: "Google Review",
+      content:
+        "I have enjoyed working with Cory and his colleagues. They are knowledgeable and kind. It gives me comfort knowing they understand my business and speak my language.",
+      image: "https://ui-avatars.com/api?name=Eshael+Johnson&background=random",
+      timestamp: "8:20 AM Oct 29, 2024",
+    },
+    {
+      name: "Marya",
+      handle: "Google Review",
+      content:
+        "Obtaining legal documents when starting a business felt overwhelming, but the process was seamless and straightforward with Conscious Counsel. They answered all of my questions promptly and made everything easy.",
+      image: "https://ui-avatars.com/api?name=Marya&background=random",
+      timestamp: "3:40 PM Oct 27, 2024",
+    },
+    {
+      name: "Holley Crooks",
+      handle: "Google Review",
+      content:
+        "So happy to be working with Conscious Counsel as I open my yoga studio. They are responsive, ready to listen, and made the legal setup incredibly easy. They covered every detail.",
+      image: "https://ui-avatars.com/api?name=Holley+Crooks&background=random",
+      timestamp: "11:15 AM Oct 25, 2024",
+    },
+    {
+      name: "Stephen Ferrer",
+      handle: "Google Review",
+      content:
+        "Probably the best decision for my business. Nothing like having confidence in conducting business and not second guessing whether you're protected. Conscious Counsel made our documents perfect.",
+      image: "https://ui-avatars.com/api?name=Stephen+Ferrer&background=random",
+      timestamp: "5:30 PM Oct 22, 2024",
+    },
+    {
+      name: "LeeAna Theberg",
+      handle: "Google Review",
+      content:
+        "Cory and his team are magicians—in a good way! They protect small businesses like mine with heart, clarity, and care. I feel so protected now.",
+      image: "https://ui-avatars.com/api?name=LeeAna+Theberg&background=random",
+      timestamp: "9:45 AM Oct 20, 2024",
+    },
+    {
+      name: "Jacqueline Lloyd",
+      handle: "Google Review",
+      content:
+        "I needed solid legal documents for my online Pilates platform. Conscious Counsel truly understands the wellness industry and knew exactly what needed to be included.",
+      image: "https://ui-avatars.com/api?name=Jacqueline+Lloyd&background=random",
+      timestamp: "1:20 PM Oct 18, 2024",
+    },
+    {
+      name: "Gretchen Wagoner",
+      handle: "Google Review",
+      content:
+        "Conscious Counsel made getting legal documents for my studio and my teacher training easy and quick. They always respond promptly to any questions.",
+      image: "https://ui-avatars.com/api?name=Gretchen+Wagoner&background=random",
+      timestamp: "4:00 PM Oct 15, 2024",
+    },
+    {
+      name: "Tim Wohlberg",
+      handle: "Google Review",
+      content:
+        "Working with Cory and his team was fantastic. The process was seamless, and they made protecting our business easy. Highly recommend.",
+      image: "https://ui-avatars.com/api?name=Tim+Wohlberg&background=random",
+      timestamp: "10:30 AM Oct 13, 2024",
+    },
+    {
+      name: "HANKS Series",
+      handle: "Google Review",
+      content:
+        "Cory was a great help on this project! Very easy to work with. Highly recommend Conscious Counsel for trademarks.",
+      image: "https://ui-avatars.com/api?name=HANKS+Series&background=random",
+      timestamp: "2:15 PM Oct 10, 2024",
+    },
+    {
+      name: "Rhonda Yancey",
+      handle: "Google Review",
+      content:
+        "I've been working with Tracy as the editor for my legal documents; she is dependable and efficient. It's a pleasure to have her assist me throughout this project.",
+      image: "https://ui-avatars.com/api?name=Rhonda+Yancey&background=random",
+      timestamp: "8:50 AM Oct 8, 2024",
+    },
+    {
+      name: "Melissa Kakavas",
+      handle: "Google Review",
+      content:
+        "Working with Cory and his team has been a great experience. They were patient, thorough, and communicated clearly. I have peace of mind knowing they have my back.",
+      image: "https://ui-avatars.com/api?name=Melissa+Kakavas&background=random",
+      timestamp: "3:25 PM Oct 5, 2024",
+    },
+    {
+      name: "Danielle Kepics",
+      handle: "Google Review",
+      content:
+        "I've been working with Conscious Counsel since day one of my business, when I had no idea what I was doing. They recommended only what I needed and always had my back.",
+      image: "https://ui-avatars.com/api?name=Danielle+Kepics&background=random",
+      timestamp: "11:40 AM Oct 3, 2024",
+    },
+    {
+      name: "Cadenza Wang",
+      handle: "Google Review",
+      content:
+        "Thank you for helping me put together my legal documents—and for making the process fun!",
+      image: "https://ui-avatars.com/api?name=Cadenza+Wang&background=random",
+      timestamp: "5:10 PM Oct 1, 2024",
+    },
+    {
+      name: "Annie Rodriguez",
+      handle: "Google Review",
+      content:
+        "Everyone at Conscious Counsel was kind, thorough, and quick to respond. I felt well taken care of every step of the way. I only regret not calling sooner!",
+      image: "https://ui-avatars.com/api?name=Annie+Rodriguez&background=random",
+      timestamp: "9:20 AM Sep 28, 2024",
+    },
+    {
+      name: "Vince Gabriele",
+      handle: "Google Review",
+      content:
+        "Conscious Counsel are the lawyers I trust. After many projects with them for my own companies, I made them the only law firm I refer my clients to.",
+      image: "https://ui-avatars.com/api?name=Vince+Gabriele&background=random",
+      timestamp: "1:45 PM Sep 25, 2024",
+    },
+    {
+      name: "Rochelle Blain",
+      handle: "Google Review",
+      content:
+        "Cory's legal presentation was clear, supportive, and informative. I chose to work with him when I started my business, and to this day I still return for support.",
+      image: "https://ui-avatars.com/api?name=Rochelle+Blain&background=random",
+      timestamp: "7:30 AM Sep 22, 2024",
+    },
+    {
+      name: "Chase Miller",
+      handle: "Google Review",
+      content:
+        "They made the entire legal process feel clear, supportive, and seamless. Truly grateful for their guidance in building the foundation of my business.",
+      image: "https://ui-avatars.com/api?name=Chase+Miller&background=random",
+      timestamp: "4:20 PM Sep 20, 2024",
+    },
+    {
+      name: "Melissa McNamara",
+      handle: "Google Review",
+      content:
+        "I've had the best experience with Cory. He went above and beyond to help me with my business. I've recommended him to everyone I know in the fitness industry.",
+      image: "https://ui-avatars.com/api?name=Melissa+McNamara&background=random",
+      timestamp: "10:55 AM Sep 18, 2024",
+    },
+    {
+      name: "Tami Tomlinson",
+      handle: "Google Review",
+      content:
+        "They expertly guided me through filing a trademark and preparing my legal documents. Their support gave me so much confidence and peace of mind.",
+      image: "https://ui-avatars.com/api?name=Tami+Tomlinson&background=random",
+      timestamp: "2:30 PM Sep 15, 2024",
+    },
+    {
+      name: "Jason McQuarrie",
+      handle: "Google Review",
+      content:
+        "Choosing Conscious Counsel was the best decision I could've made. Coming from the film world, I had no idea how to begin. They guided me with clarity and support.",
+      image: "https://ui-avatars.com/api?name=Jason+McQuarrie&background=random",
+      timestamp: "8:15 AM Sep 12, 2024",
+    },
+    {
+      name: "Virginia Martin",
+      handle: "Google Review",
+      content:
+        "I appreciate the attentiveness of the entire team. Each business is unique, and their prompt attention to my specific priorities and concerns is reassuring.",
+      image: "https://ui-avatars.com/api?name=Virginia+Martin&background=random",
+      timestamp: "3:50 PM Sep 10, 2024",
+    },
+    {
+      name: "Amy de Sa",
+      handle: "Google Review",
+      content:
+        "They provided excellent service and legal documents for my business. They were attentive, detailed, and responded quickly.",
+      image: "https://ui-avatars.com/api?name=Amy+de+Sa&background=random",
+      timestamp: "11:25 AM Sep 8, 2024",
+    },
+    {
+      name: "Shannon Barbaro",
+      handle: "Google Review",
+      content:
+        "As a Pilates studio owner, finding legal support that understands the industry is invaluable. Conscious Counsel made everything easy, fast, and thorough.",
+      image: "https://ui-avatars.com/api?name=Shannon+Barbaro&background=random",
+      timestamp: "6:00 PM Sep 5, 2024",
+    },
+    {
+      name: "Sylvain Tremblay",
+      handle: "Google Review",
+      content:
+        "Cory Sterling and his team have been invaluable in protecting our business legally. Their guidance has been essential.",
+      image: "https://ui-avatars.com/api?name=Sylvain+Tremblay&background=random",
+      timestamp: "9:40 AM Sep 3, 2024",
+    },
+    {
+      name: "Julie",
+      handle: "Google Review",
+      content:
+        "I wanted updated legal documents in place so I could focus on helping my clients. Conscious Counsel made the process smooth and supportive.",
+      image: "https://ui-avatars.com/api?name=Julie&background=random",
+      timestamp: "1:10 PM Sep 1, 2024",
+    },
+    {
+      name: "Becky Keen",
+      handle: "Google Review",
+      content:
+        "I needed contracts written and was so happy I found Cory. He was easy to talk to, worked quickly, and took a huge load off my plate. It's possible to love your lawyer—Cory makes it happen!",
+      image: "https://ui-avatars.com/api?name=Becky+Keen&background=random",
+      timestamp: "4:45 PM Aug 29, 2024",
     },
   ];
   const companyLogos = [
@@ -767,10 +945,10 @@ const Index = () => {
         <DynamicBackground />
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto text-center">
-            <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="h-10 w-10 text-black" />
+            <div className="bg-gradient-to-r from-teal-500 to-emerald-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="h-10 w-10 text-white" />
             </div>
-            <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-teal-500 to-emerald-600 bg-clip-text text-transparent">
               Welcome to Beep Career Pro! 🎉
             </h1>
             <p className="text-xl mb-6 text-gray-700">
@@ -778,7 +956,7 @@ const Index = () => {
               features.
             </p>
             <div className="bg-gray-100 p-6 rounded-lg mb-8 border">
-              <h3 className="text-lg font-semibold mb-4 text-yellow-600">
+              <h3 className="text-lg font-semibold mb-4 text-teal-600">
                 Next Steps:
               </h3>
               <div className="space-y-3 text-left">
@@ -791,7 +969,7 @@ const Index = () => {
                 <div className="flex items-center gap-3">
                   <CheckCircle className="h-5 w-5 text-green-500" />
                   <span className="text-gray-800">
-                    Check your email for bonus materials worth ₹3,999
+                    Check your email for bonus materials worth $3,999
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -805,7 +983,7 @@ const Index = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
                 onClick={() => handleDownloadClick("android")}
-                className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-semibold py-3 px-8 text-lg hover:from-yellow-300 hover:to-yellow-500"
+                className="bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-semibold py-3 px-8 text-lg hover:from-teal-400 hover:to-emerald-500"
               >
                 <Download className="mr-2 h-5 w-5" />
                 Download for Android
@@ -813,7 +991,7 @@ const Index = () => {
               <Button
                 onClick={() => handleDownloadClick("ios")}
                 variant="outline"
-                className="border-yellow-400 text-yellow-600 hover:bg-yellow-400 hover:text-black py-3 px-8 text-lg"
+                className="border-teal-500 text-teal-600 hover:bg-teal-500 hover:text-white py-3 px-8 text-lg"
               >
                 <Download className="mr-2 h-5 w-5" />
                 Download for iOS
@@ -824,39 +1002,78 @@ const Index = () => {
       </div>
     );
   }
+  if (showThankYou) {
+    return (
+      <div className="min-h-screen bg-white text-black">
+        <DynamicBackground />
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="bg-gradient-to-r from-teal-500 to-emerald-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="h-10 w-10 text-white" />
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-teal-500 to-emerald-600 bg-clip-text text-transparent">
+              Thank You!
+            </h1>
+            <p className="text-xl mb-6 text-gray-700">
+              Your information has been received. You now have access to all the essential legal documents your fitness or wellness business needs.
+            </p>
+            <div className="bg-gray-100 p-6 rounded-lg mb-8 border">
+              <h3 className="text-lg font-semibold mb-4 text-teal-600">
+                What's Next:
+              </h3>
+              <div className="space-y-3 text-left">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-gray-800">
+                    Access your free legal document templates below
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-gray-800">
+                    Check your email for exclusive bonuses worth $3,999
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-gray-800">
+                    No email? Be sure to check your spam folder
+                  </span>
+                </div>
+              </div>
+            </div>
+            <Button
+              onClick={() => window.open("https://docs.google.com/document/d/1QgS6mlBz5UdvaNbY754mM89To3I5IKRm-DFk7G_PJ6o/edit?tab=t.0#heading=h.yo57svpji26v", "_blank")}
+              className="bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-semibold py-3 px-8 text-lg hover:from-teal-400 hover:to-emerald-500"
+            >
+              <FileText className="mr-2 h-5 w-5" />
+              Access Free Templates Now
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen text-black overflow-hidden relative">
       <DynamicBackground />
 
       {/* Sticky CTA Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-yellow-400 to-yellow-600 p-4 z-50 md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-teal-500/30 to-emerald-600/30 backdrop-blur-md border-t border-white/20 p-3 z-50 md:hidden shadow-lg">
         <Button
-          onClick={handleCTAClick}
-          disabled={isLoadingPricing}
-          className="w-full bg-black text-yellow-400 font-bold py-3 text-lg hover:bg-gray-900 disabled:opacity-50"
+          onClick={handleScrollToForm}
+          className="w-full bg-black/80 backdrop-blur-sm text-teal-300 font-semibold py-2.5 text-sm uppercase tracking-wide hover:bg-black/90 transition-all"
         >
-          {isLoadingPricing
-            ? "Loading..."
-            : `Get Career Pro for ₹${getInitialPrice()} (${getTrialDays()} days)`}
+          Get your free templates now
         </Button>
       </div>
 
-      {/* Countdown Timer Bar */}
-      <div className="fixed top-0 left-0 right-0 bg-red-600 text-white p-2 z-50 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <Clock className="h-4 w-4" />
-          <span className="font-semibold">
-            Limited Time Offer Expires in: {formatTime(timeLeft)}
-          </span>
-        </div>
-      </div>
-
       {/* Header with Logo */}
-      <header className="bg-transparent z-40 text-gray-900 inset-0 bg-gradient-to-r from-yellow-400/5 to-yellow-600/5">
+      <header className="bg-gray-900 z-40 text-gray-900 inset-0">
         <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-center mt-8">
+          <div className="flex items-center justify-center mt-4">
             <img
-              src="https://www.eventbeep.com/assets/beepLogoWhite.svg"
+              src="/redirect_to.png"
               alt="Beep"
               className="h-20 w-auto"
             />
@@ -865,526 +1082,829 @@ const Index = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-white/95 via-gray-50/95 to-white/95 min-h-screen flex items-center pt-6">
-        <div className="absolute inset-0 bg-gradient-to-r from-yellow-400/5 to-yellow-600/5"></div>
-        <div className="container mx-auto px-4 pt-4 pb-20 relative z-10">
+      <section className="relative bg-gradient-to-br from-white/95 via-gray-50/95 to-white/95 pt-12">
+        <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 to-emerald-600/5"></div>
+        <div className="max-w-screen-xl mx-auto px-4 pb-12 relative z-10">
+          {/* Title Section - Centered at Top */}
           <div className="max-w-4xl mx-auto text-center">
-            <Badge className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-semibold mb-6 text-sm px-4 py-2">
-              As Seen on Shark Tank India 🦈
+            <Badge className="bg-gradient-to-r from-teal-500 via-teal-600 to-emerald-600 text-white font-semibold mb-2 text-sm px-4 py-2 animate-subtle-pulse animate-gradient inline-block">
+              FOR FITNESS & WELLNESS OWNERS ONLY
             </Badge>
-            <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight text-gray-900">
-              Land Your{" "}
-              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                {getDynamicJobTitle()}
-              </span>{" "}
-              with AI-Powered Career Tools
+            <h1 className="text-[38px] font-bold mb-4 leading-tight text-gray-900 mt-0">
+              The Must-Have Legal Documents Every Fitness & Wellness Business
+              Needs to Avoid a Lawsuit
             </h1>
-            <p className="text-xl md:text-2xl text-gray-700 mb-8 leading-relaxed">
-              Join 16,000+ students who've cracked interviews at top companies
-              using our premium career acceleration platform
-            </p>
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-8 max-w-2xl mx-auto">
-              <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-yellow-600">
-                  1M+
-                </div>
-                <div className="text-sm text-gray-600">Students</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-yellow-600">
-                  1200+
-                </div>
-                <div className="text-sm text-gray-600">Recruiters</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-yellow-600">
-                  89%
-                </div>
-                <div className="text-sm text-gray-600">Success Rate</div>
-              </div>
-            </div>
-
-            {/* Company Logos */}
-            <div className="mb-8">
-              <p className="text-gray-600 mb-4">Trusted by students at</p>
-              <div className="flex flex-wrap justify-center gap-4 opacity-60">
-                {companyLogos.map((company, index) => (
-                  <Badge
-                    key={index}
-                    variant="outline"
-                    className="border-gray-400 text-gray-600"
-                  >
-                    {company}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Main CTA */}
-            <div className="bg-white/80 backdrop-blur p-8 rounded-2xl border border-yellow-400/20 max-w-lg mx-auto shadow-lg mb-8">
-              {isLoadingPricing ? (
-                <div className="mb-4 animate-pulse">
-                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-20 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-32"></div>
-                </div>
-              ) : (
-                <div className="mb-4">
-                  <div className="text-3xl font-bold text-yellow-600">
-                    ₹{getInitialPrice()}
-                  </div>
-                  <div className="text-gray-500 line-through">
-                    ₹{getActualPrice()}
-                  </div>
-                  <div className="text-green-600 font-semibold text-sm">
-                    {getSubTitle()}
-                  </div>
-                  <div className="text-red-600 font-semibold">
-                    Limited Time Offer!
-                  </div>
-                </div>
-              )}
-              <Button
-                onClick={handleCTAClick}
-                disabled={isLoadingPricing}
-                className="w-full bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold py-4 text-lg hover:from-yellow-300 hover:to-yellow-500 mb-4 disabled:opacity-50"
-              >
-                <Zap className="mr-2 h-5 w-5" />
-                {isLoadingPricing
-                  ? "Loading..."
-                  : `Start Trial for ₹${getInitialPrice()}`}
-              </Button>
-              <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                <Shield className="h-4 w-4" />
-                <span>100% Secure Payment</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Job Listings Section */}
-      <section className="py-16 bg-white/90">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              Get Priority Review on{" "}
-              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                Your Applications
-              </span>
-            </h2>
-            <p className="text-xl text-gray-700">
-              Latest job openings from top companies
+            <p className="text-base md:text-lg text-gray-700 leading-relaxed mt-0 mb-0">
+              Get the exact waivers, contracts, and policies Conscious Counsel
+              uses to protect 1,000+ yoga studios, gyms, Pilates, and wellness
+              businesses—so you can stop worrying about legal "what ifs" and
+              focus on your clients.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-            {jobListings.map((job, index) => (
-              <Card
-                key={index}
-                className="bg-white border-gray-200 hover:border-yellow-400/50 transition-all shadow-lg"
-              >
-                <CardHeader>
-                  <CardTitle className="text-gray-900 text-lg">
-                    {job.title}
-                  </CardTitle>
-                  <CardDescription className="text-yellow-600 font-semibold">
-                    {job.company}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <MapPin className="h-4 w-4" />
-                      <span>{job.location}</span>
-                    </div>
-                    <div className="text-green-600 font-semibold">
-                      {job.salary}
-                    </div>
+          {/* Two Column Layout */}
+          <div className="grid md:grid-cols-2 gap-8 items-center max-w-7xl mx-auto mt-6">
+            {/* Left Column - Document Animation */}
+            <div className="flex justify-center md:justify-start">
+              <DocumentAnimation />
+            </div>
+
+            {/* Right Column - Form Capture */}
+            <div className="w-full flex justify-center md:justify-end">
+              <div id="enter-your-info-form" className="bg-gradient-to-br from-teal-500/40 to-emerald-600/40 backdrop-blur-md p-5 rounded-2xl border border-white/20 shadow-2xl max-w-md w-full scroll-mt-20">
+                <h2 className="text-2xl font-bold text-slate-900 mb-1.5">
+                  ENTER YOUR INFO
+                </h2>
+                <p className="text-slate-800 mb-4 text-sm">
+                  And we'll send you instant access to all the essential legal documents your fitness or wellness business needs — plus exclusive bonuses worth $3,999.
+                </p>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setShowThankYou(true);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="space-y-3"
+                >
+                  <div>
+                    <Label className="text-slate-900 text-sm font-medium mb-2 block">
+                      Name*
+                    </Label>
+                    <Input
+                      type="text"
+                      required
+                      className="w-full bg-white/80 border-gray-300/50 text-slate-900 placeholder:text-gray-500 focus:ring-teal-400"
+                      placeholder="Enter your name"
+                    />
                   </div>
+
+                  <div>
+                    <Label className="text-slate-900 text-sm font-medium mb-2 block">
+                      Email*
+                    </Label>
+                    <Input
+                      type="email"
+                      required
+                      className="w-full bg-white/80 border-gray-300/50 text-slate-900 placeholder:text-gray-500 focus:ring-teal-400"
+                      placeholder="Enter your email"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-slate-900 text-sm font-medium mb-2 block">
+                      Phone Number*
+                    </Label>
+                    <Input
+                      type="tel"
+                      required
+                      className="w-full bg-white/80 border-gray-300/50 text-slate-900 placeholder:text-gray-500 focus:ring-teal-400"
+                      placeholder="Enter your phone number"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-slate-900 text-sm font-medium mb-2 block">
+                      Instagram Handle
+                    </Label>
+                    <Input
+                      type="text"
+                      className="w-full bg-white/80 border-gray-300/50 text-slate-900 placeholder:text-gray-500 focus:ring-teal-400"
+                      placeholder="Enter your Instagram handle"
+                    />
+                  </div>
+
                   <Button
-                    onClick={handleCTAClick}
-                    className="w-full mt-4 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black hover:from-yellow-300 hover:to-yellow-500"
+                    type="submit"
+                    disabled={isLoadingPricing}
+                    className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold py-4 text-lg hover:from-teal-400 hover:to-emerald-500 disabled:opacity-50 transition-all"
                   >
-                    Apply with Priority
+                    <Zap className="mr-2 h-5 w-5" />
+                    {isLoadingPricing ? "Loading..." : "Yes! Give Me The Documents!"}
                   </Button>
-                </CardContent>
-              </Card>
-            ))}
+                </form>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Shark Tank Video Section */}
-      <section className="py-20 relative z-10 bg-white/90">
+      {/* Legal Documents Section */}
+      <section className="py-10 bg-white/90">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <Badge className="bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold mb-4 text-sm px-4 py-2">
-              As Seen on Shark Tank India 🦈
-            </Badge>
+          <div className="text-center mb-6">
             <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              Watch Our{" "}
-              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                Shark Tank Pitch
+              Get Every Legal Document You Need to{" "}
+              <span className="bg-gradient-to-r from-teal-500 to-emerald-600 bg-clip-text text-transparent">
+                Stay Protected
               </span>
             </h2>
-            <p className="text-xl text-gray-700 mb-8">
-              See how Beep Career impressed the sharks and secured investment
-            </p>
           </div>
 
-          <YouTubeVideo
-            videoId="yMN3OgWNHAA"
-            title="Beep Career Shark Tank India Pitch"
-          />
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section className="py-20 relative z-10 bg-gradient-to-b from-white/90 to-gray-50/90">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              Everything You Need to{" "}
-              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                Accelerate Your Career
-              </span>
-            </h2>
-            <p className="text-xl text-gray-700">
-              8 powerful tools to transform your job search
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {benefits.map((benefit, index) => (
-              <InteractiveCard
-                key={index}
-                icon={benefit.icon}
-                title={benefit.title}
-                description={benefit.description}
-                index={index}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Freebies Section */}
-      <section className="py-20 bg-gray-50/90">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <Badge className="bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold mb-4 text-sm px-4 py-2">
-              Limited Time Bonuses
-            </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                FREE Bonuses Worth ₹3,999
-              </span>
-            </h2>
-            <p className="text-xl text-gray-700">
-              Exclusive resources included with your Career Pro subscription
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {freebies.map((freebie, index) => (
-              <Card
-                key={index}
-                className="bg-white/80 border-yellow-400/30 hover:border-yellow-400 transition-all shadow-lg"
-              >
-                <CardHeader>
-                  <div className="flex items-center justify-between mb-4">
-                    <div
-                      className={`${freebie.bgColor} w-10 h-10 rounded-lg flex items-center justify-center`}
-                    >
-                      <freebie.icon className="h-5 w-5 text-white" />
-                    </div>
-                    <Badge className="bg-green-600 text-white">
-                      {freebie.value}
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-gray-900 text-lg">
-                    {freebie.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-700">
-                    {freebie.description}
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <div className="text-center mt-12">
-            <Button
-              onClick={handleCTAClick}
-              disabled={isLoadingPricing}
-              className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold py-4 px-8 text-lg hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50"
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
             >
-              <Gift className="mr-2 h-5 w-5" />
-              {isLoadingPricing
-                ? "Loading..."
-                : `Claim All Bonuses for ₹${getInitialPrice()}`}
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* WhatsApp Screenshots Section */}
-      <section className="py-20 bg-gradient-to-b from-gray-50/90 to-white/90">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              Real Success Stories from{" "}
-              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                Our Community
-              </span>
-            </h2>
-            <p className="text-xl text-gray-700">
-              Live updates from our Career Pro members
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {whatsappChats.map((chat, index) => (
-              <WhatsAppChat
-                key={index}
-                chats={[
-                  {
-                    name: chat.name,
-                    avatar: chat.avatar,
-                    bgColor: chat.bgColor,
-                    isOnline: true,
-                    messages: chat.messages.map((msg) => ({
-                      type: msg.type as "sent" | "received",
-                      text: msg.text,
-                      time: msg.time,
-                      isRead: msg.type === "sent" ? true : undefined,
-                    })),
-                  },
-                ]}
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
               />
-            ))}
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <FileCheck className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Waiver / Release of Liability
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  Covers injuries and accidents during workouts or classes.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <Handshake className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Service Agreement / Membership Contract
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  Defines terms of service, payment, cancellations, and policies.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <Briefcase className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Employment Agreement
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  For staff who are employees — sets clear job terms, pay, and conduct.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <FileSignature className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Independent Contractor Agreement
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  For trainers, instructors, and outside specialists.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <Globe className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Terms & Conditions, Privacy Policy, Disclaimer
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  Defines general business terms, policies, and user rights.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <Camera className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Media Release Form
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  Authorizes use of client photos, videos, and testimonials.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <Share2 className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Social Media Disclaimer
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  Protects you from liability for comments, advice, or third-party content online.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <Users className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Influencer / Collaboration Agreement
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  If you partner with ambassadors or local influencers for marketing.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <UserCheck className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Testimonial Consent & Use Agreement
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  Covers use of before/after photos and client success stories.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
+
+            <Card className="bg-white border-gray-300 hover:border-teal-400/50 transition-all duration-300 group cursor-pointer relative overflow-hidden shadow-lg hover:-translate-y-2 hover:scale-[1.02]"
+              style={{
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(20, 184, 166, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-teal-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+              <CardHeader className="relative z-10">
+                <div 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-5 group-hover:[box-shadow:0_8px_20px_rgba(20,184,166,0.4)]"
+                >
+                  <Scale className="h-6 w-6 text-white" />
+                </div>
+                <CardTitle className="text-gray-900 text-lg transition-colors duration-300">
+                  Trademark & IP Protection Guide
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <CardDescription className="text-gray-700 transition-colors duration-300">
+                  Explains how to protect your logo, brand name, slogans, and workouts.
+                </CardDescription>
+              </CardContent>
+              <div 
+                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600 transition-all duration-500 w-0 group-hover:w-full"
+              />
+            </Card>
           </div>
         </div>
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-20 bg-gradient-to-b from-gray-50/90 to-white/90">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              Success Stories from{" "}
-              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                Real Students
-              </span>
-            </h2>
-            <p className="text-xl text-gray-700">
-              See how Beep Career Pro transformed their careers
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <Card
-                key={index}
-                className="bg-white/80 border-gray-200 shadow-lg"
-              >
-                <CardHeader>
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={testimonial.image}
-                      alt={testimonial.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                    <div>
-                      <CardTitle className="text-gray-900 text-lg">
-                        {testimonial.name}
-                      </CardTitle>
-                      <CardDescription className="text-yellow-600">
-                        {testimonial.role}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className="h-4 w-4 fill-yellow-400 text-yellow-400"
-                      />
-                    ))}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-700 italic">
-                    "{testimonial.content}"
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Certificate Section */}
-      <section className="py-20 bg-gradient-to-br from-gray-50 to-white">
+      <section className="py-12 bg-white">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
-            <div className="grid md:grid-cols-2 gap-12 items-center">
-              <div className="text-center md:text-left">
-                <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900">
-                  Get your
-                  <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                    {" "}
-                    Certificate!
-                  </span>
-                </h2>
-                <p className="text-lg text-gray-700 leading-relaxed">
-                  Yes! You will be certified by Eventbeep which brings a lot of
-                  credibility to your certificate &amp; resume.
-                </p>
-              </div>
-              <div className="flex justify-center">
-                <img
-                  src="/lovable-uploads/cd314f75-00c8-4360-b16d-3de8582e8604.png"
-                  alt="Certificate of Excellence"
-                  className="max-w-full h-auto rounded-lg shadow-lg"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Section */}
-      <section className="py-20 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-                Frequently Asked{" "}
-                <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                  Questions
-                </span>
+            {/* Header */}
+            <div className="text-center mb-6">
+              <h2 className="text-3xl md:text-5xl font-bold mb-3 text-gray-900">
+                OVER 500 STUDIO OWNERS LOVE US
               </h2>
-              <p className="text-lg text-gray-600">
-                Everything you need to know about Career Pro
+              {/* Compact Rating Display */}
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <div className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className="h-4 w-4 fill-teal-500 text-teal-500"
+                    />
+                  ))}
+                </div>
+                <span className="text-sm text-gray-900 font-medium">
+                  455 5-star reviews
+                </span>
+              </div>
+              <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+                We have over 455 5-star Google reviews from satisfied clients who have transformed their careers with our services.
               </p>
             </div>
 
-            <div className="space-y-4">
-              {getFAQs().map((faq, index) => (
-                <Collapsible
+            {/* Testimonials Grid */}
+            <div className="grid md:grid-cols-3 gap-4">
+              {(showAllTestimonials ? testimonials : testimonials.slice(0, 9)).map((testimonial, index) => (
+                <Card
                   key={index}
-                  open={openFaq === index}
-                  onOpenChange={() =>
-                    setOpenFaq(openFaq === index ? null : index)
-                  }
+                  className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow relative"
                 >
-                  <CollapsibleTrigger className="w-full">
-                    <Card className="bg-white border border-gray-200 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-medium text-gray-900 text-left pr-4">
-                            {faq.question}
-                          </h3>
-                          <ChevronDown
-                            className={`h-5 w-5 text-yellow-500 transition-transform duration-200 flex-shrink-0 ${
-                              openFaq === index ? "transform rotate-180" : ""
-                            }`}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="px-6 pb-6">
-                      <p className="text-gray-600 leading-relaxed">
-                        {faq.answer}
-                      </p>
+                  {/* Google Logo in top right */}
+                  <div className="absolute top-4 right-4">
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        fill="#4285F4"
+                      />
+                      <path
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        fill="#34A853"
+                      />
+                      <path
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        fill="#FBBC05"
+                      />
+                      <path
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        fill="#EA4335"
+                      />
+                    </svg>
+                  </div>
+
+                  <CardContent className="p-6">
+                    {/* Profile Section */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <img
+                        src={testimonial.image}
+                        alt={testimonial.name}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                      <div className="flex-1">
+                        <CardTitle className="text-gray-900 text-base font-semibold mb-0">
+                          {testimonial.name}
+                        </CardTitle>
+                        <CardDescription className="text-gray-500 text-sm mt-0">
+                          {testimonial.handle}
+                        </CardDescription>
+                      </div>
                     </div>
-                  </CollapsibleContent>
-                </Collapsible>
+
+                    {/* Testimonial Text */}
+                    <p className="text-gray-700 text-sm leading-relaxed mb-4">
+                      {testimonial.content}
+                    </p>
+
+                    {/* Timestamp */}
+                    <p className="text-gray-400 text-xs">
+                      {testimonial.timestamp || "10:10 AM Nov 19, 2023"}
+                    </p>
+                  </CardContent>
+                </Card>
               ))}
             </div>
+
+            {/* See More/Less Button */}
+            {testimonials.length > 9 && (
+              <div className="text-center mt-6">
+                <Button
+                  onClick={() => setShowAllTestimonials(!showAllTestimonials)}
+                  variant="outline"
+                  className="border-gray-300 text-gray-900 hover:bg-gray-50 font-semibold px-8 py-3 rounded-lg"
+                >
+                  {showAllTestimonials ? "See less" : "See more"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </section>
 
       {/* Final CTA Section */}
-      <section className="py-20 bg-gradient-to-br from-yellow-400/10 to-yellow-600/10">
+      <section className="py-12 bg-gradient-to-b from-white/90 to-gray-50/90">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl md:text-5xl font-bold mb-6 text-gray-900">
-              Ready to Land Your{" "}
-              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                {getDynamicJobTitle()}?
-              </span>
-            </h2>
-            <p className="text-xl text-gray-700 mb-8">
-              Join thousands of successful students. Start your career
-              transformation today.
-            </p>
+          <div className="max-w-5xl mx-auto">
+            {/* Top Headline */}
+            <div className="text-center mb-6">
+              <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">
+                Get The Legal Protection Your Fitness Or Wellness Business Has Been Missing — And Finally Operate With Confidence And Peace Of Mind.
+              </h2>
+            </div>
 
-            <div className="bg-white/90 backdrop-blur p-8 rounded-2xl border border-yellow-400/20 max-w-lg mx-auto mb-8 shadow-lg">
-              {isLoadingPricing ? (
-                <div className="mb-6 animate-pulse">
-                  <div className="h-10 bg-gray-200 rounded w-20 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-40"></div>
-                </div>
-              ) : (
-                <div className="mb-6">
-                  <div className="text-4xl font-bold text-yellow-600">
-                    ₹{getInitialPrice()}
+            {/* Main Content Grid */}
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              {/* Left Side - Features List */}
+              <div className="bg-white border border-gray-200 shadow-lg p-6 rounded-2xl">
+                <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+                  10 Essential Legal Documents
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Waiver / Release of Liability - Protect against injuries and accidents
+                    </p>
                   </div>
-                  <div className="text-gray-500 line-through text-lg">
-                    ₹{getActualPrice()}
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Service Agreement / Membership Contract - Define terms, payments, and policies
+                    </p>
                   </div>
-                  <div className="text-green-600 font-semibold text-sm">
-                    {getSubTitle()}
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Employment Agreement - Clear job terms for your staff
+                    </p>
                   </div>
-                  <div className="text-red-600 font-semibold">
-                    Limited Time Offer!
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Independent Contractor Agreement - For trainers and specialists
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Terms & Conditions, Privacy Policy, Disclaimer - Complete website protection
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Media Release Form - Authorize use of client photos and testimonials
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Social Media Disclaimer - Protect against online liability
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Influencer / Collaboration Agreement - For partnerships and ambassadors
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Testimonial Consent & Use Agreement - Use client success stories safely
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-gray-700 text-base">
+                      Trademark & IP Protection Guide - Protect your brand and intellectual property
+                    </p>
                   </div>
                 </div>
-              )}
-              <Button
-                onClick={handleCTAClick}
-                disabled={isLoadingPricing}
-                className="w-full bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold py-4 text-xl hover:from-yellow-300 hover:to-yellow-500 mb-4 disabled:opacity-50"
-              >
-                <Award className="mr-2 h-6 w-6" />
-                {isLoadingPricing ? "Loading..." : "Start Your Success Journey"}
-              </Button>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex items-center justify-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  <span>100% Secure Payment</span>
+              </div>
+
+              {/* Right Side - Pricing & CTA */}
+              <div className="flex flex-col">
+                <div className="bg-white border border-gray-200 shadow-lg p-6 rounded-2xl mb-4 flex-1">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                    Bonuses Included:
+                  </h3>
+                  <div className="space-y-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-gray-900 font-semibold">
+                          Expert Legal Review & Customization
+                        </p>
+                        <p className="text-gray-600 text-sm">
+                          Professional review to ensure documents fit your specific business needs
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-gray-900 font-semibold">
+                          Easy-to-Understand Legal Language
+                        </p>
+                        <p className="text-gray-600 text-sm">
+                          Documents written in clear, accessible language you can actually understand
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-gray-900 font-semibold">
+                          Ongoing Support & Updates
+                        </p>
+                        <p className="text-gray-600 text-sm">
+                          Access to legal updates and support when you need it
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span>7-day Money Back Guarantee</span>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <Briefcase className="h-4 w-4 text-yellow-600" />
-                  <span>Built by Career Experts & Hiring Managers</span>
+
+                {/* Pricing Card */}
+                <div className="bg-white border border-teal-400/30 shadow-lg p-6 rounded-xl">
+                  {isLoadingPricing ? (
+                    <div className="animate-pulse space-y-4">
+                      <div className="h-8 bg-gray-200 rounded w-32 mx-auto"></div>
+                      <div className="h-6 bg-gray-200 rounded w-24 mx-auto"></div>
+                      <div className="h-12 bg-gray-200 rounded"></div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Mini Animated Document Card */}
+                      <div className="mb-4 relative">
+                        <div 
+                          className="relative"
+                          style={{
+                            transform: 'perspective(800px) rotateY(-3deg) rotateX(3deg)',
+                            transformStyle: 'preserve-3d'
+                          }}
+                        >
+                          {/* Back layer for depth */}
+                          <div 
+                            className={`absolute top-1.5 -left-1 -right-1 -bottom-1.5 bg-gray-100 border border-gray-200 rounded-lg transition-all duration-500`}
+                            style={{
+                              transform: isMiniShuffling ? 'translateZ(-20px) translateY(-4px) translateX(3px)' : 'translateZ(-20px)'
+                            }}
+                          />
+                          
+                          {/* Main document */}
+                          <div className="relative bg-white border border-gray-200 rounded-lg p-4 shadow-md">
+                            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
+                              <div 
+                                className={`w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+                                  isMiniAnimating ? 'scale-90' : 'scale-100'
+                                }`}
+                              >
+                                <div 
+                                  className={`transition-opacity duration-300 ${
+                                    isMiniAnimating ? 'opacity-0' : 'opacity-100'
+                                  }`}
+                                >
+                                  {getMiniDocIcon(miniDocTemplates[miniDocIndex].icon)}
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0 overflow-hidden">
+                                <div className="font-semibold text-sm text-gray-900 h-5 overflow-hidden">
+                                  <div 
+                                    className={`transition-all duration-500 ease-in-out ${
+                                      isMiniAnimating ? 'opacity-0 -translate-y-full' : 'opacity-100 translate-y-0'
+                                    }`}
+                                  >
+                                    {miniDocTemplates[miniDocIndex].title}
+                                  </div>
+                                </div>
+                                <div className="text-[10px] text-gray-500 uppercase tracking-wide h-4 overflow-hidden">
+                                  <div 
+                                    className={`transition-all duration-500 ease-in-out delay-100 ${
+                                      isMiniAnimating ? 'opacity-0 -translate-y-full' : 'opacity-100 translate-y-0'
+                                    }`}
+                                  >
+                                    {miniDocTemplates[miniDocIndex].category}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-1.5 mb-3">
+                              <div 
+                                className={`h-1.5 bg-gray-100 rounded-full transition-all duration-500 origin-left ${
+                                  isMiniAnimating ? 'scale-x-0 opacity-0' : 'scale-x-100 opacity-100'
+                                }`}
+                                style={{ transitionDelay: '50ms' }}
+                              ></div>
+                              <div 
+                                className={`h-1.5 bg-gray-100 rounded-full w-[85%] transition-all duration-500 origin-left ${
+                                  isMiniAnimating ? 'scale-x-0 opacity-0' : 'scale-x-100 opacity-100'
+                                }`}
+                                style={{ transitionDelay: '100ms' }}
+                              ></div>
+                              <div 
+                                className={`h-1.5 bg-gray-100 rounded-full w-[92%] transition-all duration-500 origin-left ${
+                                  isMiniAnimating ? 'scale-x-0 opacity-0' : 'scale-x-100 opacity-100'
+                                }`}
+                                style={{ transitionDelay: '150ms' }}
+                              ></div>
+                            </div>
+                            
+                            <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                              <div>
+                                <div 
+                                  className={`w-16 h-0.5 bg-emerald-500 mb-0.5 transition-all duration-500 origin-left ${
+                                    isMiniAnimating ? 'scale-x-0' : 'scale-x-100'
+                                  }`}
+                                  style={{ transitionDelay: '200ms' }}
+                                ></div>
+                                <div className="text-[9px] text-gray-500 uppercase tracking-wider">Signature</div>
+                              </div>
+                              <div 
+                                className={`w-10 h-10 border-2 border-emerald-500 rounded-full flex items-center justify-center transition-all duration-500 ${
+                                  isMiniAnimating ? 'scale-75 -rotate-12 opacity-0' : 'scale-100 rotate-0 opacity-100'
+                                }`}
+                                style={{ transitionDelay: '150ms' }}
+                              >
+                                <span className="text-[7px] text-emerald-600 font-semibold uppercase tracking-tight text-center leading-[1.1] px-0.5">
+                                  Legally<br/>Verified
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <Button
+                        onClick={handleScrollToForm}
+                        disabled={isLoadingPricing}
+                        className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold py-4 text-lg hover:from-teal-400 hover:to-emerald-500 mb-4 disabled:opacity-50"
+                      >
+                        <Shield className="mr-2 h-5 w-5" />
+                        {isLoadingPricing ? "Loading..." : "GET ALL LEGAL DOCUMENTS NOW"}
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
-
-            <p className="text-gray-600 text-sm">
-              {isLoadingPricing ? (
-                <span className="animate-pulse">
-                  Loading pricing details...
-                </span>
-              ) : (
-                `* Limited time offer. After trial, continue at ₹${getMonthlyPrice()}/month or cancel anytime.`
-              )}
-            </p>
           </div>
         </div>
       </section>
