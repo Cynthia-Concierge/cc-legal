@@ -8,6 +8,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { FirecrawlService } from "./services/firecrawlService.js";
 import { OpenAIService } from "./services/openaiService.js";
+import { InstantlyService } from "./services/instantlyService.js";
+import { SupabaseService } from "./services/supabaseService.js";
 
 // Load environment variables
 dotenv.config();
@@ -25,6 +27,13 @@ const firecrawlService = new FirecrawlService(
 );
 const openaiService = new OpenAIService(
   process.env.OPENAI_API_KEY || ""
+);
+const instantlyService = new InstantlyService(
+  process.env.INSTANTLY_AI_API_KEY || ""
+);
+const supabaseService = new SupabaseService(
+  process.env.SUPABASE_URL || "",
+  process.env.SUPABASE_ANON_KEY || ""
 );
 
 // Health check endpoint
@@ -117,6 +126,97 @@ app.post("/api/scrape", async (req, res) => {
     res.status(500).json({
       error: "Internal server error",
       message: error.message || "An error occurred during scraping",
+    });
+  }
+});
+
+// Add lead to Instantly.ai endpoint
+app.post("/api/add-lead", async (req, res) => {
+  try {
+    const { email, campaignId, leadData } = req.body;
+
+    if (!email || !campaignId) {
+      return res.status(400).json({
+        error: "email and campaignId are required",
+      });
+    }
+
+    // Check if API key is configured
+    if (!process.env.INSTANTLY_AI_API_KEY) {
+      console.error("INSTANTLY_AI_API_KEY is not set in environment variables");
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Instantly.ai API key is not configured. Please add INSTANTLY_AI_API_KEY to your .env file.",
+      });
+    }
+
+    const result = await instantlyService.addLeadToCampaign(
+      email,
+      campaignId,
+      leadData
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    console.error("Error adding lead:", error);
+    
+    // Provide more specific error messages
+    let statusCode = 500;
+    let errorMessage = error.message || "Failed to add lead to Instantly.ai";
+    
+    if (error.message?.includes("401")) {
+      statusCode = 401;
+      errorMessage = "Instantly.ai API authentication failed. Please check your INSTANTLY_AI_API_KEY in .env file.";
+    } else if (error.message?.includes("400")) {
+      statusCode = 400;
+      errorMessage = "Invalid request to Instantly.ai. Check campaign ID and lead data format.";
+    }
+    
+    res.status(statusCode).json({
+      error: "Internal server error",
+      message: errorMessage,
+    });
+  }
+});
+
+// Save contact to Supabase endpoint
+app.post("/api/save-contact", async (req, res) => {
+  try {
+    const { name, email, phone, website } = req.body;
+
+    if (!email || !name) {
+      return res.status(400).json({
+        error: "email and name are required",
+      });
+    }
+
+    // Normalize website URL
+    let normalizedWebsite = website?.trim() || "";
+    if (normalizedWebsite && !normalizedWebsite.startsWith("http")) {
+      normalizedWebsite = `https://${normalizedWebsite}`;
+    }
+
+    const contactData = {
+      name,
+      email,
+      phone: phone || "",
+      website: normalizedWebsite,
+    };
+
+    const result = await supabaseService.saveContact(contactData);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    console.error("Error saving contact to Supabase:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to save contact to Supabase",
     });
   }
 });
