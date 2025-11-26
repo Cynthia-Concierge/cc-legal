@@ -104,6 +104,13 @@ interface PricingPlan {
   trialDays?: number;
   platforms: string[];
 }
+// Declare Facebook Pixel function
+declare global {
+  interface Window {
+    fbq: (action: string, event: string, params?: Record<string, any>) => void;
+  }
+}
+
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
@@ -157,6 +164,16 @@ const Index = () => {
   useEffect(() => {
     fetchPricingPlans();
   }, []);
+
+  // Track Facebook Pixel Lead event when thank you page is shown
+  useEffect(() => {
+    if (showThankYou && typeof window !== 'undefined' && window.fbq) {
+      window.fbq('track', 'Lead', {
+        content_name: 'Legal Documents Form Submission',
+        content_category: 'Lead Generation'
+      });
+    }
+  }, [showThankYou]);
 
   // Mini document icon mapping
   const getMiniDocIcon = (iconName: string) => {
@@ -1123,6 +1140,13 @@ const Index = () => {
                   onSubmit={(e) => {
                     e.preventDefault();
                     setShowThankYou(true);
+                    // Track Lead event immediately on form submission
+                    if (typeof window !== 'undefined' && window.fbq) {
+                      window.fbq('track', 'Lead', {
+                        content_name: 'Legal Documents Form Submission',
+                        content_category: 'Lead Generation'
+                      });
+                    }
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                   className="space-y-3"
@@ -1168,10 +1192,33 @@ const Index = () => {
                       Website*
                     </Label>
                     <Input
-                      type="url"
+                      type="text"
                       required
                       className="w-full bg-white/80 border-gray-300/50 text-slate-900 placeholder:text-gray-500 focus:ring-teal-400"
-                      placeholder="https://yourwebsite.com"
+                      placeholder="yourwebsite.com or www.yourwebsite.com"
+                      pattern=".*"
+                      onInvalid={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        const value = target.value.trim();
+                        if (!value) {
+                          target.setCustomValidity("Please enter your website");
+                        } else {
+                          // Normalize and validate
+                          const normalized = value.startsWith("http://") || value.startsWith("https://")
+                            ? value
+                            : `https://${value}`;
+                          try {
+                            new URL(normalized);
+                            target.setCustomValidity("");
+                          } catch {
+                            target.setCustomValidity("Please enter a valid website (e.g., yourwebsite.com)");
+                          }
+                        }
+                      }}
+                      onInput={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        target.setCustomValidity("");
+                      }}
                     />
                   </div>
 
