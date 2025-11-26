@@ -104,7 +104,7 @@ interface PricingPlan {
   trialDays?: number;
   platforms: string[];
 }
-const Index = () => {
+const GymOwners = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
@@ -684,7 +684,7 @@ const Index = () => {
       name: "Dana Shaked",
       handle: "Google Review",
       content:
-        "Opening my own Pilates studio was a big step, and I knew I needed an attorney who truly understood the unique needs of my industry. Conscious Counsel protected me and my business with clarity and care.",
+        "Opening my own gym was a big step, and I knew I needed an attorney who truly understood the unique needs of the fitness industry. Conscious Counsel protected me and my business with clarity and care.",
       image: "https://ui-avatars.com/api?name=Dana+Shaked&background=random",
       timestamp: "9:25 AM Nov 10, 2024",
     },
@@ -692,7 +692,7 @@ const Index = () => {
       name: "Autumn Enloe",
       handle: "Google Review",
       content:
-        "I worked with Conscious Counsel to update my legal documents for my nutrition practice. The whole process was smooth, helpful, and quick. They made legal language easy to understand.",
+        "I worked with Conscious Counsel to update my legal documents for my gym. The whole process was smooth, helpful, and quick. They made legal language easy to understand.",
       image: "https://ui-avatars.com/api?name=Autumn+Enloe&background=random",
       timestamp: "4:15 PM Nov 8, 2024",
     },
@@ -740,7 +740,7 @@ const Index = () => {
       name: "Holley Crooks",
       handle: "Google Review",
       content:
-        "So happy to be working with Conscious Counsel as I open my yoga studio. They are responsive, ready to listen, and made the legal setup incredibly easy. They covered every detail.",
+        "So happy to be working with Conscious Counsel as I open my gym. They are responsive, ready to listen, and made the legal setup incredibly easy. They covered every detail.",
       image: "https://ui-avatars.com/api?name=Holley+Crooks&background=random",
       timestamp: "11:15 AM Oct 25, 2024",
     },
@@ -764,7 +764,7 @@ const Index = () => {
       name: "Jacqueline Lloyd",
       handle: "Google Review",
       content:
-        "I needed solid legal documents for my online Pilates platform. Conscious Counsel truly understands the wellness industry and knew exactly what needed to be included.",
+        "I needed solid legal documents for my gym. Conscious Counsel truly understands the fitness industry and knew exactly what needed to be included.",
       image: "https://ui-avatars.com/api?name=Jacqueline+Lloyd&background=random",
       timestamp: "1:20 PM Oct 18, 2024",
     },
@@ -772,7 +772,7 @@ const Index = () => {
       name: "Gretchen Wagoner",
       handle: "Google Review",
       content:
-        "Conscious Counsel made getting legal documents for my studio and my teacher training easy and quick. They always respond promptly to any questions.",
+        "Conscious Counsel made getting legal documents for my gym and my trainer agreements easy and quick. They always respond promptly to any questions.",
       image: "https://ui-avatars.com/api?name=Gretchen+Wagoner&background=random",
       timestamp: "4:00 PM Oct 15, 2024",
     },
@@ -860,7 +860,7 @@ const Index = () => {
       name: "Melissa McNamara",
       handle: "Google Review",
       content:
-        "I've had the best experience with Cory. He went above and beyond to help me with my business. I've recommended him to everyone I know in the fitness industry.",
+        "I've had the best experience with Cory. He went above and beyond to help me with my gym. I've recommended him to everyone I know in the fitness industry.",
       image: "https://ui-avatars.com/api?name=Melissa+McNamara&background=random",
       timestamp: "10:55 AM Sep 18, 2024",
     },
@@ -900,7 +900,7 @@ const Index = () => {
       name: "Shannon Barbaro",
       handle: "Google Review",
       content:
-        "As a Pilates studio owner, finding legal support that understands the industry is invaluable. Conscious Counsel made everything easy, fast, and thorough.",
+        "As a gym owner, finding legal support that understands the fitness industry is invaluable. Conscious Counsel made everything easy, fast, and thorough.",
       image: "https://ui-avatars.com/api?name=Shannon+Barbaro&background=random",
       timestamp: "6:00 PM Sep 5, 2024",
     },
@@ -1015,7 +1015,7 @@ const Index = () => {
               Thank You!
             </h1>
             <p className="text-xl mb-6 text-gray-700">
-              Your information has been received. You now have access to all the essential legal documents your fitness or wellness business needs.
+              Your information has been received. You now have access to all the essential legal documents your gym needs.
             </p>
             <div className="bg-gray-100 p-6 rounded-lg mb-8 border">
               <h3 className="text-lg font-semibold mb-4 text-teal-600">
@@ -1088,17 +1088,16 @@ const Index = () => {
           {/* Title Section - Centered at Top */}
           <div className="max-w-4xl mx-auto text-center">
             <Badge className="bg-gradient-to-r from-teal-500 via-teal-600 to-emerald-600 text-white font-semibold mb-2 text-sm px-4 py-2 animate-subtle-pulse animate-gradient inline-block">
-              FOR FITNESS & WELLNESS OWNERS ONLY
+              FOR GYM OWNERS ONLY
             </Badge>
             <h1 className="text-[38px] font-bold mb-4 leading-tight text-gray-900 mt-0">
-              THE MUST-HAVE LEGAL DOCUMENTS EVERY <span className="bg-gradient-to-r from-teal-500 to-emerald-600 bg-clip-text text-transparent">FITNESS & WELLNESS</span> BUSINESS
+              THE MUST-HAVE LEGAL DOCUMENTS EVERY <span className="bg-gradient-to-r from-teal-500 to-emerald-600 bg-clip-text text-transparent">GYM</span> OWNER
               NEEDS TO AVOID A LAWSUIT
             </h1>
             <p className="text-base md:text-lg text-gray-700 leading-relaxed mt-0 mb-0">
               Get the exact waivers, contracts, and policies Conscious Counsel
-              uses to protect 1,000+ yoga studios, gyms, Pilates, and wellness
-              businesses—so you can stop worrying about legal "what ifs" and
-              focus on your clients.
+              uses to protect 1,000+ gyms and fitness facilities—so you can stop worrying about legal "what ifs" and
+              focus on growing your membership base.
             </p>
           </div>
 
@@ -1116,7 +1115,7 @@ const Index = () => {
                   ENTER YOUR INFO
                 </h2>
                 <p className="text-slate-800 mb-4 text-sm">
-                  And we'll send you instant access to all the essential legal documents your fitness or wellness business needs — plus exclusive bonuses worth $3,999.
+                  And we'll send you instant access to all the essential legal documents your gym needs — plus exclusive bonuses worth $3,999.
                 </p>
 
                 <form
@@ -1229,7 +1228,7 @@ const Index = () => {
               </CardHeader>
               <CardContent className="relative z-10">
                 <CardDescription className="text-gray-700 transition-colors duration-300">
-                  Covers injuries and accidents during workouts or classes.
+                  Covers injuries and accidents during gym workouts, training sessions, and equipment use.
                 </CardDescription>
               </CardContent>
               <div 
@@ -1263,7 +1262,7 @@ const Index = () => {
               </CardHeader>
               <CardContent className="relative z-10">
                 <CardDescription className="text-gray-700 transition-colors duration-300">
-                  Defines terms of service, payment, cancellations, and policies.
+                  Defines membership terms, payment schedules, cancellation policies, and gym rules.
                 </CardDescription>
               </CardContent>
               <div 
@@ -1331,7 +1330,7 @@ const Index = () => {
               </CardHeader>
               <CardContent className="relative z-10">
                 <CardDescription className="text-gray-700 transition-colors duration-300">
-                  For trainers, instructors, and outside specialists.
+                  For personal trainers, group fitness instructors, and independent contractors at your gym.
                 </CardDescription>
               </CardContent>
               <div 
@@ -1501,7 +1500,7 @@ const Index = () => {
               </CardHeader>
               <CardContent className="relative z-10">
                 <CardDescription className="text-gray-700 transition-colors duration-300">
-                  Covers use of before/after photos and client success stories.
+                  Covers use of member transformation photos, workout videos, and gym success stories.
                 </CardDescription>
               </CardContent>
               <div 
@@ -1535,7 +1534,7 @@ const Index = () => {
               </CardHeader>
               <CardContent className="relative z-10">
                 <CardDescription className="text-gray-700 transition-colors duration-300">
-                  Explains how to protect your logo, brand name, slogans, and workouts.
+                  Explains how to protect your gym logo, brand name, workout programs, and training methodologies.
                 </CardDescription>
               </CardContent>
               <div 
@@ -1553,7 +1552,7 @@ const Index = () => {
             {/* Header */}
             <div className="text-center mb-6">
               <h2 className="text-3xl md:text-5xl font-bold mb-3 text-gray-900">
-                OVER 500 STUDIO OWNERS LOVE US
+                OVER 500 GYM OWNERS LOVE US
               </h2>
               {/* Compact Rating Display */}
               <div className="flex items-center justify-center gap-2 mb-4">
@@ -1570,7 +1569,7 @@ const Index = () => {
                 </span>
               </div>
               <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
-                We have over 455 5-star Google reviews from satisfied clients who have transformed their careers with our services.
+                We have over 455 5-star Google reviews from satisfied gym owners who have protected their businesses with our legal documents.
               </p>
             </div>
 
@@ -1775,7 +1774,7 @@ const Index = () => {
                           Automatic Annual Legal Update Alerts
                         </p>
                         <p className="text-gray-600 text-sm">
-                          Stay protected with yearly notifications about important changes in fitness & wellness law — no work required on your part.
+                          Stay protected with yearly notifications about important changes in gym and fitness industry law — no work required on your part.
                         </p>
                       </div>
                     </div>
@@ -1915,4 +1914,4 @@ const Index = () => {
     </div>
   );
 };
-export default Index;
+export default GymOwners;

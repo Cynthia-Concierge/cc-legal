@@ -71,3 +71,56 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Lead Scraping System
+
+This project includes a lead scraping system that:
+1. Scrapes lead websites using Firecrawl API
+2. Extracts legal documents (Privacy Policy, Terms of Service, Refund Policy, etc.)
+3. Analyzes documents using ChatGPT to find missing items and compliance issues
+4. Generates personalized emails using ChatGPT
+
+### Setup
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Configure Environment Variables**
+   Update the `.env` file in the root directory:
+   ```
+   FIRECRAWL_API_KEY=your-firecrawl-api-key
+   OPENAI_API_KEY=your-openai-api-key
+   ```
+
+3. **Start the Backend Server**
+   ```bash
+   npm run server
+   ```
+   
+   Or for development with auto-reload:
+   ```bash
+   npm run server:dev
+   ```
+
+4. **Start the Frontend**
+   ```bash
+   npm run dev
+   ```
+
+5. **Access the Lead Scraper**
+   Navigate to `http://localhost:8080/lead-scraper` in your browser.
+
+### Usage
+
+1. Enter a website URL (e.g., `https://example.com`)
+2. Optionally provide lead information (name, company, email)
+3. Click "Analyze Website"
+4. View the results:
+   - Legal documents found
+   - Compliance analysis with missing documents and issues
+   - Generated personalized email
+5. Copy or download the generated email
+
+For more details, see [server/README.md](./server/README.md)
