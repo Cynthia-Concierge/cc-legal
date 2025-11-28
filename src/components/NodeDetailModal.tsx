@@ -18,7 +18,10 @@ import {
   MessageSquare,
   Sparkles,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface AutoGenReview {
@@ -78,6 +81,162 @@ const NodeDetailModal = ({
     prompts?: Record<string, string>;
     autogenConfigs?: Record<string, any>;
   } | null>(null);
+  const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
+
+  // Helper function to truncate long strings in JSON objects
+  const truncateLongStrings = (obj: any, path: string = "", maxLength: number = 10000): any => {
+    if (typeof obj === "string") {
+      if (obj.length > maxLength) {
+        const isExpanded = expandedFields.has(path);
+        return {
+          __truncated: true,
+          __path: path,
+          __originalLength: obj.length,
+          __value: isExpanded ? obj : obj.substring(0, maxLength) + "\n\n... [truncated, click to expand]",
+        };
+      }
+      return obj;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map((item, index) => truncateLongStrings(item, `${path}[${index}]`, maxLength));
+    }
+    
+    if (obj !== null && typeof obj === "object") {
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const newPath = path ? `${path}.${key}` : key;
+        result[key] = truncateLongStrings(value, newPath, maxLength);
+      }
+      return result;
+    }
+    
+    return obj;
+  };
+
+  // Toggle field expansion
+  const toggleField = (path: string) => {
+    setExpandedFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  // Render JSON with truncation support
+  const renderTruncatedJSON = (data: any, label: string) => {
+    const maxLength = 10000;
+    
+    // Find all long string paths
+    const longStringPaths: Array<{path: string, length: number}> = [];
+    const findPaths = (obj: any, path: string = "") => {
+      if (typeof obj === "string" && obj.length > maxLength) {
+        longStringPaths.push({ path, length: obj.length });
+      } else if (Array.isArray(obj)) {
+        obj.forEach((item, index) => {
+          findPaths(item, `${path}[${index}]`);
+        });
+      } else if (obj !== null && typeof obj === "object") {
+        for (const [key, value] of Object.entries(obj)) {
+          const newPath = path ? `${path}.${key}` : key;
+          findPaths(value, newPath);
+        }
+      }
+    };
+    findPaths(data);
+    
+    // Create display data with truncated strings
+    const createDisplayData = (obj: any, path: string = ""): any => {
+      if (typeof obj === "string") {
+        const isExpanded = expandedFields.has(path);
+        if (obj.length > maxLength) {
+          return isExpanded 
+            ? obj 
+            : obj.substring(0, maxLength) + "\n\n... [truncated - " + (obj.length - maxLength).toLocaleString() + " more characters - click expand button below]";
+        }
+        return obj;
+      }
+      
+      if (Array.isArray(obj)) {
+        return obj.map((item, index) => createDisplayData(item, `${path}[${index}]`));
+      }
+      
+      if (obj !== null && typeof obj === "object") {
+        const result: any = {};
+        for (const [key, value] of Object.entries(obj)) {
+          const newPath = path ? `${path}.${key}` : key;
+          result[key] = createDisplayData(value, newPath);
+        }
+        return result;
+      }
+      
+      return obj;
+    };
+    
+    const displayData = createDisplayData(data);
+    const jsonString = JSON.stringify(displayData, null, 2);
+
+    return (
+      <div className="space-y-2">
+        <ScrollArea className="h-[25vh] border rounded-lg p-4">
+          <pre className="whitespace-pre-wrap text-xs font-mono">
+            {jsonString}
+          </pre>
+        </ScrollArea>
+        {longStringPaths.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {longStringPaths.map(({ path, length }) => {
+              const isExpanded = expandedFields.has(path);
+              const pathParts = path.split('.');
+              const displayName = pathParts[pathParts.length - 1] || path;
+              return (
+                <Button
+                  key={path}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleField(path)}
+                  className="text-xs"
+                >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="w-3 h-3 mr-1" />
+                      Collapse {displayName} ({length.toLocaleString()} chars)
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3 mr-1" />
+                      Expand {displayName} ({length.toLocaleString()} chars)
+                    </>
+                  )}
+                </Button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Helper to get nested value from object by path
+  const getNestedValue = (obj: any, path: string): any => {
+    const parts = path.split(".");
+    let current = obj;
+    for (const part of parts) {
+      if (part.includes("[")) {
+        const [key, indexStr] = part.split("[");
+        const index = parseInt(indexStr.replace("]", ""));
+        current = current?.[key]?.[index];
+      } else {
+        current = current?.[part];
+      }
+      if (current === undefined) break;
+    }
+    return current;
+  };
 
   // Fallback fetch if config is missing
   useEffect(() => {
@@ -469,22 +628,14 @@ const NodeDetailModal = ({
                 {details?.input && (
                   <div className="space-y-2">
                     <div className="text-sm font-medium">Input Data</div>
-                    <ScrollArea className="h-[25vh] border rounded-lg p-4">
-                      <pre className="whitespace-pre-wrap text-xs font-mono">
-                        {JSON.stringify(details.input, null, 2)}
-                      </pre>
-                    </ScrollArea>
+                    {renderTruncatedJSON(details.input, "input")}
                   </div>
                 )}
 
                 {details?.output && (
                   <div className="space-y-2">
                     <div className="text-sm font-medium">Output Data</div>
-                    <ScrollArea className="h-[25vh] border rounded-lg p-4">
-                      <pre className="whitespace-pre-wrap text-xs font-mono">
-                        {JSON.stringify(details.output, null, 2)}
-                      </pre>
-                    </ScrollArea>
+                    {renderTruncatedJSON(details.output, "output")}
                   </div>
                 )}
 

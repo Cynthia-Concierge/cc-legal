@@ -5,34 +5,16 @@
 
 import { StateGraph, END, START, Annotation } from "@langchain/langgraph";
 import { FirecrawlService } from "./firecrawlService.js";
+import type { NormalizedWebsiteData } from "./firecrawlService.js";
 import { AutoGenService } from "./autogenService.js";
 
 /**
  * State interface for the website redesign workflow
  */
+
 export interface WebsiteRedesignState {
   websiteUrl: string;
-  scrapedData?: {
-    mainPage: {
-      markdown: string;
-      metadata?: {
-        title?: string;
-        description?: string;
-      };
-    };
-    navigation: {
-      links: Array<{
-        text: string;
-        url: string;
-      }>;
-    };
-    services?: string[];
-    structure: {
-      sections: string[];
-      footer?: string;
-      header?: string;
-    };
-  };
+  scrapedData?: NormalizedWebsiteData;
   normalizedData?: {
     url: string;
     metadata: {
@@ -179,7 +161,7 @@ export class WebsiteRedesignWorkflow {
       );
 
       const endTime = Date.now();
-      console.log(`[Full Scrape Node] Scraped homepage with ${scrapedData.navigation.links.length} nav links`);
+      console.log(`[Full Scrape Node] Scraped ${scrapedData.pages.length} pages with ${scrapedData.navigation.items.length} nav items`);
 
       const executionDetails: Record<string, NodeExecutionDetails> = {};
       if (state.executionDetails) {
@@ -193,9 +175,13 @@ export class WebsiteRedesignWorkflow {
         duration: endTime - startTime,
         input: { websiteUrl: state.websiteUrl },
         output: { 
-          navigationLinks: scrapedData.navigation.links.length,
-          servicesFound: scrapedData.services?.length || 0,
-          sectionsFound: scrapedData.structure.sections.length,
+          summary: {
+            pagesScraped: scrapedData.pages.length,
+            navigationItems: scrapedData.navigation.items.length,
+            totalSections: scrapedData.pages.reduce((sum, page) => sum + page.sections.length, 0),
+            logoFound: !!scrapedData.logo,
+          },
+          fullData: scrapedData,
         },
       };
 
@@ -266,13 +252,19 @@ export class WebsiteRedesignWorkflow {
         endTime,
         duration: endTime - startTime,
         input: {
-          navigationLinks: state.scrapedData.navigation.links.length,
-          servicesCount: state.scrapedData.services?.length || 0,
+          summary: {
+            pagesScraped: state.scrapedData.pages.length,
+            navigationItems: state.scrapedData.navigation.items.length,
+          },
+          fullData: state.scrapedData,
         },
         output: {
-          servicesNormalized: normalizedData.services.length,
-          navItemsNormalized: normalizedData.navigation.main.length,
-          sectionsFound: normalizedData.sections.length,
+          summary: {
+            servicesNormalized: normalizedData.services.length,
+            navItemsNormalized: normalizedData.navigation.main.length,
+            sectionsFound: normalizedData.sections.length,
+          },
+          fullData: normalizedData,
         },
       };
 
@@ -307,7 +299,9 @@ export class WebsiteRedesignWorkflow {
   }
 
   /**
-   * Normalize scraped data into clean, structured format
+   * Normalize scraped data into format expected by AutoGen
+   * The scraped data is already normalized, but we need to convert it to the format
+   * expected by the AutoGen service
    */
   private normalizeScrapedData(
     websiteUrl: string,
@@ -317,48 +311,90 @@ export class WebsiteRedesignWorkflow {
       throw new Error("No scraped data to normalize");
     }
 
-    const markdown = scrapedData.mainPage.markdown || "";
-    const metadata = scrapedData.mainPage.metadata || {};
+    // Find homepage
+    const homepage = scrapedData.pages.find(p => p.url === "/" || p.name === "Home") || scrapedData.pages[0];
+    
+    // Extract hero from homepage first section
+    const heroSection = homepage?.sections[0] || { heading: "Welcome", copy: "", ctas: [] };
+    const heroCTA = heroSection.ctas[0] || { label: "Get Started", url: "/contact" };
+    const secondaryCTA = heroSection.ctas[1];
 
-    // Clean markdown - remove footer, duplicated nav, scripts
-    const cleanedMarkdown = this.cleanMarkdown(markdown);
+    // Extract all services from all pages
+    const services: string[] = [];
+    for (const page of scrapedData.pages) {
+      for (const section of page.sections) {
+        // Look for service-like sections
+        if (section.heading.toLowerCase().includes("service") || 
+            section.heading.toLowerCase().includes("feature") ||
+            section.heading.toLowerCase().includes("offer")) {
+          // Extract bullet points or list items from copy
+          const bulletMatches = section.copy.match(/^[\*\-\•]\s*(.+)$/gm);
+          if (bulletMatches) {
+            bulletMatches.forEach(match => {
+              const service = match.replace(/^[\*\-\•]\s*/, "").trim();
+              if (service.length > 5 && service.length < 100 && !services.includes(service)) {
+                services.push(service);
+              }
+            });
+          }
+        }
+      }
+    }
 
-    // Extract hero section
-    const hero = this.extractHero(cleanedMarkdown);
+    // Extract all sections
+    const sections: string[] = [];
+    for (const page of scrapedData.pages) {
+      for (const section of page.sections) {
+        if (section.heading && !sections.includes(section.heading)) {
+          sections.push(section.heading);
+        }
+      }
+    }
 
-    // Extract main navigation (filter out footer links, social links, etc.)
-    const mainNav = this.extractMainNavigation(scrapedData.navigation.links, websiteUrl);
+    // Extract CTAs from all pages
+    const ctas: string[] = [];
+    for (const page of scrapedData.pages) {
+      for (const section of page.sections) {
+        for (const cta of section.ctas) {
+          if (!ctas.includes(cta.label)) {
+            ctas.push(cta.label);
+          }
+        }
+      }
+    }
 
-    // Extract services (clean and deduplicate)
-    const services = this.extractCleanServices(scrapedData.services || [], cleanedMarkdown);
-
-    // Extract social links
-    const socialLinks = this.extractSocialLinks(scrapedData.navigation.links, cleanedMarkdown);
-
-    // Extract CTAs
-    const ctas = this.extractCTAs(cleanedMarkdown);
-
-    // Extract sections
-    const sections = this.extractSections(scrapedData.structure.sections || []);
+    // Extract social links from navigation (if any)
+    const socialLinks: Record<string, string> = {};
+    for (const navItem of scrapedData.navigation.items) {
+      const url = navItem.url.toLowerCase();
+      if (url.includes("facebook.com")) socialLinks.facebook = navItem.url;
+      else if (url.includes("instagram.com")) socialLinks.instagram = navItem.url;
+      else if (url.includes("twitter.com") || url.includes("x.com")) socialLinks.twitter = navItem.url;
+      else if (url.includes("linkedin.com")) socialLinks.linkedin = navItem.url;
+      else if (url.includes("youtube.com")) socialLinks.youtube = navItem.url;
+    }
 
     return {
       url: websiteUrl,
       metadata: {
-        title: metadata.title || "Website",
-        description: metadata.description || "",
+        title: homepage?.name || "Website",
+        description: "",
       },
       hero: {
-        headline: hero.headline,
-        subheadline: hero.subheadline,
-        primaryCTA: hero.primaryCTA,
-        secondaryCTA: hero.secondaryCTA,
+        headline: heroSection.heading || "Welcome",
+        subheadline: heroSection.copy.substring(0, 150) || "Discover our services",
+        primaryCTA: heroCTA.label,
+        secondaryCTA: secondaryCTA?.label,
       },
       navigation: {
-        main: mainNav,
+        main: scrapedData.navigation.items.map(item => ({
+          label: item.label,
+          url: item.url,
+        })),
       },
-      services,
+      services: services.slice(0, 10), // Limit to 10
       socialLinks: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
-      sections,
+      sections: sections.slice(0, 20), // Limit to 20
       ctas: ctas.length > 0 ? ctas : undefined,
     };
   }
@@ -954,6 +990,87 @@ Each agent receives the outputs from previous agents and builds upon them to cre
       } as WebsiteRedesignState;
     } catch (error: any) {
       console.error("[Workflow] Execution error:", error);
+      return {
+        ...initialState,
+        error: `Workflow execution error: ${error.message || "Unknown error"}`,
+      };
+    }
+  }
+
+  /**
+   * Execute workflow up to a specific step
+   * Supports: "full_scrape", "normalize_data", "website_design"
+   */
+  async executeUpToStep(
+    websiteUrl: string,
+    stopAtStep: "full_scrape" | "normalize_data" | "website_design"
+  ): Promise<WebsiteRedesignState> {
+    const initialState = {
+      websiteUrl,
+      scrapedData: undefined,
+      normalizedData: undefined,
+      redesignedWebsite: undefined,
+      error: undefined,
+      executionDetails: {},
+    };
+
+    try {
+      let currentState = initialState;
+
+      // Step 1: Full Scrape
+      if (stopAtStep === "full_scrape" || stopAtStep === "normalize_data" || stopAtStep === "website_design") {
+        console.log(`[Workflow] Executing step: full_scrape`);
+        const scrapeResult = await this.fullScrapeNode(currentState);
+        currentState = { ...currentState, ...scrapeResult };
+        
+        if (currentState.error) {
+          return currentState as WebsiteRedesignState;
+        }
+
+        if (stopAtStep === "full_scrape") {
+          return {
+            ...currentState,
+            executionDetails: currentState.executionDetails || {},
+          } as WebsiteRedesignState;
+        }
+      }
+
+      // Step 2: Normalize Data
+      if (stopAtStep === "normalize_data" || stopAtStep === "website_design") {
+        console.log(`[Workflow] Executing step: normalize_data`);
+        const normalizeResult = await this.normalizeDataNode(currentState);
+        currentState = { ...currentState, ...normalizeResult };
+        
+        if (currentState.error) {
+          return currentState as WebsiteRedesignState;
+        }
+
+        if (stopAtStep === "normalize_data") {
+          return {
+            ...currentState,
+            executionDetails: currentState.executionDetails || {},
+          } as WebsiteRedesignState;
+        }
+      }
+
+      // Step 3: Website Design
+      if (stopAtStep === "website_design") {
+        console.log(`[Workflow] Executing step: website_design`);
+        const designResult = await this.websiteDesignNode(currentState);
+        currentState = { ...currentState, ...designResult };
+      }
+
+      const mergedExecutionDetails: Record<string, NodeExecutionDetails> = {};
+      if (currentState.executionDetails) {
+        Object.assign(mergedExecutionDetails, currentState.executionDetails);
+      }
+
+      return {
+        ...currentState,
+        executionDetails: mergedExecutionDetails,
+      } as WebsiteRedesignState;
+    } catch (error: any) {
+      console.error("[Workflow] Partial execution error:", error);
       return {
         ...initialState,
         error: `Workflow execution error: ${error.message || "Unknown error"}`,

@@ -483,6 +483,71 @@ app.post("/api/website-redesign", async (req, res) => {
   }
 });
 
+// Step-by-step website redesign endpoint
+app.post("/api/website-redesign-step", async (req, res) => {
+  try {
+    const { websiteUrl, stopAtStep } = req.body;
+
+    if (!websiteUrl) {
+      return res.status(400).json({
+        error: "websiteUrl is required",
+      });
+    }
+
+    if (!stopAtStep || !["full_scrape", "normalize_data", "website_design"].includes(stopAtStep)) {
+      return res.status(400).json({
+        error: "stopAtStep is required and must be one of: full_scrape, normalize_data, website_design",
+      });
+    }
+
+    // Validate URL format
+    try {
+      new URL(websiteUrl);
+    } catch {
+      return res.status(400).json({
+        error: "Invalid URL format",
+      });
+    }
+
+    if (!websiteRedesignWorkflow) {
+      return res.status(500).json({
+        error: "Website redesign workflow not initialized",
+      });
+    }
+
+    // Execute workflow up to specified step
+    console.log(`[Website Redesign Step] Executing up to step: ${stopAtStep} for: ${websiteUrl}`);
+    const result = await websiteRedesignWorkflow.executeUpToStep(websiteUrl, stopAtStep);
+
+    // Check for errors
+    if (result.error) {
+      return res.status(500).json({
+        error: "Workflow execution error",
+        message: result.error,
+      });
+    }
+
+    // Return results
+    res.json({
+      success: true,
+      data: {
+        websiteUrl: result.websiteUrl,
+        stepExecuted: stopAtStep,
+        scrapedData: result.scrapedData,
+        normalizedData: result.normalizedData,
+        redesignedWebsite: result.redesignedWebsite,
+        executionDetails: result.executionDetails || {},
+      },
+    });
+  } catch (error: any) {
+    console.error("Error in website-redesign-step:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "An error occurred during step execution",
+    });
+  }
+});
+
 // Streaming endpoint for real-time website redesign workflow updates
 app.post("/api/website-redesign-stream", async (req, res) => {
   try {

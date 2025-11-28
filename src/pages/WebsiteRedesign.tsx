@@ -18,10 +18,12 @@ import {
   Layout,
   Palette,
   Navigation,
+  Play,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import WorkflowVisualization from "@/components/WorkflowVisualization";
 
 interface NodeExecutionDetails {
@@ -38,7 +40,9 @@ interface NodeExecutionDetails {
 
 interface RedesignResult {
   websiteUrl: string;
+  stepExecuted?: string;
   scrapedData?: any;
+  normalizedData?: any;
   redesignedWebsite?: {
     structure: {
       pages: Array<{
@@ -79,6 +83,7 @@ const WebsiteRedesign = () => {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<RedesignResult | null>(null);
+  const [selectedStep, setSelectedStep] = useState<"full_scrape" | "normalize_data" | "website_design" | "full">("full");
   const [currentStep, setCurrentStep] = useState<
     "idle" | "scraping" | "normalizing" | "designing" | "complete"
   >("idle");
@@ -124,7 +129,58 @@ const WebsiteRedesign = () => {
         ? websiteUrl
         : `https://${websiteUrl}`;
 
-      // Use streaming endpoint for real-time updates
+      // If step-by-step execution is selected, use step endpoint
+      if (selectedStep !== "full") {
+        const response = await fetch(`${API_BASE_URL}/api/website-redesign-step`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            websiteUrl: normalizedUrl,
+            stopAtStep: selectedStep,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.message || errorData.error || "Failed to execute step"
+          );
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          // Map step to current step state
+          if (selectedStep === "full_scrape") {
+            setCurrentStep("scraping");
+          } else if (selectedStep === "normalize_data") {
+            setCurrentStep("normalizing");
+          } else if (selectedStep === "website_design") {
+            setCurrentStep("designing");
+          }
+
+          setResult({
+            websiteUrl: data.data.websiteUrl,
+            scrapedData: data.data.scrapedData,
+            normalizedData: data.data.normalizedData,
+            redesignedWebsite: data.data.redesignedWebsite,
+            executionDetails: data.data.executionDetails,
+          });
+
+          setCurrentStep("complete");
+          toast({
+            title: "Success",
+            description: `Step ${selectedStep} completed successfully!`,
+          });
+        } else {
+          throw new Error("Invalid response from server");
+        }
+        return;
+      }
+
+      // Use streaming endpoint for full workflow
       const response = await fetch(`${API_BASE_URL}/api/website-redesign-stream`, {
         method: "POST",
         headers: {
@@ -363,7 +419,7 @@ const WebsiteRedesign = () => {
         <CardHeader>
           <CardTitle>Enter Website URL</CardTitle>
           <CardDescription>
-            Provide the website URL to scrape and redesign
+            Provide the website URL to scrape and redesign. Select a step to test individually or run the full workflow.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -378,6 +434,40 @@ const WebsiteRedesign = () => {
               onChange={(e) => setWebsiteUrl(e.target.value)}
               disabled={isLoading}
             />
+          </div>
+
+          <div className="space-y-3">
+            <Label>Execution Mode</Label>
+            <RadioGroup
+              value={selectedStep}
+              onValueChange={(value) => setSelectedStep(value as typeof selectedStep)}
+              disabled={isLoading}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="full_scrape" id="step1" />
+                <Label htmlFor="step1" className="font-normal cursor-pointer">
+                  Step 1: Scrape Only (Test scraping)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="normalize_data" id="step2" />
+                <Label htmlFor="step2" className="font-normal cursor-pointer">
+                  Step 2: Scrape + Normalize (Test normalization)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="website_design" id="step3" />
+                <Label htmlFor="step3" className="font-normal cursor-pointer">
+                  Step 3: Full Workflow (Scrape + Normalize + Design)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="full" id="full" />
+                <Label htmlFor="full" className="font-normal cursor-pointer">
+                  Full Workflow (Streaming - All Steps)
+                </Label>
+              </div>
+            </RadioGroup>
           </div>
 
           <Button
@@ -395,14 +485,234 @@ const WebsiteRedesign = () => {
               </>
             ) : (
               <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Redesign Website
+                <Play className="mr-2 h-4 w-4" />
+                {selectedStep === "full_scrape" && "Run Step 1: Scrape"}
+                {selectedStep === "normalize_data" && "Run Step 2: Scrape + Normalize"}
+                {selectedStep === "website_design" && "Run Step 3: Full Workflow"}
+                {selectedStep === "full" && "Run Full Workflow (Streaming)"}
               </>
             )}
           </Button>
         </CardContent>
       </Card>
 
+      {/* Step 1 Results: Scraped Data */}
+      {result && result.scrapedData && !result.normalizedData && !result.redesignedWebsite && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5" />
+                  Step 1 Results: Scraped Data
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      copyToClipboard(
+                        JSON.stringify(result.scrapedData, null, 2),
+                        "Scraped Data"
+                      )
+                    }
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-sm font-semibold">Domain</Label>
+                <p className="text-sm text-muted-foreground">{result.scrapedData.domain}</p>
+              </div>
+              {result.scrapedData.logo && (
+                <div>
+                  <Label className="text-sm font-semibold">Logo</Label>
+                  <p className="text-sm text-muted-foreground break-all">{result.scrapedData.logo}</p>
+                </div>
+              )}
+              <div>
+                <Label className="text-sm font-semibold">Navigation Items</Label>
+                <div className="mt-2 space-y-2">
+                  {result.scrapedData.navigation?.items?.map((item: any, index: number) => (
+                    <div key={index} className="border rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="default" className="font-medium">
+                          {item.label}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{item.url}</span>
+                      </div>
+                      {item.children && item.children.length > 0 && (
+                        <div className="mt-2 ml-4 space-y-1">
+                          <div className="text-xs font-semibold text-muted-foreground mb-1">
+                            Subnavigation:
+                          </div>
+                          {item.children.map((child: any, childIndex: number) => (
+                            <div key={childIndex} className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                {child.label}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">{child.url}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold">Pages Scraped</Label>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {result.scrapedData.pages?.length || 0} pages
+                </p>
+                <ScrollArea className="h-96 w-full rounded-md border p-4">
+                  <div className="space-y-4">
+                    {result.scrapedData.pages?.map((page: any, index: number) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium">{page.name}</h4>
+                          <Badge variant="secondary">{page.url}</Badge>
+                        </div>
+                        <div className="space-y-2">
+                          {page.sections?.map((section: any, sIndex: number) => (
+                            <div key={sIndex} className="border-l-2 pl-3 py-2">
+                              <div className="font-semibold text-sm">{section.heading}</div>
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-3">
+                                {section.copy}
+                              </p>
+                              {section.images?.length > 0 && (
+                                <div className="mt-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {section.images.length} image(s)
+                                  </Badge>
+                                </div>
+                              )}
+                              {section.ctas?.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {section.ctas.map((cta: any, cIndex: number) => (
+                                    <Badge key={cIndex} variant="outline" className="text-xs">
+                                      {cta.label}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step 2 Results: Normalized Data */}
+      {result && result.normalizedData && !result.redesignedWebsite && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  Step 2 Results: Normalized Data
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      copyToClipboard(
+                        JSON.stringify(result.normalizedData, null, 2),
+                        "Normalized Data"
+                      )
+                    }
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-sm font-semibold">URL</Label>
+                <p className="text-sm text-muted-foreground">{result.normalizedData.url}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold">Metadata</Label>
+                <div className="mt-1 space-y-1">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Title:</strong> {result.normalizedData.metadata?.title}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Description:</strong> {result.normalizedData.metadata?.description}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold">Hero Section</Label>
+                <div className="mt-1 space-y-1 p-3 bg-slate-50 dark:bg-slate-900 rounded">
+                  <p className="text-sm font-medium">{result.normalizedData.hero?.headline}</p>
+                  <p className="text-sm text-muted-foreground">{result.normalizedData.hero?.subheadline}</p>
+                  <div className="flex gap-2 mt-2">
+                    <Badge variant="default">{result.normalizedData.hero?.primaryCTA}</Badge>
+                    {result.normalizedData.hero?.secondaryCTA && (
+                      <Badge variant="outline">{result.normalizedData.hero.secondaryCTA}</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold">Navigation</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {result.normalizedData.navigation?.main?.map((item: any, index: number) => (
+                    <Badge key={index} variant="outline">
+                      {item.label} ({item.url})
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              {result.normalizedData.services && result.normalizedData.services.length > 0 && (
+                <div>
+                  <Label className="text-sm font-semibold">Services</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {result.normalizedData.services.map((service: string, index: number) => (
+                      <Badge key={index} variant="secondary">{service}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {result.normalizedData.sections && result.normalizedData.sections.length > 0 && (
+                <div>
+                  <Label className="text-sm font-semibold">Sections</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {result.normalizedData.sections.map((section: string, index: number) => (
+                      <Badge key={index} variant="outline">{section}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <Label className="text-sm font-semibold">Full Normalized Data</Label>
+                <ScrollArea className="h-96 w-full rounded-md border p-4 mt-2">
+                  <pre className="text-xs font-mono whitespace-pre-wrap">
+                    {JSON.stringify(result.normalizedData, null, 2)}
+                  </pre>
+                </ScrollArea>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step 3 Results: Full Redesign */}
       {result && result.redesignedWebsite && (
         <div className="space-y-6">
           {/* Design Overview */}

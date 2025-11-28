@@ -16,6 +16,38 @@ interface FirecrawlScrapeResponse {
   error?: string;
 }
 
+// New interfaces for website redesign scraping
+export interface NavigationItem {
+  label: string;
+  url: string;
+  children?: NavigationItem[]; // Subnavigation items
+}
+
+export interface PageSection {
+  heading: string;
+  copy: string;
+  images: string[];
+  ctas: Array<{
+    label: string;
+    url: string;
+  }>;
+}
+
+export interface NormalizedPage {
+  name: string;
+  url: string;
+  sections: PageSection[];
+}
+
+export interface NormalizedWebsiteData {
+  domain: string;
+  logo?: string;
+  navigation: {
+    items: NavigationItem[];
+  };
+  pages: NormalizedPage[];
+}
+
 interface LegalDocuments {
   privacyPolicy?: string;
   termsOfService?: string;
@@ -220,74 +252,58 @@ export class FirecrawlService {
 
   /**
    * Scrape entire website for redesign purposes
-   * Optimized: Only scrapes homepage with minimal data extraction
-   * Returns structured data about navigation, services, and structure
+   * NEW IMPLEMENTATION: Scrapes homepage + nav pages only (5-10 pages max)
+   * Returns normalized JSON with all pages, sections, images, and CTAs
    */
-  async scrapeFullWebsite(url: string): Promise<{
-    mainPage: {
-      markdown: string;
-      metadata?: {
-        title?: string;
-        description?: string;
-      };
-    };
-    navigation: {
-      links: Array<{
-        text: string;
-        url: string;
-      }>;
-    };
-    services?: string[];
-    structure: {
-      sections: string[];
-      footer?: string;
-      header?: string;
-    };
-  }> {
+  async scrapeFullWebsite(url: string): Promise<NormalizedWebsiteData> {
     try {
-      // Scrape main page only - using onlyMainContent: true for cleaner data
-      const mainPageResponse = await fetch(`${this.baseUrl}/scrape`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          url: url,
-          formats: ["markdown"],
-          onlyMainContent: true,
-        }),
+      console.log(`[Firecrawl] Starting website scrape for: ${url}`);
+      
+      // Normalize URL
+      const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
+      const domain = new URL(normalizedUrl).origin;
+
+      // STEP 1: Scrape homepage
+      const homepageData = await this.scrapeHomepage(normalizedUrl);
+      
+      // STEP 2: Extract true navigation
+      const navigation = await this.extractNavigation(
+        homepageData.markdown,
+        homepageData.html || "",
+        domain
+      );
+
+      // STEP 3: Scrape nav pages (include subnavigation, limit total pages)
+      // Collect all nav items (top-level + subnav) but limit to 20 total pages
+      const allNavItems: NavigationItem[] = [];
+      for (const item of navigation.items) {
+        allNavItems.push(item);
+        if (item.children) {
+          allNavItems.push(...item.children);
+        }
+        if (allNavItems.length >= 20) break; // Increased limit to capture more pages
+      }
+      const navPages = await this.scrapeNavPages(domain, allNavItems.slice(0, 20));
+
+      // STEP 4: Normalize homepage
+      const homepagePage = this.normalizePageData({
+        name: "Home",
+        url: "/",
+        markdown: homepageData.markdown,
+        metadata: homepageData.metadata,
       });
 
-      if (!mainPageResponse.ok) {
-        throw new Error(`Firecrawl API error: ${mainPageResponse.status}`);
-      }
+      // STEP 5: Combine all pages
+      const allPages = [homepagePage, ...navPages];
 
-      const mainPageData: FirecrawlScrapeResponse = await mainPageResponse.json();
-      
-      if (!mainPageData.success || !mainPageData.data?.markdown) {
-        throw new Error(mainPageData.error || "No content returned from Firecrawl");
-      }
-
-      // Extract navigation links from markdown (simplified - only main nav)
-      const navigationLinks = this.extractNavigationLinks(mainPageData.data.markdown, url);
-      
-      // Extract services/features (simplified)
-      const services = this.extractServices(mainPageData.data.markdown);
-      
-      // Extract page structure (only H1-H3, limited header/footer)
-      const structure = this.extractStructure(mainPageData.data.markdown);
+      // Extract logo from homepage
+      const logo = this.extractLogo(homepageData.markdown, homepageData.html || "", domain);
 
       return {
-        mainPage: {
-          markdown: mainPageData.data.markdown,
-          metadata: mainPageData.data.metadata,
-        },
-        navigation: {
-          links: navigationLinks,
-        },
-        services,
-        structure,
+        domain,
+        logo,
+        navigation,
+        pages: allPages,
       };
     } catch (error) {
       console.error("Error in scrapeFullWebsite:", error);
@@ -296,120 +312,951 @@ export class FirecrawlService {
   }
 
   /**
-   * Extract navigation links from markdown content
-   * Simplified: Only extracts main navigation links (first 20 unique links)
+   * STEP 1: Scrape homepage with browser mode to capture JavaScript-rendered content
    */
-  private extractNavigationLinks(content: string, baseUrl: string): Array<{ text: string; url: string }> {
-    const links: Array<{ text: string; url: string }> = [];
-    
-    // Extract markdown links [text](url) - only first 50 matches to avoid over-processing
-    const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-    let match;
-    let matchCount = 0;
-    
-    while ((match = markdownLinkRegex.exec(content)) !== null && matchCount < 50) {
-      matchCount++;
-      const text = match[1].trim();
-      let url = match[2].trim();
-      
-      // Skip anchor links, mailto, tel, etc.
-      if (url.startsWith('#') || url.startsWith('mailto:') || url.startsWith('tel:')) {
-        continue;
+  private async scrapeHomepage(url: string): Promise<{
+    markdown: string;
+    html?: string;
+    metadata?: {
+      title?: string;
+      description?: string;
+    };
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/scrape`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          url: url,
+          formats: ["markdown", "html"],
+          onlyMainContent: false, // Need full page to extract nav
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          `Firecrawl API error: ${response.status} - ${errorData.message || response.statusText}`
+        );
       }
+
+      const data: FirecrawlScrapeResponse = await response.json();
+
+      if (!data.success || !data.data?.markdown) {
+        throw new Error(data.error || "No content returned from Firecrawl");
+      }
+
+      return {
+        markdown: data.data.markdown,
+        html: data.data.html,
+        metadata: data.data.metadata,
+      };
+    } catch (error) {
+      console.error(`Error scraping homepage ${url}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * STEP 2: Extract ALL internal links including dropdown menus, hidden menus, mobile nav
+   * This captures JavaScript-rendered navigation that only appears after interaction
+   */
+  private async extractNavigation(
+    markdown: string,
+    html: string,
+    domain: string
+  ): Promise<{ items: NavigationItem[] }> {
+    const allInternalLinks = new Set<string>();
+    const linkToLabel = new Map<string, string>();
+    const seenUrls = new Set<string>();
+
+    // Extract ALL links from HTML (including hidden dropdown menus, mobile nav, etc.)
+    if (html) {
+      // Use regex to find all <a> tags with href attributes
+      const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+      let linkMatch;
       
-      // Resolve relative URLs
-      if (!url.startsWith('http')) {
-        try {
-          url = new URL(url, baseUrl).href;
-        } catch {
+      while ((linkMatch = linkRegex.exec(html)) !== null) {
+        const href = linkMatch[1].trim();
+        let label = linkMatch[2].trim();
+        
+        // Clean label
+        label = this.cleanNavLabel(label);
+        
+        // Skip if it's a logo, icon, or invalid
+        if (this.isLogoOrIcon(linkMatch[0], href, label)) {
           continue;
         }
+
+        // Only process internal links
+        if (this.isInternalLink(href, domain)) {
+          const normalizedUrl = this.normalizeNavUrl(href, domain);
+          
+          if (!seenUrls.has(normalizedUrl) && label.length > 0) {
+            allInternalLinks.add(normalizedUrl);
+            linkToLabel.set(normalizedUrl, label);
+            seenUrls.add(normalizedUrl);
+          }
+        }
       }
-      
-      // Only include links from the same domain
+    }
+
+    // Also extract from markdown as fallback
+    const markdownLinks = this.extractNavLinksFromMarkdown(markdown, domain);
+    for (const link of markdownLinks) {
+      if (this.isInternalLink(link.url, domain)) {
+        const normalizedUrl = this.normalizeNavUrl(link.url, domain);
+        if (!seenUrls.has(normalizedUrl)) {
+          allInternalLinks.add(normalizedUrl);
+          linkToLabel.set(normalizedUrl, link.text);
+          seenUrls.add(normalizedUrl);
+        }
+      }
+    }
+
+    // Now organize into hierarchical structure (parent/child relationships)
+    const navItems = this.organizeLinksIntoNavStructure(
+      Array.from(allInternalLinks),
+      linkToLabel,
+      domain
+    );
+
+    // Filter and limit
+    const filtered = navItems
+      .filter(item => {
+        return this.isValidNavigationItem(item, domain);
+      })
+      .slice(0, 15); // Allow more items to include subnav
+
+    return { items: filtered };
+  }
+
+  /**
+   * Check if a link is internal (same domain)
+   */
+  private isInternalLink(href: string, domain: string): boolean {
+    // Skip anchors, mailto, tel, javascript
+    if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) {
+      return false;
+    }
+
+    // Skip external domains
+    if (href.startsWith("http")) {
       try {
-        const linkUrl = new URL(url);
-        const baseUrlObj = new URL(baseUrl);
-        if (linkUrl.hostname === baseUrlObj.hostname) {
-          links.push({ text, url });
+        const linkUrl = new URL(href);
+        const domainUrl = new URL(domain);
+        if (linkUrl.hostname !== domainUrl.hostname) {
+          return false;
         }
       } catch {
+        return false;
+      }
+    }
+
+    // Skip common external services
+    const lowerHref = href.toLowerCase();
+    if (
+      lowerHref.includes("shopify") ||
+      lowerHref.includes("facebook.com") ||
+      lowerHref.includes("instagram.com") ||
+      lowerHref.includes("twitter.com") ||
+      lowerHref.includes("linkedin.com") ||
+      lowerHref.includes("youtube.com") ||
+      lowerHref.includes("booking") ||
+      lowerHref.includes("calendly") ||
+      lowerHref.includes("zocdoc")
+    ) {
+      return false;
+    }
+
+    // Must be relative path or same domain
+    return true;
+  }
+
+  /**
+   * Organize flat list of links into hierarchical nav structure
+   * Groups related links (e.g., /treatments/botox under /treatments)
+   */
+  private organizeLinksIntoNavStructure(
+    links: string[],
+    linkToLabel: Map<string, string>,
+    domain: string
+  ): NavigationItem[] {
+    const navItems: NavigationItem[] = [];
+    const processed = new Set<string>();
+    const childrenByParent = new Map<string, string[]>();
+
+    // First pass: Build parent-child relationships
+    for (const link of links) {
+      const pathParts = link.split("/").filter(p => p);
+      
+      // Check if this link has a parent
+      if (pathParts.length > 1) {
+        // Try different parent path formats
+        const parentPath1 = "/" + pathParts.slice(0, -1).join("/");
+        const parentPath2 = parentPath1 + "/";
+        
+        // Check if parent exists in our links
+        const parentPath = links.includes(parentPath1) ? parentPath1 : 
+                          links.includes(parentPath2) ? parentPath2 : null;
+        
+        if (parentPath) {
+          if (!childrenByParent.has(parentPath)) {
+            childrenByParent.set(parentPath, []);
+          }
+          childrenByParent.get(parentPath)!.push(link);
+        }
+      }
+    }
+
+    // Second pass: Build nav items with children
+    // Sort links by depth (shorter paths first) so parents come before children
+    const sortedLinks = links.sort((a, b) => {
+      const aDepth = a.split("/").filter(p => p).length;
+      const bDepth = b.split("/").filter(p => p).length;
+      return aDepth - bDepth;
+    });
+
+    for (const link of sortedLinks) {
+      if (processed.has(link)) continue;
+
+      const label = linkToLabel.get(link) || this.inferLabelFromUrl(link);
+      const navItem: NavigationItem = {
+        label,
+        url: link,
+      };
+
+      // Check if this item has children
+      const children = childrenByParent.get(link) || [];
+      if (children.length > 0) {
+        navItem.children = children
+          .filter(child => links.includes(child)) // Only include if child is in our links
+          .map(child => ({
+            label: linkToLabel.get(child) || this.inferLabelFromUrl(child),
+            url: child,
+          }))
+          .slice(0, 20); // Limit subnav items
+        
+        // Mark children as processed
+        children.forEach(child => processed.add(child));
+      }
+
+      navItems.push(navItem);
+      processed.add(link);
+    }
+
+    // Add remaining links that weren't organized (orphans)
+    for (const link of sortedLinks) {
+      if (!processed.has(link)) {
+        const label = linkToLabel.get(link) || this.inferLabelFromUrl(link);
+        navItems.push({
+          label,
+          url: link,
+        });
+        processed.add(link);
+      }
+    }
+
+    return navItems;
+  }
+
+  /**
+   * Find the main navigation container in HTML
+   */
+  private findMainNavigationContainer(html: string): string | null {
+    // Try to find <nav> elements first
+    const navRegex = /<nav[^>]*>([\s\S]*?)<\/nav>/gi;
+    const navMatches = Array.from(html.matchAll(navRegex));
+    
+    if (navMatches.length > 0) {
+      // Prefer nav elements that are likely in the header/top of page
+      // Look for navs that appear early in the HTML or have nav-related classes
+      for (const match of navMatches) {
+        const navHtml = match[0];
+        // Check if this nav is likely the main nav (has multiple links, not in footer)
+        const linkCount = (navHtml.match(/<a[^>]*href/gi) || []).length;
+        const isFooter = /footer/i.test(navHtml) || /bottom/i.test(navHtml);
+        const hasNavClasses = /nav|menu|header/i.test(navHtml);
+        
+        if (linkCount >= 3 && !isFooter && hasNavClasses) {
+          return match[1]; // Return the content inside nav
+        }
+      }
+      // If no ideal match, return the first nav
+      return navMatches[0][1];
+    }
+
+    // Fallback: Look for navigation in <header>
+    const headerRegex = /<header[^>]*>([\s\S]*?)<\/header>/gi;
+    const headerMatches = Array.from(html.matchAll(headerRegex));
+    
+    if (headerMatches.length > 0) {
+      // Return the first header (usually the main one)
+      return headerMatches[0][1];
+    }
+
+    return null;
+  }
+
+  /**
+   * Extract navigation structure with subnavigation
+   */
+  private extractNavStructure(html: string, domain: string): NavigationItem[] {
+    const navItems: NavigationItem[] = [];
+    const seenUrls = new Set<string>();
+
+    // Find all top-level links (direct children of nav/header or in ul/li structures)
+    // Look for <ul> with class containing "nav", "menu", etc.
+    const ulRegex = /<ul[^>]*(?:class|id)=["'][^"']*(?:nav|menu|navigation)[^"']*["'][^>]*>([\s\S]*?)<\/ul>/gi;
+    const ulMatches = Array.from(html.matchAll(ulRegex));
+    
+    // Also look for any <ul> that might be navigation
+    if (ulMatches.length === 0) {
+      const allUlRegex = /<ul[^>]*>([\s\S]*?)<\/ul>/gi;
+      const allUls = Array.from(html.matchAll(allUlRegex));
+      // Filter to likely nav lists (have multiple <li> with links)
+      for (const ulMatch of allUls) {
+        const liCount = (ulMatch[1].match(/<li/gi) || []).length;
+        const linkCount = (ulMatch[1].match(/<a[^>]*href/gi) || []).length;
+        if (liCount >= 3 && linkCount >= 3) {
+          ulMatches.push(ulMatch);
+        }
+      }
+    }
+
+    // Extract from <ul> structures (most common nav pattern)
+    for (const ulMatch of ulMatches) {
+      const ulContent = ulMatch[1];
+      const items = this.extractNavItemsFromList(ulContent, domain, seenUrls);
+      navItems.push(...items);
+      if (navItems.length >= 15) break;
+    }
+
+    // If no <ul> found, extract direct links from nav/header
+    if (navItems.length === 0) {
+      const directLinks = this.extractDirectNavLinks(html, domain, seenUrls);
+      navItems.push(...directLinks);
+    }
+
+    return navItems;
+  }
+
+  /**
+   * Extract navigation items from a <ul> list structure (handles submenus)
+   */
+  private extractNavItemsFromList(
+    ulContent: string,
+    domain: string,
+    seenUrls: Set<string>
+  ): NavigationItem[] {
+    const items: NavigationItem[] = [];
+
+    // Extract <li> elements
+    const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+    const liMatches = Array.from(ulContent.matchAll(liRegex));
+
+    for (const liMatch of liMatches) {
+      if (items.length >= 15) break;
+      
+      const liContent = liMatch[1];
+      
+      // Find the main link in this <li>
+      const mainLinkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i;
+      const mainLinkMatch = liContent.match(mainLinkRegex);
+      
+      if (mainLinkMatch) {
+        const href = mainLinkMatch[1].trim();
+        let label = mainLinkMatch[2].trim();
+        
+        // Clean label - remove nested HTML tags, images, icons
+        label = this.cleanNavLabel(label);
+        
+        // Skip if it's a logo, icon, or image
+        if (this.isLogoOrIcon(liContent, href, label)) {
+          continue;
+        }
+
+        if (this.isValidNavLink(href, domain, label) && label.length > 0) {
+          const fullUrl = href.startsWith("http") ? href : new URL(href, domain).href;
+          
+          if (!seenUrls.has(fullUrl)) {
+            // Check for submenu/dropdown in this <li>
+            const children = this.extractSubnavigation(liContent, domain, seenUrls);
+            
+            const navItem: NavigationItem = {
+              label: label || this.inferLabelFromUrl(href),
+              url: this.normalizeNavUrl(href, domain),
+            };
+            
+            if (children.length > 0) {
+              navItem.children = children;
+            }
+            
+            items.push(navItem);
+            seenUrls.add(fullUrl);
+          }
+        }
+      }
+    }
+
+    return items;
+  }
+
+  /**
+   * Extract subnavigation items (dropdown menus)
+   */
+  private extractSubnavigation(
+    liContent: string,
+    domain: string,
+    seenUrls: Set<string>
+  ): NavigationItem[] {
+    const children: NavigationItem[] = [];
+
+    // Look for nested <ul> (common dropdown pattern)
+    const nestedUlRegex = /<ul[^>]*>([\s\S]*?)<\/ul>/gi;
+    const nestedUls = Array.from(liContent.matchAll(nestedUlRegex));
+
+    for (const nestedUl of nestedUls) {
+      const ulContent = nestedUl[1];
+      const nestedLiRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+      const nestedLis = Array.from(ulContent.matchAll(nestedLiRegex));
+
+      for (const nestedLi of nestedLis) {
+        if (children.length >= 20) break; // Limit subnav items
+        
+        const liContentInner = nestedLi[1];
+        const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i;
+        const linkMatch = liContentInner.match(linkRegex);
+
+        if (linkMatch) {
+          const href = linkMatch[1].trim();
+          let label = linkMatch[2].trim();
+          label = this.cleanNavLabel(label);
+
+          // Skip logos/icons
+          if (this.isLogoOrIcon(liContentInner, href, label)) {
+            continue;
+          }
+
+          if (this.isValidNavLink(href, domain, label) && label.length > 0) {
+            const fullUrl = href.startsWith("http") ? href : new URL(href, domain).href;
+            
+            if (!seenUrls.has(fullUrl)) {
+              children.push({
+                label: label || this.inferLabelFromUrl(href),
+                url: this.normalizeNavUrl(href, domain),
+              });
+              seenUrls.add(fullUrl);
+            }
+          }
+        }
+      }
+    }
+
+    return children;
+  }
+
+  /**
+   * Extract direct navigation links (when no <ul> structure)
+   */
+  private extractDirectNavLinks(
+    html: string,
+    domain: string,
+    seenUrls: Set<string>
+  ): NavigationItem[] {
+    const items: NavigationItem[] = [];
+    
+    // Find all <a> tags
+    const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    const links = Array.from(html.matchAll(linkRegex));
+
+    for (const link of links) {
+      if (items.length >= 15) break;
+      
+      const href = link[1].trim();
+      let label = link[2].trim();
+      label = this.cleanNavLabel(label);
+
+      // Skip logos/icons
+      if (this.isLogoOrIcon(link[0], href, label)) {
+        continue;
+      }
+
+      if (this.isValidNavLink(href, domain, label) && label.length > 0) {
+        const fullUrl = href.startsWith("http") ? href : new URL(href, domain).href;
+        
+        if (!seenUrls.has(fullUrl)) {
+          items.push({
+            label: label || this.inferLabelFromUrl(href),
+            url: this.normalizeNavUrl(href, domain),
+          });
+          seenUrls.add(fullUrl);
+        }
+      }
+    }
+
+    return items;
+  }
+
+  /**
+   * Clean navigation label (remove HTML, images, icons)
+   */
+  private cleanNavLabel(label: string): string {
+    // Remove HTML tags
+    let cleaned = label.replace(/<[^>]+>/g, "");
+    
+    // Remove image tags and their alt text patterns
+    cleaned = cleaned.replace(/!\[([^\]]*)\]\([^)]+\)/g, ""); // Markdown images
+    cleaned = cleaned.replace(/<img[^>]*>/gi, ""); // HTML images
+    
+    // Remove SVG icons (common pattern: <svg>...</svg>)
+    cleaned = cleaned.replace(/<svg[\s\S]*?<\/svg>/gi, "");
+    
+    // Remove common icon class patterns
+    cleaned = cleaned.replace(/\bicon-[\w-]+\b/gi, "");
+    
+    // Trim whitespace
+    cleaned = cleaned.trim();
+    
+    return cleaned;
+  }
+
+  /**
+   * Check if a link is a logo or icon (should be excluded from nav)
+   */
+  private isLogoOrIcon(htmlContent: string, href: string, label: string): boolean {
+    const lowerHtml = htmlContent.toLowerCase();
+    const lowerHref = href.toLowerCase();
+    const lowerLabel = label.toLowerCase();
+
+    // Check for image files in href
+    if (/\.(svg|png|jpg|jpeg|gif|webp|ico)(\?|$)/i.test(href)) {
+      return true;
+    }
+
+    // Check for logo in class/id/alt
+    if (/logo|brand|icon|img|image/i.test(lowerHtml) && 
+        (lowerHtml.includes('<img') || lowerHtml.includes('<svg') || lowerLabel.length === 0)) {
+      return true;
+    }
+
+    // Check if label is empty or very short (likely an icon)
+    if (label.length === 0 || (label.length <= 2 && !/[a-z]{2,}/i.test(label))) {
+      return true;
+    }
+
+    // Check for common icon patterns
+    if (/^[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/.test(label)) {
+      return true;
+    }
+
+    // Check if it's just an image with no text
+    if (lowerHtml.includes('<img') && label.length === 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Validate if item is a valid navigation item
+   */
+  private isValidNavigationItem(item: NavigationItem, domain: string): boolean {
+    const url = item.url.toLowerCase();
+    const label = item.label.toLowerCase();
+
+    // Exclude external domains
+    if (url.startsWith("http")) {
+      try {
+        const linkUrl = new URL(item.url);
+        const domainUrl = new URL(domain);
+        if (linkUrl.hostname !== domainUrl.hostname) {
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
+
+    // Exclude social media, login, etc.
+    if (
+      url.includes("facebook.com") ||
+      url.includes("instagram.com") ||
+      url.includes("twitter.com") ||
+      url.includes("linkedin.com") ||
+      url.includes("youtube.com") ||
+      label.includes("login") ||
+      label.includes("sign up") ||
+      label.includes("newsletter") ||
+      url.includes("/blog/") || // Blog posts
+      url.includes("/product/") || // Product detail pages
+      url.includes("/category/")
+    ) {
+      return false;
+    }
+
+    // Label should be reasonable
+    if (label.length < 1 || label.length > 50) {
+      return false;
+    }
+
+    // Validate children recursively
+    if (item.children) {
+      item.children = item.children.filter(child => 
+        this.isValidNavigationItem(child, domain)
+      );
+    }
+
+    return true;
+  }
+
+  /**
+   * Helper: Check if link is valid for navigation
+   */
+  private isValidNavLink(href: string, domain: string, label: string): boolean {
+    // Skip anchors, mailto, tel, javascript
+    if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) {
+      return false;
+    }
+
+    // Must be same domain or relative
+    try {
+      if (href.startsWith("http")) {
+        const linkUrl = new URL(href);
+        const domainUrl = new URL(domain);
+        if (linkUrl.hostname !== domainUrl.hostname) {
+          return false;
+        }
+      }
+    } catch {
+      return false;
+    }
+
+    // Label should be reasonable length
+    if (label && (label.length < 2 || label.length > 50)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Helper: Normalize nav URL to relative path
+   */
+  private normalizeNavUrl(href: string, domain: string): string {
+    if (href.startsWith("http")) {
+      try {
+        const url = new URL(href);
+        const domainUrl = new URL(domain);
+        if (url.hostname === domainUrl.hostname) {
+          return url.pathname + url.search;
+        }
+      } catch {
+        return href;
+      }
+    }
+    return href.startsWith("/") ? href : `/${href}`;
+  }
+
+  /**
+   * Helper: Infer label from URL
+   */
+  private inferLabelFromUrl(url: string): string {
+    const path = url.split("?")[0].split("#")[0];
+    const parts = path.split("/").filter(p => p);
+    const lastPart = parts[parts.length - 1] || "Home";
+    return lastPart
+      .split("-")
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  }
+
+  /**
+   * Helper: Extract nav links from markdown
+   */
+  private extractNavLinksFromMarkdown(markdown: string, domain: string): Array<{ text: string; url: string }> {
+    const links: Array<{ text: string; url: string }> = [];
+    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let match;
+
+    while ((match = linkRegex.exec(markdown)) !== null && links.length < 20) {
+      const text = match[1].trim();
+      const url = match[2].trim();
+      
+      if (!url.startsWith("#") && !url.startsWith("mailto:") && !url.startsWith("tel:")) {
+        links.push({ text, url });
+      }
+    }
+
+    return links;
+  }
+
+  /**
+   * STEP 3: Scrape navigation pages
+   */
+  private async scrapeNavPages(
+    domain: string,
+    navItems: NavigationItem[]
+  ): Promise<NormalizedPage[]> {
+    const pages: NormalizedPage[] = [];
+    const maxPages = Math.min(navItems.length, 20); // Limit to 20 pages (includes subnav)
+
+    for (let i = 0; i < maxPages; i++) {
+      const navItem = navItems[i];
+      try {
+        const fullUrl = navItem.url.startsWith("http")
+          ? navItem.url
+          : `${domain}${navItem.url.startsWith("/") ? navItem.url : `/${navItem.url}`}`;
+
+        console.log(`[Firecrawl] Scraping nav page: ${fullUrl}`);
+
+        const response = await fetch(`${this.baseUrl}/scrape`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            url: fullUrl,
+            formats: ["markdown"],
+            onlyMainContent: true,
+          }),
+        });
+
+        if (!response.ok) {
+          console.warn(`[Firecrawl] Failed to scrape ${fullUrl}: ${response.status}`);
+          continue;
+        }
+
+        const data: FirecrawlScrapeResponse = await response.json();
+
+        if (data.success && data.data?.markdown) {
+          const normalizedPage = this.normalizePageData({
+            name: navItem.label,
+            url: navItem.url,
+            markdown: data.data.markdown,
+            metadata: data.data.metadata,
+          });
+          pages.push(normalizedPage);
+        }
+      } catch (error) {
+        console.error(`[Firecrawl] Error scraping nav page ${navItem.url}:`, error);
+        // Continue with next page on error
         continue;
       }
     }
-    
-    // Remove duplicates and limit to first 20 unique links
-    const uniqueLinks = Array.from(
-      new Map(links.map(link => [link.url, link])).values()
-    ).slice(0, 20);
-    
-    return uniqueLinks;
+
+    return pages;
   }
 
   /**
-   * Extract services/features from content
-   * Simplified: Only extracts first 10 services from bullet points
+   * STEP 4: Normalize page data into required structure
    */
-  private extractServices(content: string): string[] {
-    const services: string[] = [];
-    
-    // Look for bullet points that might be services (simpler approach)
-    const bulletRegex = /^[\*\-\•]\s*(.+)$/gm;
-    let bulletMatch;
-    while ((bulletMatch = bulletRegex.exec(content)) !== null && services.length < 10) {
-      const text = bulletMatch[1].trim();
-      // Filter out legal/privacy links and very short/long items
-      if (text.length > 10 && text.length < 200 && 
-          !text.toLowerCase().includes('privacy') && 
-          !text.toLowerCase().includes('terms') &&
-          !text.toLowerCase().includes('cookie') &&
-          !text.toLowerCase().includes('refund')) {
-        services.push(text);
-      }
-    }
-    
-    return services.slice(0, 10); // Limit to 10 services
-  }
+  private normalizePageData(data: {
+    name: string;
+    url: string;
+    markdown: string;
+    metadata?: {
+      title?: string;
+      description?: string;
+    };
+  }): NormalizedPage {
+    const { name, url, markdown, metadata } = data;
 
-  /**
-   * Extract page structure (sections, header, footer)
-   * Optimized: Only H1-H3 headers, limited header/footer to 500 chars
-   */
-  private extractStructure(content: string): {
-    sections: string[];
-    footer?: string;
-    header?: string;
-  } {
-    const sections: string[] = [];
-    
-    // Extract only H1, H2, H3 headers (not H4-H6)
-    const headerRegex = /^#{1,3}\s+(.+)$/gm;
-    let headerMatch;
-    while ((headerMatch = headerRegex.exec(content)) !== null) {
-      const headerText = headerMatch[1].trim();
-      if (headerText.length > 3 && headerText.length < 100) {
-        sections.push(headerText);
-      }
-    }
-    
-    // Extract footer - limited to 500 characters around footer indicators
-    const footerMatch = content.match(/footer|©|copyright|all rights reserved/gi);
-    let footer: string | undefined;
-    if (footerMatch) {
-      const footerIndex = content.lastIndexOf(footerMatch[0]);
-      const startIndex = Math.max(0, footerIndex - 250);
-      const endIndex = Math.min(content.length, footerIndex + 250);
-      footer = content.slice(startIndex, endIndex);
-    }
-    
-    // Extract header - only first 500 characters
-    const header = content.slice(0, 500);
-    
+    // Extract sections from markdown
+    const sections = this.extractSectionsFromMarkdown(markdown);
+
     return {
-      sections: sections.slice(0, 20), // Limit to 20 sections
-      footer: footer,
-      header: header,
+      name,
+      url,
+      sections,
     };
   }
+
+  /**
+   * Extract sections with headings, copy, images, and CTAs
+   */
+  private extractSectionsFromMarkdown(markdown: string): PageSection[] {
+    const sections: PageSection[] = [];
+
+    // Split by headers (H1, H2, H3)
+    const headerRegex = /^(#{1,3})\s+(.+)$/gm;
+    const parts: Array<{ level: number; heading: string; content: string }> = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = headerRegex.exec(markdown)) !== null) {
+      const level = match[1].length;
+      const heading = match[2].trim();
+      const contentStart = match.index + match[0].length;
+      
+      // Get content before this header (for previous section)
+      if (parts.length > 0) {
+        parts[parts.length - 1].content = markdown.slice(lastIndex, match.index).trim();
+      }
+      
+      parts.push({
+        level,
+        heading,
+        content: "",
+      });
+      
+      lastIndex = contentStart;
+    }
+
+    // Add remaining content to last section
+    if (parts.length > 0) {
+      parts[parts.length - 1].content = markdown.slice(lastIndex).trim();
+    }
+
+    // If no headers found, create one section from entire content
+    if (parts.length === 0) {
+      parts.push({
+        level: 1,
+        heading: "Content",
+        content: markdown.trim(),
+      });
+    }
+
+    // Convert parts to sections
+    for (const part of parts) {
+      const images = this.extractImages(part.content);
+      const ctas = this.extractCTAs(part.content);
+      const copy = this.cleanCopy(part.content);
+
+      sections.push({
+        heading: part.heading,
+        copy: copy || "",
+        images,
+        ctas,
+      });
+    }
+
+    return sections;
+  }
+
+  /**
+   * Extract image URLs from markdown
+   */
+  private extractImages(content: string): string[] {
+    const images: string[] = [];
+    
+    // Markdown images: ![alt](url)
+    const markdownImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    let match;
+    while ((match = markdownImageRegex.exec(content)) !== null) {
+      const url = match[2].trim();
+      if (url && (url.startsWith("http") || url.startsWith("/"))) {
+        images.push(url);
+      }
+    }
+
+    // HTML img tags
+    const htmlImageRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+    while ((match = htmlImageRegex.exec(content)) !== null) {
+      const url = match[1].trim();
+      if (url && (url.startsWith("http") || url.startsWith("/"))) {
+        images.push(url);
+      }
+    }
+
+    return [...new Set(images)]; // Remove duplicates
+  }
+
+  /**
+   * Extract CTAs (buttons/links) from content
+   */
+  private extractCTAs(content: string): Array<{ label: string; url: string }> {
+    const ctas: Array<{ label: string; url: string }> = [];
+
+    // Common CTA patterns
+    const ctaPatterns = [
+      /(?:book|schedule|get started|start now|learn more|contact us|call now|request|sign up|register|buy now|shop now)/i,
+    ];
+
+    // Extract markdown links that match CTA patterns
+    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let match;
+    while ((match = linkRegex.exec(content)) !== null) {
+      const label = match[1].trim();
+      const url = match[2].trim();
+      
+      // Check if label matches CTA pattern
+      const isCTA = ctaPatterns.some(pattern => pattern.test(label));
+      
+      if (isCTA && !url.startsWith("#") && !url.startsWith("mailto:") && !url.startsWith("tel:")) {
+        ctas.push({ label, url });
+      }
+    }
+
+    // Extract HTML buttons/links
+    const buttonRegex = /<(?:a|button)[^>]+(?:href|onclick)=["']([^"']+)["'][^>]*>([^<]+)<\/(?:a|button)>/gi;
+    while ((match = buttonRegex.exec(content)) !== null) {
+      const url = match[1].trim();
+      const label = match[2].trim().replace(/<[^>]+>/g, "");
+      
+      const isCTA = ctaPatterns.some(pattern => pattern.test(label));
+      
+      if (isCTA && label.length > 0 && !url.startsWith("#") && !url.startsWith("mailto:") && !url.startsWith("tel:")) {
+        ctas.push({ label, url });
+      }
+    }
+
+    return ctas.slice(0, 5); // Limit to 5 CTAs per section
+  }
+
+  /**
+   * Clean copy text (remove markdown syntax, images, links but keep text)
+   */
+  private cleanCopy(content: string): string {
+    let cleaned = content;
+
+    // Remove images
+    cleaned = cleaned.replace(/!\[([^\]]*)\]\([^)]+\)/g, "");
+    
+    // Convert links to just text: [text](url) -> text
+    cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+    
+    // Remove HTML tags but keep text
+    cleaned = cleaned.replace(/<[^>]+>/g, "");
+    
+    // Remove markdown headers
+    cleaned = cleaned.replace(/^#{1,6}\s+/gm, "");
+    
+    // Remove excessive whitespace
+    cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+    cleaned = cleaned.replace(/[ \t]+/g, " ");
+    
+    return cleaned.trim();
+  }
+
+  /**
+   * Extract logo URL from homepage
+   */
+  private extractLogo(markdown: string, html: string, domain: string): string | undefined {
+    // Look for logo in HTML first
+    if (html) {
+      const logoRegex = /<img[^>]*(?:class|id)=["'][^"']*logo[^"']*["'][^>]+src=["']([^"']+)["'][^>]*>/i;
+      const match = html.match(logoRegex);
+      if (match && match[1]) {
+        const url = match[1].trim();
+        return url.startsWith("http") ? url : new URL(url, domain).href;
+      }
+    }
+
+    // Fallback: look in markdown
+    const markdownImageRegex = /!\[([^\]]*logo[^\]]*)\]\(([^)]+)\)/i;
+    const markdownMatch = markdown.match(markdownImageRegex);
+    if (markdownMatch && markdownMatch[2]) {
+      const url = markdownMatch[2].trim();
+      return url.startsWith("http") ? url : new URL(url, domain).href;
+    }
+
+    return undefined;
+  }
+
 }
 

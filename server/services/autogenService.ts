@@ -730,11 +730,10 @@ Please enhance the email by incorporating the valid suggestions while maintainin
   }> {
     console.log("[AutoGen Team] Starting 7-agent website redesign collaboration...");
 
-    // Progress callback for real-time updates
-    const onAgentProgress = (agentName: string, status: "starting" | "completed") => {
-      // This will be used by the workflow to emit progress
+    // Progress callback for real-time updates - use provided callback or default
+    const progressCallback = onAgentProgress || ((agentName: string, status: "starting" | "completed") => {
       console.log(`[AutoGen Team] Agent: ${agentName} - ${status}`);
-    };
+    });
 
     // Prepare normalized data for agents
     const scrapedMarkdown = JSON.stringify(normalizedData, null, 2);
@@ -748,7 +747,7 @@ Please enhance the email by incorporating the valid suggestions while maintainin
 
     // Step 1: Information Architect Agent
     console.log("[AutoGen Team] Agent 1: Information Architect starting...");
-    onAgentProgress?.("information_architect", "starting");
+    progressCallback("information_architect", "starting");
     const infoArchitect = this.createAgent({
       name: "information_architect",
       systemMessage: `You are the Information Architect.
@@ -788,11 +787,11 @@ ${domain}
 Your job is to perform the responsibilities in your system message and output your sitemap, page purposes, and navigation recommendations.`,
       },
     ]);
-    onAgentProgress?.("information_architect", "completed");
+    progressCallback("information_architect", "completed");
 
     // Step 2: UX Strategist Agent
     console.log("[AutoGen Team] Agent 2: UX Strategist starting...");
-    onAgentProgress?.("ux_strategist", "starting");
+    progressCallback("ux_strategist", "starting");
     const uxStrategist = this.createAgent({
       name: "ux_strategist",
       systemMessage: `You are the Senior UX Strategist.
@@ -825,11 +824,11 @@ ${iaOutput}
 Using the responsibilities in your system message, create the UX breakdown, page sections, flow notes, and mobile-first strategy.`,
       },
     ]);
-    onAgentProgress?.("ux_strategist", "completed");
+    progressCallback("ux_strategist", "completed");
 
     // Step 3: CRO / Conversion Expert Agent
     console.log("[AutoGen Team] Agent 3: CRO Expert starting...");
-    onAgentProgress?.("cro_expert", "starting");
+    progressCallback("cro_expert", "starting");
     const croExpert = this.createAgent({
       name: "cro_expert",
       systemMessage: `You are the Conversion Optimization Expert.
@@ -865,11 +864,11 @@ ${uxOutput}
 Using the responsibilities in your system message, produce all CTA enhancements, social proof strategy, and conversion improvements.`,
       },
     ]);
-    onAgentProgress?.("cro_expert", "completed");
+    progressCallback("cro_expert", "completed");
 
     // Step 4: Copywriter Agent
     console.log("[AutoGen Team] Agent 4: Copywriter starting...");
-    onAgentProgress?.("copywriter", "starting");
+    progressCallback("copywriter", "starting");
     const copywriter = this.createAgent({
       name: "copywriter",
       systemMessage: `You are the Website Copywriter.
@@ -909,11 +908,11 @@ ${croOutput}
 Rewrite the copy now according to your system instructions.`,
       },
     ]);
-    onAgentProgress?.("copywriter", "completed");
+    progressCallback("copywriter", "completed");
 
     // Step 5: Brand/UI Designer Agent
     console.log("[AutoGen Team] Agent 5: UI Designer starting...");
-    onAgentProgress?.("ui_designer", "starting");
+    progressCallback("ui_designer", "starting");
     const uiDesigner = this.createAgent({
       name: "ui_designer",
       systemMessage: `You are the UI/Visual Designer.
@@ -953,11 +952,11 @@ ${copyOutput}
 Now produce the color palettes, type system, visual style, and design rules based on your system instructions.`,
       },
     ]);
-    onAgentProgress?.("ui_designer", "completed");
+    progressCallback("ui_designer", "completed");
 
     // Step 6: Component & Wireframe Engineer Agent
     console.log("[AutoGen Team] Agent 6: Wireframe Engineer starting...");
-    onAgentProgress?.("wireframe_engineer", "starting");
+    progressCallback("wireframe_engineer", "starting");
     const wireframeEngineer = this.createAgent({
       name: "wireframe_engineer",
       systemMessage: `You are the Component & Wireframe Engineer.
@@ -998,11 +997,11 @@ ${designOutput}
 Now define all components, layouts, wireframes, and responsive behavior according to your system message.`,
       },
     ]);
-    onAgentProgress?.("wireframe_engineer", "completed");
+    progressCallback("wireframe_engineer", "completed");
 
     // Step 7: Final JSON Composer Agent (CRITICAL - Outputs only JSON)
     console.log("[AutoGen Team] Agent 7: Final JSON Composer starting...");
-    onAgentProgress?.("final_composer", "starting");
+    progressCallback("final_composer", "starting");
     const finalComposer = this.createAgent({
       name: "final_composer",
       systemMessage: `You are the Final Composer Agent.
@@ -1104,7 +1103,7 @@ Output ONLY valid JSON and nothing else.`,
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         console.log("[AutoGen Team] Successfully composed final JSON");
-        onAgentProgress?.("final_composer", "completed");
+        progressCallback("final_composer", "completed");
         return parsed;
       }
 
