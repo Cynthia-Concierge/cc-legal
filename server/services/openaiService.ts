@@ -30,12 +30,16 @@ interface EmailContent {
   body: string;
 }
 
+import { NodePromptConfig } from "./configService.js";
+
 export class OpenAIService {
   private apiKey: string;
   private baseUrl = "https://api.openai.com/v1";
+  private customPrompts?: Record<string, NodePromptConfig>;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, customPrompts?: Record<string, NodePromptConfig>) {
     this.apiKey = apiKey;
+    this.customPrompts = customPrompts;
   }
 
   /**
@@ -48,7 +52,9 @@ export class OpenAIService {
     try {
       const documentsSummary = this.prepareDocumentsSummary(legalDocuments);
 
-      const prompt = `You are an expert legal compliance auditor specializing in fitness, wellness, coaching, and online service businesses. 
+      // Use custom prompt if available, otherwise use default
+      const customPrompt = this.customPrompts?.legal_analysis?.prompt;
+      const basePrompt = customPrompt || `You are an expert legal compliance auditor specializing in fitness, wellness, coaching, and online service businesses. 
 
 Your job is to analyze the *entire legal footprint* of a business based on the website content provided.
 
@@ -170,6 +176,11 @@ Output your response as clean JSON:
   "summary": "concise but authoritative summary of compliance status"
 }`;
 
+      // Replace placeholders in prompt
+      const prompt = basePrompt
+        .replace(/\$\{websiteUrl\}/g, websiteUrl)
+        .replace(/\$\{documentsSummary\}/g, documentsSummary);
+
       const response = await this.callChatGPT(prompt);
       return this.parseAnalysisResponse(response);
     } catch (error) {
@@ -194,7 +205,9 @@ Output your response as clean JSON:
       // Convert analysis to JSON string for the prompt
       const analysisJSON = JSON.stringify(analysis, null, 2);
 
-      const prompt = `You are writing as "Chad" from Conscious Counsel — a friendly, helpful, human legal expert who just reviewed their website after they opted in for our free legal protection resources.
+      // Use custom prompt if available, otherwise use default
+      const customPrompt = this.customPrompts?.email_generation?.prompt;
+      const basePrompt = customPrompt || `You are writing as "Chad" from Conscious Counsel — a friendly, helpful, human legal expert who just reviewed their website after they opted in for our free legal protection resources.
 
 Your tone: warm, simple, conversational, human, approachable, helpful — NOT salesy, NOT corporate, NOT robotic.
 
@@ -371,14 +384,19 @@ Return JSON ONLY in this format:
    
    Do NOT use plain text with dashes or periods. Always use proper HTML <ul> and <li> tags for bullet points.
    
+   CRITICAL: Do NOT include "why it matters" explanations within each bullet point. Each bullet should only state the finding itself, not explain why it matters.
+   
    IMPORTANT: Add ONE single line break (<br>) or one paragraph margin between the bullet points and the next section - avoid double spacing.
 
 3. "Here's why it matters" section:
-   - Write a catchy 1-2 sentence explanation about avoiding lawsuits and stress
+   - Write ONE single sentence that summarizes why these findings matter overall
    - Focus on the real-world consequences (legal trouble, stress, financial risk)
    - Make it compelling but not fear-mongering
    - Do NOT repeat the bullet points from above - create a fresh, concise reason
+   - CRITICAL: Do NOT include individual "why it matters" explanations for each bullet point
+   - CRITICAL: Do NOT use the "whyItMatters" fields from the analysis data - create ONE unified summary sentence
    - Example tone: "Getting these in place protects you from legal headaches and lets you focus on what you do best."
+   - Keep it to exactly ONE sentence - no more, no less
 
 4. Reassurance:
 
@@ -413,6 +431,12 @@ Make the email feel like a real person (Chad) typed it after reviewing their web
 
 Write the best, warmest, most human legal audit follow-up email you can.`;
 
+      // Replace placeholders in prompt
+      const prompt = basePrompt
+        .replace(/\$\{analysisJSON\}/g, analysisJSON)
+        .replace(/\$\{websiteUrl\}/g, websiteUrl)
+        .replace(/\$\{leadInfo\}/g, JSON.stringify(leadInfo || {}, null, 2));
+
       const response = await this.callChatGPT(prompt);
       return this.parseEmailResponse(response);
     } catch (error) {
@@ -424,7 +448,7 @@ Write the best, warmest, most human legal audit follow-up email you can.`;
   /**
    * Call ChatGPT API
    */
-  private async callChatGPT(prompt: string): Promise<string> {
+  async callChatGPT(prompt: string): Promise<string> {
     try {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
@@ -520,6 +544,199 @@ Write the best, warmest, most human legal audit follow-up email you can.`;
         operationalRisks: [],
         recommendations: [],
         summary: response,
+      };
+    }
+  }
+
+  /**
+   * Design a website based on scraped data
+   */
+  async designWebsite(
+    websiteUrl: string,
+    scrapedData: any
+  ): Promise<{
+    structure: {
+      pages: Array<{
+        name: string;
+        path: string;
+        description: string;
+        sections: Array<{
+          name: string;
+          type: string;
+          content: string;
+        }>;
+      }>;
+    };
+    navigation: {
+      items: Array<{
+        label: string;
+        path: string;
+        order: number;
+      }>;
+    };
+    design: {
+      colorScheme: string;
+      typography: string;
+      layout: string;
+      recommendations: string[];
+    };
+    improvements: Array<{
+      area: string;
+      current: string;
+      improved: string;
+      reason: string;
+    }>;
+  }> {
+    try {
+      const scrapedDataJSON = JSON.stringify(scrapedData, null, 2);
+      const truncatedData = scrapedDataJSON.length > 10000
+        ? scrapedDataJSON.substring(0, 10000) + "\n... [Data truncated]"
+        : scrapedDataJSON;
+
+      const prompt = `You are an expert website designer and UX strategist. Your job is to analyze a scraped website and create a comprehensive redesign that makes it 100x better.
+
+Website URL: ${websiteUrl}
+
+Scraped Website Data:
+${truncatedData}
+
+Your task:
+1. Analyze the current website structure, navigation, and content
+2. Identify areas for improvement (UX, conversion, engagement, clarity)
+3. Design a new website structure with:
+   - Improved page organization
+   - Better navigation flow
+   - Enhanced user experience
+   - Modern design principles
+   - Conversion optimization
+4. Create a detailed redesign plan with specific improvements
+
+Output your response as JSON with this structure:
+{
+  "structure": {
+    "pages": [
+      {
+        "name": "Home",
+        "path": "/",
+        "description": "Page description",
+        "sections": [
+          {
+            "name": "Hero",
+            "type": "hero",
+            "content": "Section content description"
+          }
+        ]
+      }
+    ]
+  },
+  "navigation": {
+    "items": [
+      {
+        "label": "Home",
+        "path": "/",
+        "order": 1
+      }
+    ]
+  },
+  "design": {
+    "colorScheme": "Modern, professional color palette",
+    "typography": "Typography recommendations",
+    "layout": "Layout approach",
+    "recommendations": ["Recommendation 1", "Recommendation 2"]
+  },
+  "improvements": [
+    {
+      "area": "Navigation",
+      "current": "Current state",
+      "improved": "Improved state",
+      "reason": "Why this improvement matters"
+    }
+  ]
+}`;
+
+      const response = await this.callChatGPT(prompt);
+      return this.parseWebsiteDesignResponse(response);
+    } catch (error) {
+      console.error("Error designing website:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse website design response from ChatGPT
+   */
+  private parseWebsiteDesignResponse(response: string): {
+    structure: {
+      pages: Array<{
+        name: string;
+        path: string;
+        description: string;
+        sections: Array<{
+          name: string;
+          type: string;
+          content: string;
+        }>;
+      }>;
+    };
+    navigation: {
+      items: Array<{
+        label: string;
+        path: string;
+        order: number;
+      }>;
+    };
+    design: {
+      colorScheme: string;
+      typography: string;
+      layout: string;
+      recommendations: string[];
+    };
+    improvements: Array<{
+      area: string;
+      current: string;
+      improved: string;
+      reason: string;
+    }>;
+  } {
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+
+      // Fallback if JSON parsing fails
+      return {
+        structure: {
+          pages: [],
+        },
+        navigation: {
+          items: [],
+        },
+        design: {
+          colorScheme: "Not specified",
+          typography: "Not specified",
+          layout: "Not specified",
+          recommendations: [],
+        },
+        improvements: [],
+      };
+    } catch (error) {
+      console.error("Error parsing website design response:", error);
+      return {
+        structure: {
+          pages: [],
+        },
+        navigation: {
+          items: [],
+        },
+        design: {
+          colorScheme: "Not specified",
+          typography: "Not specified",
+          layout: "Not specified",
+          recommendations: [],
+        },
+        improvements: [],
       };
     }
   }

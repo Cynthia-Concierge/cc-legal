@@ -33,6 +33,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import WorkflowVisualization from "@/components/WorkflowVisualization";
 
 interface AnalysisResult {
   missingDocuments: string[];
@@ -61,11 +62,31 @@ interface EmailContent {
   body: string;
 }
 
+interface NodeExecutionDetails {
+  nodeId: string;
+  nodeName: string;
+  startTime?: number;
+  endTime?: number;
+  duration?: number;
+  autogenEnabled: boolean;
+  autogenReviews?: Array<{
+    agent: string;
+    review: string;
+    suggestions: string[];
+    approved: boolean;
+  }>;
+  prompt?: string;
+  input?: any;
+  output?: any;
+  error?: string;
+}
+
 interface ScrapeResult {
   websiteUrl: string;
   legalDocuments: string[];
   analysis: AnalysisResult;
   email: EmailContent;
+  executionDetails?: Record<string, NodeExecutionDetails>;
 }
 
 const LeadScraper = () => {
@@ -78,6 +99,7 @@ const LeadScraper = () => {
   const [currentStep, setCurrentStep] = useState<
     "idle" | "scraping" | "analyzing" | "generating" | "complete"
   >("idle");
+  const [workflowError, setWorkflowError] = useState<string | undefined>();
   const { toast } = useToast();
 
   // Use proxy in development, or direct URL in production
@@ -109,6 +131,7 @@ const LeadScraper = () => {
 
     setIsLoading(true);
     setResult(null);
+    setWorkflowError(undefined);
     setCurrentStep("scraping");
 
     try {
@@ -117,6 +140,7 @@ const LeadScraper = () => {
         ? websiteUrl
         : `https://${websiteUrl}`;
 
+      // Use regular endpoint with simulated progress for better UX
       const response = await fetch(`${API_BASE_URL}/api/scrape-and-analyze`, {
         method: "POST",
         headers: {
@@ -142,6 +166,15 @@ const LeadScraper = () => {
       const data = await response.json();
 
       if (data.success && data.data) {
+        // Simulate step progression for visual feedback
+        // This gives users visual feedback as the workflow progresses
+        setCurrentStep("scraping");
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setCurrentStep("analyzing");
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setCurrentStep("generating");
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
         setResult(data.data);
         setCurrentStep("complete");
         toast({
@@ -153,9 +186,11 @@ const LeadScraper = () => {
       }
     } catch (error: any) {
       console.error("Error scraping website:", error);
+      const errorMessage = error.message || "Failed to scrape website. Please try again.";
+      setWorkflowError(errorMessage);
       toast({
         title: "Error",
-        description: error.message || "Failed to scrape website. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
       setCurrentStep("idle");
@@ -206,16 +241,23 @@ const LeadScraper = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Lead Website Analyzer
-          </h1>
-          <p className="text-muted-foreground">
-            Scrape, analyze, and generate personalized emails for leads
-          </p>
-        </div>
+    <div className="space-y-6">
+        {/* Workflow Visualization - Always visible */}
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <WorkflowVisualization 
+              currentStep={currentStep}
+              error={workflowError}
+              executionDetails={result?.executionDetails}
+              websiteUrl={websiteUrl || undefined}
+              leadInfo={leadName || leadCompany || leadEmail ? {
+                name: leadName || undefined,
+                company: leadCompany || undefined,
+                email: leadEmail || undefined,
+              } : undefined}
+            />
+          </CardContent>
+        </Card>
 
         <Card className="mb-6">
           <CardHeader>
@@ -537,7 +579,6 @@ const LeadScraper = () => {
             </Card>
           </div>
         )}
-      </div>
     </div>
   );
 };
