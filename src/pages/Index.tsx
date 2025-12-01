@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, FileText, Download } from "lucide-react";
+import { CheckCircle, FileText, Download, LayoutDashboard } from "lucide-react";
 import DynamicBackground from "@/components/DynamicBackground";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
@@ -332,6 +332,15 @@ const Index = () => {
   // Main landing page with new design
   return (
     <div className="min-h-screen bg-white">
+      {/* Dashboard Button - Fixed at top right */}
+      <Link
+        to="/dashboard"
+        className="fixed top-4 right-4 z-50 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 text-sm"
+      >
+        <LayoutDashboard className="h-4 w-4" />
+        <span>Dashboard</span>
+      </Link>
+
       <Hero onFormSubmit={handleFormSubmit} />
       <Features />
       <ValueStack onGetDocumentsClick={handleScrollToForm} />
