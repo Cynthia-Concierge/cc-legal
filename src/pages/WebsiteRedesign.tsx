@@ -83,9 +83,9 @@ const WebsiteRedesign = () => {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<RedesignResult | null>(null);
-  const [selectedStep, setSelectedStep] = useState<"full_scrape" | "normalize_data" | "website_design" | "full">("full");
+  const [selectedStep, setSelectedStep] = useState<"full_scrape" | "normalize_data" | "website_design" | "final_prompt" | "full">("full");
   const [currentStep, setCurrentStep] = useState<
-    "idle" | "scraping" | "normalizing" | "designing" | "complete"
+    "idle" | "scraping" | "normalizing" | "designing" | "generating" | "complete"
   >("idle");
   const [workflowError, setWorkflowError] = useState<string | undefined>();
   const [activeNode, setActiveNode] = useState<string | null>(null);
@@ -159,6 +159,8 @@ const WebsiteRedesign = () => {
             setCurrentStep("normalizing");
           } else if (selectedStep === "website_design") {
             setCurrentStep("designing");
+          } else if (selectedStep === "final_prompt") {
+            setCurrentStep("generating");
           }
 
           setResult({
@@ -166,6 +168,7 @@ const WebsiteRedesign = () => {
             scrapedData: data.data.scrapedData,
             normalizedData: data.data.normalizedData,
             redesignedWebsite: data.data.redesignedWebsite,
+            geminiPrompt: data.data.geminiPrompt,
             executionDetails: data.data.executionDetails,
           });
 
@@ -279,6 +282,10 @@ const WebsiteRedesign = () => {
                   setActiveNode("website_design");
                   setCurrentStep("designing");
                   // activeAgent is set above if present
+                } else if (nodeName === "final_prompt") {
+                  setActiveNode("final_prompt");
+                  setCurrentStep("generating");
+                  setActiveAgent(null);
                 }
 
                 // Accumulate final result
@@ -394,7 +401,13 @@ const WebsiteRedesign = () => {
       id: "website_design",
       name: "Website Design",
       description: "Analyzing and creating improved website design",
-      status: currentStep === "designing" ? "running" : currentStep === "normalizing" ? "pending" : currentStep === "complete" ? "completed" : "pending",
+      status: currentStep === "designing" ? "running" : currentStep === "normalizing" ? "pending" : currentStep === "generating" || currentStep === "complete" ? "completed" : "pending",
+    },
+    {
+      id: "final_prompt",
+      name: "Final Gemini Prompt",
+      description: "Generating creative prompt for Gemini to build Next.js website",
+      status: currentStep === "generating" ? "running" : currentStep === "designing" ? "pending" : currentStep === "complete" ? "completed" : "pending",
     },
   ];
 
@@ -404,7 +417,7 @@ const WebsiteRedesign = () => {
       <Card className="mb-6">
         <CardContent className="pt-6">
           <WorkflowVisualization 
-            currentStep={currentStep === "scraping" ? "scraping" : currentStep === "normalizing" ? "analyzing" : currentStep === "designing" ? "analyzing" : currentStep === "complete" ? "complete" : "idle"}
+            currentStep={currentStep === "scraping" ? "scraping" : currentStep === "normalizing" ? "analyzing" : currentStep === "designing" ? "analyzing" : currentStep === "generating" ? "analyzing" : currentStep === "complete" ? "complete" : "idle"}
             error={workflowError}
             executionDetails={result?.executionDetails}
             websiteUrl={websiteUrl || undefined}
@@ -458,7 +471,13 @@ const WebsiteRedesign = () => {
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="website_design" id="step3" />
                 <Label htmlFor="step3" className="font-normal cursor-pointer">
-                  Step 3: Full Workflow (Scrape + Normalize + Design)
+                  Step 3: Scrape + Normalize + Design
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="final_prompt" id="step4" />
+                <Label htmlFor="step4" className="font-normal cursor-pointer">
+                  Step 4: Full Workflow + Gemini Prompt
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
@@ -482,13 +501,15 @@ const WebsiteRedesign = () => {
                 {currentStep === "scraping" && "Scraping website..."}
                 {currentStep === "normalizing" && "Normalizing data..."}
                 {currentStep === "designing" && "Designing website..."}
+                {currentStep === "generating" && "Generating Gemini prompt..."}
               </>
             ) : (
               <>
                 <Play className="mr-2 h-4 w-4" />
                 {selectedStep === "full_scrape" && "Run Step 1: Scrape"}
                 {selectedStep === "normalize_data" && "Run Step 2: Scrape + Normalize"}
-                {selectedStep === "website_design" && "Run Step 3: Full Workflow"}
+                {selectedStep === "website_design" && "Run Step 3: Scrape + Normalize + Design"}
+                {selectedStep === "final_prompt" && "Run Step 4: Full Workflow + Gemini Prompt"}
                 {selectedStep === "full" && "Run Full Workflow (Streaming)"}
               </>
             )}
@@ -712,6 +733,88 @@ const WebsiteRedesign = () => {
         </div>
       )}
 
+      {/* Step 4 Results: Gemini Prompt */}
+      {result && result.geminiPrompt && !result.redesignedWebsite && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  Step 4 Results: Gemini Prompt
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      copyToClipboard(result.geminiPrompt || "", "Gemini Prompt")
+                    }
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Prompt
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-sm font-semibold">Creative Gemini Prompt</Label>
+                <p className="text-sm text-muted-foreground mb-2">
+                  This prompt gives Gemini creative freedom to design a beautiful, premium website using Next.js 14 and TailwindCSS.
+                </p>
+                <ScrollArea className="h-96 w-full rounded-md border p-4">
+                  <pre className="text-xs font-mono whitespace-pre-wrap">
+                    {result.geminiPrompt}
+                  </pre>
+                </ScrollArea>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step 4 Results: Gemini Prompt */}
+      {result && result.geminiPrompt && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  Step 4 Results: Gemini Prompt
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      copyToClipboard(result.geminiPrompt || "", "Gemini Prompt")
+                    }
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Prompt
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-sm font-semibold">Creative Gemini Prompt</Label>
+                <p className="text-sm text-muted-foreground mb-2">
+                  This prompt gives Gemini creative freedom to design a beautiful, premium website using Next.js 14 and TailwindCSS. The prompt includes the brand aesthetic direction and the complete website structure with all pages, sections, images, and CTAs.
+                </p>
+                <ScrollArea className="h-96 w-full rounded-md border p-4">
+                  <pre className="text-xs font-mono whitespace-pre-wrap">
+                    {result.geminiPrompt}
+                  </pre>
+                </ScrollArea>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Step 3 Results: Full Redesign */}
       {result && result.redesignedWebsite && (
         <div className="space-y-6">
@@ -783,10 +886,26 @@ const WebsiteRedesign = () => {
                   {result.redesignedWebsite.design.recommendations.length > 0 && (
                     <div>
                       <Label className="text-sm font-semibold">Additional Recommendations</Label>
-                      <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground mt-1">
-                        {result.redesignedWebsite.design.recommendations.map((rec, index) => (
-                          <li key={index}>{rec}</li>
-                        ))}
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground mt-1">
+                        {result.redesignedWebsite.design.recommendations.map((rec, index) => {
+                          // Handle both string and object formats
+                          const recommendationText = typeof rec === 'string' 
+                            ? rec 
+                            : (rec?.recommendation || rec?.text || JSON.stringify(rec));
+                          const urgency = typeof rec === 'object' && rec?.urgency 
+                            ? rec.urgency 
+                            : null;
+                          return (
+                            <li key={index} className="text-sm">
+                              {recommendationText}
+                              {urgency && (
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  {urgency}
+                                </Badge>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}

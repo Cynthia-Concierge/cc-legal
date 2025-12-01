@@ -168,7 +168,8 @@ const WorkflowVisualization = ({ currentStep, error, executionDetails, websiteUr
     };
 
     fetchWorkflowConfig();
-  }, [websiteUrl, leadInfo, currentStep]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [websiteUrl, currentStep]); // Removed leadInfo to prevent infinite loop - it's used inside but not as a dependency
 
   // Update nodes when workflowSteps prop changes
   useEffect(() => {

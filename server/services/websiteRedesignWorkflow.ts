@@ -102,6 +102,9 @@ const StateAnnotation = Annotation.Root({
   redesignedWebsite: Annotation<WebsiteRedesignState["redesignedWebsite"]>({
     reducer: (left, right) => right ?? left,
   }),
+  geminiPrompt: Annotation<WebsiteRedesignState["geminiPrompt"]>({
+    reducer: (left, right) => right ?? left,
+  }),
   error: Annotation<string>({
     reducer: (left: string, right: string) => right ?? left,
   }),
@@ -134,12 +137,14 @@ export class WebsiteRedesignWorkflow {
     workflow.addNode("full_scrape", this.fullScrapeNode.bind(this));
     workflow.addNode("normalize_data", this.normalizeDataNode.bind(this));
     workflow.addNode("website_design", this.websiteDesignNode.bind(this));
+    workflow.addNode("final_prompt", this.finalPromptNode.bind(this));
 
     // Define the flow
     workflow.addEdge(START, "full_scrape" as any);
     workflow.addEdge("full_scrape" as any, "normalize_data" as any);
     workflow.addEdge("normalize_data" as any, "website_design" as any);
-    workflow.addEdge("website_design" as any, END);
+    workflow.addEdge("website_design" as any, "final_prompt" as any);
+    workflow.addEdge("final_prompt" as any, END);
 
     return workflow.compile();
   }
@@ -716,13 +721,284 @@ export class WebsiteRedesignWorkflow {
         error: error.message || "Unknown error",
       };
 
+      // Don't return error - let workflow continue to final_prompt
+      // The final_prompt node can work without redesignedWebsite
       return {
-        error: `Website design error: ${error.message || "Unknown error"}`,
+        redesignedWebsite: undefined,
         executionDetails,
       };
     }
   }
 
+  /**
+   * Final Prompt Node: Generate creative Gemini prompt for website redesign
+   */
+  private async finalPromptNode(
+    state: typeof StateAnnotation.State
+  ): Promise<Partial<typeof StateAnnotation.State>> {
+    const startTime = Date.now();
+    const nodeId = "final_prompt";
+    
+    try {
+      if (!state.scrapedData) {
+        return { error: "No scraped data available for prompt generation" };
+      }
+
+      console.log("[Final Prompt Node] Generating creative Gemini prompt...");
+
+      // Extract aesthetic direction from redesigned website if available, otherwise use defaults
+      let aesthetic: {
+        colorScheme: string[] | string;
+        typography: any;
+        layout: string;
+        recommendations: string[];
+      };
+
+      if (state.redesignedWebsite?.design) {
+        aesthetic = {
+          colorScheme: state.redesignedWebsite.design.colorScheme,
+          typography: state.redesignedWebsite.design.typography,
+          layout: state.redesignedWebsite.design.layout,
+          recommendations: state.redesignedWebsite.design.recommendations || [],
+        };
+      } else {
+        // Use default aesthetic if website design failed
+        console.log("[Final Prompt Node] Using default aesthetic (website design not available)");
+        aesthetic = {
+          colorScheme: "Modern, clean color palette",
+          typography: "Professional, readable typography",
+          layout: "Responsive, mobile-first layout",
+          recommendations: [
+            "Use a modern, premium design aesthetic",
+            "Ensure strong visual hierarchy",
+            "Implement smooth animations and transitions",
+            "Focus on clarity and user experience",
+          ],
+        };
+      }
+
+      // Use scrapedData for the full structure (pages with sections, images, CTAs)
+      const normalized = {
+        navigation: {
+          items: state.scrapedData.navigation.items,
+        },
+        pages: state.scrapedData.pages,
+      };
+
+      // Generate the creative Gemini prompt
+      const finalPrompt = this.generateGeminiPrompt(aesthetic, normalized);
+
+      console.log("[Final Prompt Node] Gemini prompt generated successfully");
+
+      const endTime = Date.now();
+
+      const executionDetails: Record<string, NodeExecutionDetails> = {};
+      if (state.executionDetails) {
+        Object.assign(executionDetails, state.executionDetails);
+      }
+      executionDetails[nodeId] = {
+        nodeId,
+        nodeName: "Final Gemini Prompt Generation",
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        input: {
+          pagesCount: normalized.pages.length,
+          navItemsCount: normalized.navigation.items.length,
+          hasAesthetic: !!aesthetic,
+        },
+        output: {
+          promptLength: finalPrompt.length,
+          promptPreview: finalPrompt.substring(0, 200) + "...",
+        },
+      };
+
+      return {
+        geminiPrompt: finalPrompt,
+        executionDetails,
+      };
+    } catch (error: any) {
+      const endTime = Date.now();
+      console.error("[Final Prompt Node] Error:", error);
+      const executionDetails: Record<string, NodeExecutionDetails> = {};
+      if (state.executionDetails) {
+        Object.assign(executionDetails, state.executionDetails);
+      }
+      executionDetails[nodeId] = {
+        nodeId,
+        nodeName: "Final Gemini Prompt Generation",
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        input: {
+          websiteUrl: state.websiteUrl,
+        },
+        error: error.message || "Unknown error",
+      };
+
+      return {
+        error: `Final prompt generation error: ${error.message || "Unknown error"}`,
+        executionDetails,
+      };
+    }
+  }
+
+  /**
+   * Generate creative Gemini prompt for website redesign
+   */
+  private generateGeminiPrompt(
+    aesthetic: {
+      colorScheme: string[] | string;
+      typography: any;
+      layout: string;
+      recommendations: string[];
+    },
+    normalized: {
+      navigation: {
+        items: Array<{
+          label: string;
+          url: string;
+          children?: Array<{
+            label: string;
+            url: string;
+          }>;
+        }>;
+      };
+      pages: Array<{
+        name: string;
+        url: string;
+        sections: Array<{
+          heading: string;
+          copy: string;
+          images: string[];
+          ctas: Array<{
+            label: string;
+            url: string;
+          }>;
+        }>;
+      }>;
+    }
+  ): string {
+    return `You are a senior front-end designer and web engineer.
+
+Your job: **Redesign this entire website into a modern, beautiful, premium version**, using the real structure, copy, and images provided below.  
+
+Do NOT change the copy unless you need small formatting fixes.  
+
+Do NOT change the navigation structure.  
+
+Do NOT invent new services or pages.  
+
+---
+
+# 🌈 BRAND AESTHETIC (Creative Direction Only)
+
+Use this aesthetic direction as inspiration — interpret it freely:
+
+${JSON.stringify(aesthetic, null, 2)}
+
+This is NOT strict.  
+
+You may choose the best:
+
+- fonts  
+
+- spacing  
+
+- layout  
+
+- color system  
+
+- animations  
+
+- UI style  
+
+- visual hierarchy  
+
+Your goal: **make it look significantly nicer, more premium, more modern, and more high-end** than the current site.
+
+---
+
+# 📘 WEBSITE STRUCTURE (USE EXACTLY)
+
+Below is the full cleaned website structure with navigation items, pages, sections, images, and CTAs.  
+
+This is the content you must rebuild.
+
+## Navigation
+
+\`\`\`json
+${JSON.stringify(normalized.navigation, null, 2)}
+\`\`\`
+
+## Pages
+
+\`\`\`json
+${JSON.stringify(normalized.pages, null, 2)}
+\`\`\`
+
+---
+
+# 🧩 WHAT TO BUILD
+
+Build a **fully responsive multi-page website**, using:
+
+- **Next.js 14 App Router**
+
+- **TailwindCSS**
+
+- Reusable **components** for hero, sections, cards, grids, nav, footer
+
+- Real images (from URLs) placed thoughtfully
+
+- A modern UI with strong visual hierarchy
+
+Your redesign should emphasize:
+
+- A beautiful hero for each major page  
+
+- Elegant spacing + composition  
+
+- Polished mobile layouts  
+
+- Smooth micro-animations  
+
+- A high-end premium look  
+
+**Give Gemini creative freedom**.  
+
+Your priority is *beauty, clarity, and premium feel.*
+
+---
+
+# 📦 WHAT TO RETURN
+
+Return ONLY:
+
+### ✔ 1. A short explanation of your redesign choices  
+
+### ✔ 2. A complete, working **Next.js codebase**, including:
+
+- \`app/\` pages for each route  
+
+- \`components/\`  
+
+- \`public/\` (download images by URL)  
+
+- \`layout.tsx\`, \`globals.css\`, \`tailwind.config.js\`  
+
+- Navigation with dropdowns  
+
+- All sections rebuilt  
+
+- All images placed in modern UI blocks  
+
+This website must run out of the box.
+
+---
+
+# Begin now.`;
+  }
 
   /**
    * Get prompts for nodes before execution (public method)
@@ -974,6 +1250,7 @@ Each agent receives the outputs from previous agents and builds upon them to cre
       scrapedData: undefined,
       normalizedData: undefined,
       redesignedWebsite: undefined,
+      geminiPrompt: undefined,
       error: undefined,
       executionDetails: {},
     };
@@ -1003,13 +1280,14 @@ Each agent receives the outputs from previous agents and builds upon them to cre
    */
   async executeUpToStep(
     websiteUrl: string,
-    stopAtStep: "full_scrape" | "normalize_data" | "website_design"
+    stopAtStep: "full_scrape" | "normalize_data" | "website_design" | "final_prompt"
   ): Promise<WebsiteRedesignState> {
     const initialState = {
       websiteUrl,
       scrapedData: undefined,
       normalizedData: undefined,
       redesignedWebsite: undefined,
+      geminiPrompt: undefined,
       error: undefined,
       executionDetails: {},
     };
@@ -1054,10 +1332,26 @@ Each agent receives the outputs from previous agents and builds upon them to cre
       }
 
       // Step 3: Website Design
-      if (stopAtStep === "website_design") {
+      if (stopAtStep === "website_design" || stopAtStep === "final_prompt") {
         console.log(`[Workflow] Executing step: website_design`);
         const designResult = await this.websiteDesignNode(currentState);
         currentState = { ...currentState, ...designResult };
+        
+        // Don't stop on error - continue to final_prompt if needed
+        // The final_prompt node can work without redesignedWebsite
+        if (stopAtStep === "website_design") {
+          return {
+            ...currentState,
+            executionDetails: currentState.executionDetails || {},
+          } as WebsiteRedesignState;
+        }
+      }
+
+      // Step 4: Final Prompt
+      if (stopAtStep === "final_prompt") {
+        console.log(`[Workflow] Executing step: final_prompt`);
+        const promptResult = await this.finalPromptNode(currentState);
+        currentState = { ...currentState, ...promptResult };
       }
 
       const mergedExecutionDetails: Record<string, NodeExecutionDetails> = {};
@@ -1089,6 +1383,7 @@ Each agent receives the outputs from previous agents and builds upon them to cre
       scrapedData: undefined,
       normalizedData: undefined,
       redesignedWebsite: undefined,
+      geminiPrompt: undefined,
       error: undefined,
       executionDetails: {},
     };

@@ -157,10 +157,21 @@ const LeadScraper = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message || errorData.error || "Failed to scrape website"
-        );
+        let errorData: any = {};
+        try {
+          const text = await response.text();
+          errorData = text ? JSON.parse(text) : {};
+        } catch (e) {
+          console.error("Failed to parse error response:", e);
+        }
+        
+        const errorMessage = errorData.message || errorData.error || `Server error: ${response.status} ${response.statusText}`;
+        console.error("API Error Response:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+        });
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -175,19 +186,36 @@ const LeadScraper = () => {
         setCurrentStep("generating");
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        setResult(data.data);
+        // Validate data structure before setting
+        const resultData = {
+          websiteUrl: data.data.websiteUrl || websiteUrl,
+          legalDocuments: Array.isArray(data.data.legalDocuments) ? data.data.legalDocuments : [],
+          analysis: data.data.analysis || null,
+          email: data.data.email || null,
+          executionDetails: data.data.executionDetails || {},
+        };
+        
+        setResult(resultData);
         setCurrentStep("complete");
         toast({
           title: "Success",
           description: "Website analyzed successfully!",
         });
       } else {
-        throw new Error("Invalid response from server");
+        throw new Error(data.message || data.error || "Invalid response from server");
       }
     } catch (error: any) {
       console.error("Error scraping website:", error);
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        websiteUrl: websiteUrl,
+      });
+      
       const errorMessage = error.message || "Failed to scrape website. Please try again.";
       setWorkflowError(errorMessage);
+      setResult(null); // Clear any partial results
       toast({
         title: "Error",
         description: errorMessage,
@@ -208,14 +236,21 @@ const LeadScraper = () => {
   };
 
   const downloadEmail = () => {
-    if (!result?.email) return;
+    if (!result?.email) {
+      toast({
+        title: "Error",
+        description: "No email available to download",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const emailContent = `Subject: ${result.email.subject}\n\n${result.email.body}`;
+    const emailContent = `Subject: ${result.email.subject || ""}\n\n${result.email.body || ""}`;
     const blob = new Blob([emailContent], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `email-${result.websiteUrl.replace(/[^a-z0-9]/gi, "-")}.txt`;
+    a.download = `email-${(result.websiteUrl || "website").replace(/[^a-z0-9]/gi, "-")}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -348,7 +383,7 @@ const LeadScraper = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {result.legalDocuments.length > 0 ? (
+                {result.legalDocuments && result.legalDocuments.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {result.legalDocuments.map((doc, index) => (
                       <Badge key={index} variant="outline">
@@ -365,139 +400,68 @@ const LeadScraper = () => {
             </Card>
 
             {/* Analysis Results */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Compliance Analysis
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h3 className="font-semibold mb-2">Summary</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {result.analysis.summary}
-                  </p>
-                </div>
-
-                {result.analysis.missingDocuments.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold mb-2">Missing Documents</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {result.analysis.missingDocuments.map((doc, index) => (
-                        <Badge key={index} variant="destructive">
-                          {doc}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {result.analysis.issues.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold mb-2">Document Issues Found</h3>
-                    <Accordion type="single" collapsible className="w-full">
-                      {result.analysis.issues.map((issue, index) => (
-                        <AccordionItem key={index} value={`issue-${index}`}>
-                          <AccordionTrigger>
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant={getSeverityColor(issue.severity)}
-                              >
-                                {issue.severity}
-                              </Badge>
-                              <span className="font-medium">
-                                {issue.document}
-                              </span>
-                            </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="space-y-2">
-                            <p className="text-sm text-muted-foreground">
-                              {issue.issue}
-                            </p>
-                            {issue.whyItMatters && (
-                              <div className="mt-2 pt-2 border-t">
-                                <p className="text-xs font-semibold text-muted-foreground mb-1">
-                                  Why it matters:
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {issue.whyItMatters}
-                                </p>
-                              </div>
-                            )}
-                          </AccordionContent>
-                        </AccordionItem>
-                      ))}
-                    </Accordion>
-                  </div>
-                )}
-
-                {result.analysis.marketingRisks &&
-                  result.analysis.marketingRisks.length > 0 && (
+            {result.analysis && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    Compliance Analysis
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {result.analysis.summary && (
                     <div>
-                      <h3 className="font-semibold mb-2 flex items-center gap-2">
-                        <Megaphone className="h-4 w-4" />
-                        Marketing & FTC Compliance Risks
-                      </h3>
-                      <Accordion type="single" collapsible className="w-full">
-                        {result.analysis.marketingRisks.map((risk, index) => (
-                          <AccordionItem
-                            key={index}
-                            value={`marketing-${index}`}
-                          >
-                            <AccordionTrigger>
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  variant={getSeverityColor(risk.severity)}
-                                >
-                                  {risk.severity}
-                                </Badge>
-                                <span className="font-medium text-sm">
-                                  {risk.risk}
-                                </span>
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent>
-                              <p className="text-sm text-muted-foreground">
-                                {risk.whyItMatters}
-                              </p>
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
+                      <h3 className="font-semibold mb-2">Summary</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {result.analysis.summary}
+                      </p>
                     </div>
                   )}
 
-                {result.analysis.operationalRisks &&
-                  result.analysis.operationalRisks.length > 0 && (
+                  {result.analysis.missingDocuments && result.analysis.missingDocuments.length > 0 && (
                     <div>
-                      <h3 className="font-semibold mb-2 flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        Operational & Website Compliance Risks
-                      </h3>
+                      <h3 className="font-semibold mb-2">Missing Documents</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {result.analysis.missingDocuments.map((doc, index) => (
+                          <Badge key={index} variant="destructive">
+                            {doc}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {result.analysis.issues && result.analysis.issues.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold mb-2">Document Issues Found</h3>
                       <Accordion type="single" collapsible className="w-full">
-                        {result.analysis.operationalRisks.map((risk, index) => (
-                          <AccordionItem
-                            key={index}
-                            value={`operational-${index}`}
-                          >
+                        {result.analysis.issues.map((issue, index) => (
+                          <AccordionItem key={index} value={`issue-${index}`}>
                             <AccordionTrigger>
                               <div className="flex items-center gap-2">
                                 <Badge
-                                  variant={getSeverityColor(risk.severity)}
+                                  variant={getSeverityColor(issue.severity)}
                                 >
-                                  {risk.severity}
+                                  {issue.severity}
                                 </Badge>
-                                <span className="font-medium text-sm">
-                                  {risk.risk}
+                                <span className="font-medium">
+                                  {issue.document}
                                 </span>
                               </div>
                             </AccordionTrigger>
-                            <AccordionContent>
-                              {risk.whyItMatters && (
-                                <p className="text-sm text-muted-foreground">
-                                  {risk.whyItMatters}
-                                </p>
+                            <AccordionContent className="space-y-2">
+                              <p className="text-sm text-muted-foreground">
+                                {issue.issue}
+                              </p>
+                              {issue.whyItMatters && (
+                                <div className="mt-2 pt-2 border-t">
+                                  <p className="text-xs font-semibold text-muted-foreground mb-1">
+                                    Why it matters:
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {issue.whyItMatters}
+                                  </p>
+                                </div>
                               )}
                             </AccordionContent>
                           </AccordionItem>
@@ -506,77 +470,181 @@ const LeadScraper = () => {
                     </div>
                   )}
 
-                {result.analysis.recommendations.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold mb-2">Recommendations</h3>
-                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                      {result.analysis.recommendations.map((rec, index) => (
-                        <li key={index}>{rec}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  {result.analysis.marketingRisks &&
+                    result.analysis.marketingRisks.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold mb-2 flex items-center gap-2">
+                          <Megaphone className="h-4 w-4" />
+                          Marketing & FTC Compliance Risks
+                        </h3>
+                        <Accordion type="single" collapsible className="w-full">
+                          {result.analysis.marketingRisks.map((risk, index) => (
+                            <AccordionItem
+                              key={index}
+                              value={`marketing-${index}`}
+                            >
+                              <AccordionTrigger>
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant={getSeverityColor(risk.severity)}
+                                  >
+                                    {risk.severity}
+                                  </Badge>
+                                  <span className="font-medium text-sm">
+                                    {risk.risk}
+                                  </span>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                <p className="text-sm text-muted-foreground">
+                                  {risk.whyItMatters}
+                                </p>
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
+                      </div>
+                    )}
+
+                  {result.analysis.operationalRisks &&
+                    result.analysis.operationalRisks.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold mb-2 flex items-center gap-2">
+                          <Settings className="h-4 w-4" />
+                          Operational & Website Compliance Risks
+                        </h3>
+                        <Accordion type="single" collapsible className="w-full">
+                          {result.analysis.operationalRisks.map((risk, index) => (
+                            <AccordionItem
+                              key={index}
+                              value={`operational-${index}`}
+                            >
+                              <AccordionTrigger>
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant={getSeverityColor(risk.severity)}
+                                  >
+                                    {risk.severity}
+                                  </Badge>
+                                  <span className="font-medium text-sm">
+                                    {risk.risk}
+                                  </span>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                {risk.whyItMatters && (
+                                  <p className="text-sm text-muted-foreground">
+                                    {risk.whyItMatters}
+                                  </p>
+                                )}
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
+                      </div>
+                    )}
+
+                  {result.analysis.recommendations && result.analysis.recommendations.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold mb-2">Recommendations</h3>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                        {result.analysis.recommendations.map((rec, index) => {
+                          // Handle both string and object formats
+                          const recommendationText = typeof rec === 'string' 
+                            ? rec 
+                            : (rec?.recommendation || rec?.text || JSON.stringify(rec));
+                          const urgency = typeof rec === 'object' && rec?.urgency 
+                            ? rec.urgency 
+                            : null;
+                          return (
+                            <li key={index}>
+                              {recommendationText}
+                              {urgency && (
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  {urgency}
+                                </Badge>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Generated Email */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Mail className="h-5 w-5" />
-                    Generated Email
-                  </CardTitle>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        copyToClipboard(
-                          `Subject: ${result.email.subject}\n\n${result.email.body}`,
-                          "Email"
-                        )
-                      }
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={downloadEmail}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
+            {result.email && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="h-5 w-5" />
+                      Generated Email
+                    </CardTitle>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          copyToClipboard(
+                            `Subject: ${result.email?.subject || ""}\n\n${result.email?.body || ""}`,
+                            "Email"
+                          )
+                        }
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={downloadEmail}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-sm font-semibold">Subject</Label>
-                  <Input
-                    value={result.email.subject}
-                    readOnly
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm font-semibold">Body</Label>
-                  <ScrollArea className="h-96 w-full rounded-md border p-4 mt-1">
-                    <div
-                      className="prose prose-sm dark:prose-invert max-w-none [&_p]:leading-relaxed [&_p]:mb-4 [&_li]:mb-2 [&_ul]:space-y-2 [&_ol]:space-y-2"
-                      style={{
-                        lineHeight: '1.6',
-                      }}
-                      dangerouslySetInnerHTML={{
-                        __html: result.email.body,
-                      }}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-sm font-semibold">Subject</Label>
+                    <Input
+                      value={result.email?.subject || ""}
+                      readOnly
+                      className="mt-1"
                     />
-                  </ScrollArea>
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold">Body</Label>
+                    <ScrollArea className="h-96 w-full rounded-md border p-4 mt-1">
+                      <div
+                        className="prose prose-sm dark:prose-invert max-w-none [&_p]:leading-relaxed [&_p]:mb-4 [&_li]:mb-2 [&_ul]:space-y-2 [&_ol]:space-y-2"
+                        style={{
+                          lineHeight: '1.6',
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: result.email?.body || "",
+                        }}
+                      />
+                    </ScrollArea>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Show message if no data is available */}
+            {!result.analysis && !result.email && (
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-muted-foreground text-center py-8">
+                    No analysis or email data available. The workflow may have encountered an error.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
     </div>

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Sparkles } from "lucide-react";
+import { FileText, Sparkles, Database } from "lucide-react";
 import LeadScraper from "./LeadScraper";
 import WebsiteRedesign from "./WebsiteRedesign";
+import DatabaseTables from "@/components/DatabaseTables";
 
 const Dashboard = () => {
   return (
@@ -21,7 +22,7 @@ const Dashboard = () => {
         <Card>
           <CardContent className="pt-6">
             <Tabs defaultValue="legal-analyzer" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsList className="grid w-full grid-cols-3 mb-6">
                 <TabsTrigger value="legal-analyzer" className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Legal Analyzer
@@ -29,6 +30,10 @@ const Dashboard = () => {
                 <TabsTrigger value="website-redesign" className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4" />
                   Website Redesign
+                </TabsTrigger>
+                <TabsTrigger value="database" className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  Database Tables
                 </TabsTrigger>
               </TabsList>
 
@@ -38,6 +43,10 @@ const Dashboard = () => {
 
               <TabsContent value="website-redesign" className="mt-0">
                 <WebsiteRedesign />
+              </TabsContent>
+
+              <TabsContent value="database" className="mt-0">
+                <DatabaseTables />
               </TabsContent>
             </Tabs>
           </CardContent>

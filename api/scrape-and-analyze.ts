@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { EmailGenerationWorkflow } from '../server/services/emailGenerationWorkflow.js';
 import { ConfigService } from '../server/services/configService.js';
+import { WorkflowResultsService } from '../server/services/workflowResultsService.js';
 
 export default async function handler(
   req: VercelRequest,
@@ -55,10 +56,51 @@ export default async function handler(
 
     // Check for errors
     if (result.error) {
+      // Save error result to database
+      if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+        try {
+          const workflowResultsService = new WorkflowResultsService(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_ANON_KEY
+          );
+          await workflowResultsService.saveWorkflowResult({
+            websiteUrl,
+            leadInfo,
+            error: result.error,
+            status: "error",
+          });
+        } catch (saveError) {
+          console.error("[Workflow] Error saving failed workflow result:", saveError);
+        }
+      }
+
       return res.status(500).json({
         error: "Workflow execution error",
         message: result.error,
       });
+    }
+
+    // Save successful workflow results to Supabase
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+      try {
+        const workflowResultsService = new WorkflowResultsService(
+          process.env.SUPABASE_URL,
+          process.env.SUPABASE_ANON_KEY
+        );
+        await workflowResultsService.saveWorkflowResult({
+          websiteUrl: result.websiteUrl,
+          leadInfo,
+          legalDocuments: result.legalDocuments,
+          analysis: result.analysis,
+          email: result.email,
+          executionDetails: result.executionDetails,
+          status: "completed",
+        });
+        console.log("[Workflow] Successfully saved workflow results to Supabase");
+      } catch (saveError: any) {
+        console.error("[Workflow] Error saving workflow results to Supabase:", saveError);
+        // Continue even if save fails - don't break the API response
+      }
     }
 
     // Return results
