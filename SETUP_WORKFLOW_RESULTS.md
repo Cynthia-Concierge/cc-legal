@@ -8,7 +8,7 @@
 
 **Integration Complete:**
 - ✅ Workflow results are automatically saved after each workflow run
-- ✅ Both server endpoint (`/api/scrape-and-analyze`) and Vercel API endpoint save results
+- ✅ Server endpoint (`/api/scrape-and-analyze`) saves results
 - ✅ Error results are also saved for debugging
 
 ---
@@ -168,7 +168,6 @@ WHERE analysis->'missingDocuments' @> '["Privacy Policy"]'::jsonb;
 1. **`supabase_workflow_results_table.sql`** - SQL script to create the table
 2. **`server/services/workflowResultsService.ts`** - Service to save/retrieve workflow results
 3. **`server/index.ts`** - Updated to save results after workflow completes
-4. **`api/scrape-and-analyze.ts`** - Updated Vercel API endpoint to save results
 
 ---
 

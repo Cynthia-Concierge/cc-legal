@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import BusinessWidget from "./pages/BusinessWidget";
+import ThankYou from "./pages/ThankYou";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,6 +21,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/thank-you" element={<ThankYou />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/lead-scraper" element={<Dashboard />} />
             <Route path="/business-widget" element={<BusinessWidget />} />

@@ -13,6 +13,14 @@ CREATE TABLE IF NOT EXISTS workflow_results (
   lead_email TEXT,
   legal_documents JSONB,
   analysis JSONB,
+  scraped_email TEXT,
+  scraped_emails JSONB,
+  instagram_url TEXT,
+  facebook_url TEXT,
+  twitter_url TEXT,
+  linkedin_url TEXT,
+  tiktok_url TEXT,
+  other_social_links JSONB,
   email_subject TEXT,
   email_body TEXT,
   execution_details JSONB,
@@ -25,15 +33,27 @@ CREATE TABLE IF NOT EXISTS workflow_results (
 -- Step 2: Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_workflow_results_website_url ON workflow_results(website_url);
 CREATE INDEX IF NOT EXISTS idx_workflow_results_lead_email ON workflow_results(lead_email);
+CREATE INDEX IF NOT EXISTS idx_workflow_results_scraped_email ON workflow_results(scraped_email);
+CREATE INDEX IF NOT EXISTS idx_workflow_results_instagram_url ON workflow_results(instagram_url);
 CREATE INDEX IF NOT EXISTS idx_workflow_results_created_at ON workflow_results(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_workflow_results_status ON workflow_results(status);
 
 -- Step 3: Create GIN indexes for JSONB columns (for efficient JSON queries)
 CREATE INDEX IF NOT EXISTS idx_workflow_results_legal_documents ON workflow_results USING GIN (legal_documents);
 CREATE INDEX IF NOT EXISTS idx_workflow_results_analysis ON workflow_results USING GIN (analysis);
+CREATE INDEX IF NOT EXISTS idx_workflow_results_scraped_emails ON workflow_results USING GIN (scraped_emails);
+CREATE INDEX IF NOT EXISTS idx_workflow_results_other_social_links ON workflow_results USING GIN (other_social_links);
 
 -- Step 4: Add table comment
-COMMENT ON TABLE workflow_results IS 'Stores results from Legal Analyzer workflow - website scraping, legal analysis, and generated emails';
+COMMENT ON TABLE workflow_results IS 'Stores results from Legal Analyzer workflow - website scraping, legal analysis, contact information, and generated emails';
+COMMENT ON COLUMN workflow_results.scraped_email IS 'Primary email address scraped from the website';
+COMMENT ON COLUMN workflow_results.scraped_emails IS 'Array of all email addresses found on the website';
+COMMENT ON COLUMN workflow_results.instagram_url IS 'Instagram profile URL scraped from the website';
+COMMENT ON COLUMN workflow_results.facebook_url IS 'Facebook profile/page URL scraped from the website';
+COMMENT ON COLUMN workflow_results.twitter_url IS 'Twitter/X profile URL scraped from the website';
+COMMENT ON COLUMN workflow_results.linkedin_url IS 'LinkedIn profile/company URL scraped from the website';
+COMMENT ON COLUMN workflow_results.tiktok_url IS 'TikTok profile URL scraped from the website';
+COMMENT ON COLUMN workflow_results.other_social_links IS 'JSONB object containing other social media links (YouTube, Pinterest, etc.)';
 
 -- Step 5: Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_workflow_results_updated_at()
@@ -45,6 +65,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Step 6: Create trigger to automatically update updated_at
+DROP TRIGGER IF EXISTS update_workflow_results_updated_at ON workflow_results;
 CREATE TRIGGER update_workflow_results_updated_at
   BEFORE UPDATE ON workflow_results
   FOR EACH ROW

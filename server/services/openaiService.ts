@@ -52,129 +52,37 @@ export class OpenAIService {
     try {
       const documentsSummary = this.prepareDocumentsSummary(legalDocuments);
 
-      // Use custom prompt if available, otherwise use default
+      // Use custom prompt if available, otherwise use simplified default
       const customPrompt = this.customPrompts?.legal_analysis?.prompt;
-      const basePrompt = customPrompt || `You are an expert legal compliance auditor specializing in fitness, wellness, coaching, and online service businesses. 
+      const basePrompt = customPrompt || `You are a legal compliance expert. Analyze this website's legal documents and tell me what's wrong in simple, easy-to-understand language.
 
-Your job is to analyze the *entire legal footprint* of a business based on the website content provided.
+Website: ${websiteUrl}
 
-The business website URL is: ${websiteUrl}
-
-Here are all legal documents and website text detected:
-
+Legal documents found:
 ${documentsSummary}
 
-Using this data, produce a comprehensive legal risk assessment that covers:
+Your job: Find what's wrong with their legal setup. Keep it simple and clear.
 
-1. **Missing Required Legal Documents**
+Focus on:
+1. **Missing Documents** - What legal pages are they missing? (Privacy Policy, Terms, Refund Policy, etc.)
+2. **Problems in Existing Documents** - What's wrong with the documents they do have? Use plain language.
+3. **What This Means** - Explain why each problem matters in simple terms.
 
-   Identify all documents that should exist for this type of business, including:
-
-   - Privacy Policy
-
-   - Terms of Service
-
-   - Disclaimer (health, fitness, medical, coaching)
-
-   - Refund / Cancellation Policy
-
-   - Cookie Policy / Tracking Notice
-
-   - Media Release / Testimonial Consent
-
-   - Liability Waiver / Release of Claims
-
-   - Coaching Agreement (if applicable)
-
-   - Challenge / Program Terms (if applicable)
-
-2. **Gaps or Issues in EXISTING Legal Documents**
-
-   For each document found:
-
-   - identify missing clauses
-
-   - identify outdated language
-
-   - identify vague or unenforceable terms
-
-   - identify missing jurisdiction/venue clauses
-
-   - identify missing limitation of liability clauses
-
-   - identify missing indemnification clauses
-
-   - identify missing assumption of risk language
-
-   - evaluate compliance with GDPR/CCPA if collecting data
-
-3. **Marketing & FTC Compliance Risks**
-
-   Identify risky elements such as:
-
-   - before/after photos without media release rights
-
-   - testimonials without disclaimers
-
-   - weight loss or health claims without qualifiers
-
-   - "guarantees" or "promises" without proper legal structure
-
-4. **Operational & Website Compliance Risks**
-
-   - missing contact details
-
-   - missing business address
-
-   - unclear pricing
-
-   - accessibility (ADA) issues
-
-   - broken policy links
-
-   - missing consent checkboxes during checkout or opt-in
-
-5. **Severity Scoring**
-
-   For EACH issue, assign:
-
-   - severity: "high", "medium", or "low"
-
-   - explain why
-
-6. **Specific, Practical Recommendations**
-
-   Clear, actionable steps to fix every issue.
-
-Output your response as clean JSON:
-
+Output format (JSON only):
 {
-  "missingDocuments": ["list of missing document types"],
+  "missingDocuments": ["Privacy Policy", "Terms of Service", etc.],
   "issues": [
     {
-      "document": "Privacy Policy | Terms | Waiver | etc.",
-      "issue": "description of the issue",
+      "document": "Privacy Policy",
+      "issue": "Simple description of what's wrong (e.g., 'Missing data collection disclosure')",
       "severity": "high|medium|low",
-      "whyItMatters": "brief explanation"
+      "whyItMatters": "Simple explanation (e.g., 'You could face fines if you collect data without proper disclosure')"
     }
   ],
-  "marketingRisks": [
-    {
-      "risk": "description",
-      "severity": "high|medium|low",
-      "whyItMatters": "explanation"
-    }
-  ],
-  "operationalRisks": [
-    {
-      "risk": "description",
-      "severity": "high|medium|low",
-      "whyItMatters": "explanation"
-    }
-  ],
-  "recommendations": ["list of recommendations"],
-  "summary": "concise but authoritative summary of compliance status"
-}`;
+  "summary": "One paragraph summary in plain language - what's the main problem and why it matters"
+}
+
+Keep descriptions short, clear, and easy to understand. No legal jargon.`;
 
       // Replace placeholders in prompt
       const prompt = basePrompt

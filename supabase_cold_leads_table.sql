@@ -17,6 +17,15 @@ CREATE TABLE IF NOT EXISTS cold_leads (
   company_website TEXT,
   source TEXT DEFAULT 'instantly',
   imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  analyzed_at TIMESTAMPTZ,
+  scraped_email TEXT,
+  scraped_emails JSONB,
+  instagram_url TEXT,
+  facebook_url TEXT,
+  twitter_url TEXT,
+  linkedin_url_scraped TEXT,
+  tiktok_url TEXT,
+  other_social_links JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -30,9 +39,20 @@ CREATE INDEX IF NOT EXISTS idx_cold_leads_email_2 ON cold_leads(email_2);
 CREATE INDEX IF NOT EXISTS idx_cold_leads_linkedin_url ON cold_leads(linkedin_url);
 CREATE INDEX IF NOT EXISTS idx_cold_leads_imported_at ON cold_leads(imported_at DESC);
 CREATE INDEX IF NOT EXISTS idx_cold_leads_source ON cold_leads(source);
+CREATE INDEX IF NOT EXISTS idx_cold_leads_analyzed_at ON cold_leads(analyzed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cold_leads_scraped_email ON cold_leads(scraped_email);
+CREATE INDEX IF NOT EXISTS idx_cold_leads_instagram_url ON cold_leads(instagram_url);
 
 -- Step 3: Add table comment
 COMMENT ON TABLE cold_leads IS 'Stores cold leads imported from Instantly or other lead sources';
+COMMENT ON COLUMN cold_leads.scraped_email IS 'Primary email address scraped from the website during analysis';
+COMMENT ON COLUMN cold_leads.scraped_emails IS 'Array of all email addresses found on the website';
+COMMENT ON COLUMN cold_leads.instagram_url IS 'Instagram profile URL scraped from the website';
+COMMENT ON COLUMN cold_leads.facebook_url IS 'Facebook profile/page URL scraped from the website';
+COMMENT ON COLUMN cold_leads.twitter_url IS 'Twitter/X profile URL scraped from the website';
+COMMENT ON COLUMN cold_leads.linkedin_url_scraped IS 'LinkedIn profile/company URL scraped from the website (different from linkedin_url which is from lead import)';
+COMMENT ON COLUMN cold_leads.tiktok_url IS 'TikTok profile URL scraped from the website';
+COMMENT ON COLUMN cold_leads.other_social_links IS 'JSONB object containing other social media links (YouTube, Pinterest, etc.)';
 
 -- Step 4: Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_cold_leads_updated_at()
@@ -44,6 +64,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Step 5: Create trigger to automatically update updated_at
+DROP TRIGGER IF EXISTS update_cold_leads_updated_at ON cold_leads;
 CREATE TRIGGER update_cold_leads_updated_at
   BEFORE UPDATE ON cold_leads
   FOR EACH ROW

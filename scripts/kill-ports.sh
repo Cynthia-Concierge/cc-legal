@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# Kill processes on port 8080 (frontend)
-if lsof -ti:8080 > /dev/null 2>&1; then
-  echo "Killing process on port 8080..."
-  lsof -ti:8080 | xargs kill -9 2>/dev/null || true
-fi
+# Array of ports to kill
+PORTS=(3001 4000 5000 5001 5173 8080 9000)
 
-# Kill processes on port 3001 (backend)
-if lsof -ti:3001 > /dev/null 2>&1; then
-  echo "Killing process on port 3001..."
-  lsof -ti:3001 | xargs kill -9 2>/dev/null || true
-fi
+echo "Killing processes on ports..."
 
-echo "Ports cleared!"
+for port in "${PORTS[@]}"; do
+  if lsof -ti:$port > /dev/null 2>&1; then
+    echo "  Killing process on port $port..."
+    lsof -ti:$port | xargs kill -9 2>/dev/null || true
+  fi
+done
+
+echo "✅ All ports cleared!"
 

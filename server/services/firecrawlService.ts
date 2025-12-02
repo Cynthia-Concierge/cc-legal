@@ -57,6 +57,12 @@ interface LegalDocuments {
   other?: string[];
 }
 
+export interface SocialMediaInfo {
+  instagram?: string;
+  socialLinks: Record<string, string>;
+  emails?: string[];
+}
+
 export class FirecrawlService {
   private apiKey: string;
   private baseUrl = "https://api.firecrawl.dev/v1";
@@ -100,6 +106,76 @@ export class FirecrawlService {
   }
 
   /**
+   * Scrape website and extract legal documents + social media info
+   */
+  async scrapeWebsiteWithSocial(url: string): Promise<{ legalDocuments: LegalDocuments; socialMedia: SocialMediaInfo }> {
+    try {
+      // Scrape main page with HTML to get footer
+      let markdown = "";
+      let html = "";
+      
+      try {
+        const pageData = await this.scrapePageWithHtml(url);
+        markdown = pageData.markdown || "";
+        html = pageData.html || "";
+      } catch (error: any) {
+        console.warn("[Firecrawl] Failed to scrape with HTML, trying markdown only:", error.message);
+        // Fallback to markdown-only scraping
+        markdown = await this.scrapePage(url);
+        html = "";
+      }
+
+      // Debug: Verify HTML contains footer/social content
+      if (html) {
+        const hasFooter = html.includes("footer") || html.match(/<footer/i);
+        const hasInstagram = html.includes("instagram");
+        const hasEmail = html.includes("@") || html.includes("mailto:");
+        console.log(`[Firecrawl] HTML extraction check for ${url}:`, {
+          hasFooter,
+          hasInstagram,
+          hasEmail,
+          htmlLength: html.length,
+        });
+      } else {
+        console.warn(`[Firecrawl] WARNING: No HTML returned for ${url} - social links may be missed!`);
+      }
+
+      // Extract social media and contact info from footer (even if HTML is empty, try markdown)
+      const socialMedia = this.extractSocialMedia(html, markdown);
+      const emails = this.extractEmails(html, markdown);
+      
+      // Add emails to socialMedia object
+      if (emails.length > 0) {
+        socialMedia.emails = emails;
+      }
+
+      // Find links to legal documents
+      const legalLinks = this.findLegalDocumentLinks(markdown, url);
+
+      // Scrape each legal document
+      const legalDocuments: LegalDocuments = {};
+
+      for (const [docType, docUrl] of Object.entries(legalLinks)) {
+        if (docUrl && docType !== "other") {
+          try {
+            const content = await this.scrapePage(docUrl);
+            if (content) {
+              (legalDocuments as any)[docType] = content;
+            }
+          } catch (error) {
+            console.error(`Error scraping ${docType} from ${docUrl}:`, error);
+          }
+        }
+      }
+
+      return { legalDocuments, socialMedia };
+    } catch (error) {
+      console.error("Error in scrapeWebsiteWithSocial:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Scrape a single page using Firecrawl
    */
   private async scrapePage(url: string): Promise<string> {
@@ -135,6 +211,370 @@ export class FirecrawlService {
       console.error(`Error scraping page ${url}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Scrape a page with HTML to extract footer and social media
+   * CRITICAL: Must use onlyMainContent: false + javascript: true to get footer/social links
+   */
+  private async scrapePageWithHtml(url: string): Promise<{ markdown: string; html: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/scrape`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          url: url,
+          formats: ["html", "markdown"], // HTML first for better extraction
+          onlyMainContent: false, // CRITICAL: Must be false to get footer/header/social links
+          // Note: Firecrawl automatically handles JavaScript rendering when onlyMainContent is false
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          `Firecrawl API error: ${response.status} - ${errorData.message || response.statusText}`
+        );
+      }
+
+      const data: any = await response.json();
+
+      if (!data.success || !data.data) {
+        throw new Error(data.error || "No content returned from Firecrawl");
+      }
+
+      return {
+        markdown: data.data.markdown || "",
+        html: data.data.html || "",
+      };
+    } catch (error) {
+      console.error(`Error scraping page with HTML ${url}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extract social media links from footer and throughout the page
+   */
+  extractSocialMedia(html: string, markdown: string): { instagram?: string; socialLinks: Record<string, string> } {
+    const socialLinks: Record<string, string> = {};
+    let instagram: string | undefined;
+
+    // Common social media patterns - more comprehensive
+    const socialPatterns = {
+      instagram: [
+        /instagram\.com\/([a-zA-Z0-9_.]+)/gi,
+        /instagram\.com\/p\/([a-zA-Z0-9_.]+)/gi,
+        /instagram\.com\/reel\/([a-zA-Z0-9_.]+)/gi,
+      ],
+      facebook: [
+        /facebook\.com\/([a-zA-Z0-9_.]+)/gi,
+        /fb\.com\/([a-zA-Z0-9_.]+)/gi,
+      ],
+      twitter: [
+        /twitter\.com\/([a-zA-Z0-9_.]+)/gi,
+        /x\.com\/([a-zA-Z0-9_.]+)/gi,
+      ],
+      linkedin: [
+        /linkedin\.com\/(company|in)\/([a-zA-Z0-9_.-]+)/gi,
+        /linkedin\.com\/company\/([a-zA-Z0-9_.-]+)/gi,
+        /linkedin\.com\/in\/([a-zA-Z0-9_.-]+)/gi,
+      ],
+      tiktok: [
+        /tiktok\.com\/@([a-zA-Z0-9_.]+)/gi,
+        /tiktok\.com\/([a-zA-Z0-9_.]+)/gi,
+      ],
+      youtube: [
+        /youtube\.com\/(channel|c|user|@)\/([a-zA-Z0-9_.-]+)/gi,
+        /youtube\.com\/@([a-zA-Z0-9_.-]+)/gi,
+        /youtu\.be\/([a-zA-Z0-9_.-]+)/gi,
+      ],
+      pinterest: [
+        /pinterest\.com\/([a-zA-Z0-9_.-]+)/gi,
+        /pinterest\.([a-z]{2})\/([a-zA-Z0-9_.-]+)/gi,
+      ],
+    };
+
+    // Helper to normalize URLs
+    const normalizeUrl = (url: string): string => {
+      if (!url) return "";
+      // Handle relative URLs
+      if (url.startsWith("//")) {
+        return "https:" + url;
+      }
+      if (url.startsWith("/")) {
+        // Can't resolve without base URL, but try to make it absolute
+        return url;
+      }
+      if (!url.startsWith("http")) {
+        return "https://" + url;
+      }
+      return url;
+    };
+
+    // Extract from HTML - search entire page, prioritize footer
+    if (html) {
+      // First, try to find footer section (more likely to have social links)
+      const footerMatch = html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i);
+      const footerContent = footerMatch ? footerMatch[1] : "";
+      
+      // Also look for common footer class/ID patterns
+      const footerPatterns = [
+        /<div[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
+        /<section[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi,
+      ];
+      
+      let allFooterContent = footerContent;
+      for (const pattern of footerPatterns) {
+        let match;
+        while ((match = pattern.exec(html)) !== null) {
+          allFooterContent += " " + match[1];
+        }
+      }
+
+      // Search areas: footer first, then entire page
+      const searchAreas = [
+        { content: allFooterContent, priority: 2 }, // Footer has higher priority
+        { content: html, priority: 1 }, // Then entire page
+      ];
+
+      for (const area of searchAreas) {
+        // CRITICAL: First, extract SVG-only links (common pattern: <a href="..."><svg>...</svg></a>)
+        // These are often social media icons with no text, which markdown conversion removes
+        const svgLinkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>\s*<svg/gi;
+        let svgMatch;
+        while ((svgMatch = svgLinkRegex.exec(area.content)) !== null) {
+          let url = svgMatch[1].trim();
+          url = normalizeUrl(url);
+
+          // Check for Instagram
+          if (!instagram) {
+            for (const pattern of socialPatterns.instagram) {
+              if (pattern.test(url)) {
+                instagram = url;
+                socialLinks.instagram = url;
+                break;
+              }
+            }
+          }
+
+          // Check for other social media
+          for (const [platform, patterns] of Object.entries(socialPatterns)) {
+            if (platform === "instagram" && instagram) continue; // Already handled
+            if (!socialLinks[platform]) {
+              for (const pattern of patterns) {
+                if (pattern.test(url)) {
+                  socialLinks[platform] = url;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Extract all href attributes (standard links)
+        const hrefRegex = /href=["']([^"']+)["']/gi;
+        let match;
+        while ((match = hrefRegex.exec(area.content)) !== null) {
+          let url = match[1].trim();
+          url = normalizeUrl(url);
+
+          // Check for Instagram
+          if (!instagram) {
+            for (const pattern of socialPatterns.instagram) {
+              if (pattern.test(url)) {
+                instagram = url;
+                socialLinks.instagram = url;
+                break;
+              }
+            }
+          }
+
+          // Check for other social media
+          for (const [platform, patterns] of Object.entries(socialPatterns)) {
+            if (platform === "instagram" && instagram) continue; // Already handled
+            if (!socialLinks[platform]) {
+              for (const pattern of patterns) {
+                if (pattern.test(url)) {
+                  socialLinks[platform] = url;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Also look for social media in data attributes and aria-labels
+        const socialIconPatterns = [
+          /(?:aria-label|title|alt)=["']([^"']*(?:instagram|facebook|twitter|linkedin|youtube|pinterest|tiktok)[^"']*)["']/gi,
+        ];
+
+        for (const pattern of socialIconPatterns) {
+          let iconMatch;
+          while ((iconMatch = pattern.exec(area.content)) !== null) {
+            const text = iconMatch[1].toLowerCase();
+            // Try to find nearby href
+            const context = area.content.substring(
+              Math.max(0, iconMatch.index - 200),
+              Math.min(area.content.length, iconMatch.index + 200)
+            );
+            const nearbyHref = context.match(/href=["']([^"']+)["']/i);
+            if (nearbyHref) {
+              let url = normalizeUrl(nearbyHref[1]);
+              // Match platform based on text
+              if (text.includes("instagram") && !socialLinks.instagram) {
+                socialLinks.instagram = url;
+                if (!instagram) instagram = url;
+              } else if (text.includes("facebook") && !socialLinks.facebook) {
+                socialLinks.facebook = url;
+              } else if ((text.includes("twitter") || text.includes("x.com")) && !socialLinks.twitter) {
+                socialLinks.twitter = url;
+              } else if (text.includes("linkedin") && !socialLinks.linkedin) {
+                socialLinks.linkedin = url;
+              } else if (text.includes("youtube") && !socialLinks.youtube) {
+                socialLinks.youtube = url;
+              } else if (text.includes("pinterest") && !socialLinks.pinterest) {
+                socialLinks.pinterest = url;
+              } else if (text.includes("tiktok") && !socialLinks.tiktok) {
+                socialLinks.tiktok = url;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Also check markdown for links (as fallback)
+    if (markdown) {
+      const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+      let markdownMatch;
+      while ((markdownMatch = markdownLinkRegex.exec(markdown)) !== null) {
+        let url = markdownMatch[2].trim();
+        const text = markdownMatch[1].toLowerCase();
+        url = normalizeUrl(url);
+
+        // Check for Instagram
+        if (!instagram) {
+          for (const pattern of socialPatterns.instagram) {
+            if (pattern.test(url) || text.includes("instagram")) {
+              instagram = url;
+              socialLinks.instagram = url;
+              break;
+            }
+          }
+        }
+
+        // Check for other social media
+        for (const [platform, patterns] of Object.entries(socialPatterns)) {
+          if (platform === "instagram" && instagram) continue;
+          if (!socialLinks[platform]) {
+            for (const pattern of patterns) {
+              if (pattern.test(url) || text.includes(platform)) {
+                socialLinks[platform] = url;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Also search for plain URLs in markdown
+      const plainUrlRegex = /https?:\/\/(?:www\.)?(instagram|facebook|twitter|x|linkedin|youtube|pinterest|tiktok)\.com[^\s\)]+/gi;
+      let plainMatch;
+      while ((plainMatch = plainUrlRegex.exec(markdown)) !== null) {
+        const url = plainMatch[0];
+        const platform = plainMatch[1].toLowerCase();
+        
+        // Map platform names
+        const platformMap: Record<string, string> = {
+          instagram: "instagram",
+          facebook: "facebook",
+          twitter: "twitter",
+          x: "twitter",
+          linkedin: "linkedin",
+          youtube: "youtube",
+          pinterest: "pinterest",
+          tiktok: "tiktok",
+        };
+
+        const mappedPlatform = platformMap[platform];
+        if (mappedPlatform && !socialLinks[mappedPlatform]) {
+          socialLinks[mappedPlatform] = url;
+          if (mappedPlatform === "instagram" && !instagram) {
+            instagram = url;
+          }
+        }
+      }
+    }
+
+    // Log what we found for debugging
+    if (Object.keys(socialLinks).length > 0) {
+      console.log("[Firecrawl] Found social media links:", Object.keys(socialLinks));
+    } else {
+      console.log("[Firecrawl] No social media links found in HTML or markdown");
+    }
+
+    return { instagram, socialLinks };
+  }
+
+  /**
+   * Extract email addresses from HTML and markdown content
+   */
+  extractEmails(html: string, markdown: string): string[] {
+    const emails = new Set<string>();
+    
+    // Common email regex pattern
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    
+    // Extract from HTML
+    if (html) {
+      // Look for emails in href="mailto:" links
+      const mailtoRegex = /mailto:([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})/gi;
+      let match;
+      while ((match = mailtoRegex.exec(html)) !== null) {
+        emails.add(match[1].toLowerCase());
+      }
+      
+      // Also extract plain emails from HTML text content
+      // Remove script and style tags first
+      const cleanHtml = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+      while ((match = emailRegex.exec(cleanHtml)) !== null) {
+        const email = match[0].toLowerCase();
+        // Filter out common false positives
+        if (!email.includes('example.com') && !email.includes('test@') && !email.includes('placeholder')) {
+          emails.add(email);
+        }
+      }
+    }
+    
+    // Extract from markdown
+    if (markdown) {
+      // Extract from markdown links [text](mailto:email)
+      const markdownMailtoRegex = /\[([^\]]+)\]\(mailto:([^)]+)\)/gi;
+      let markdownMatch;
+      while ((markdownMatch = markdownMailtoRegex.exec(markdown)) !== null) {
+        const email = markdownMatch[2].toLowerCase();
+        if (email.includes('@')) {
+          emails.add(email);
+        }
+      }
+      
+      // Extract plain emails from markdown
+      let emailMatch;
+      while ((emailMatch = emailRegex.exec(markdown)) !== null) {
+        const email = emailMatch[0].toLowerCase();
+        // Filter out common false positives
+        if (!email.includes('example.com') && !email.includes('test@') && !email.includes('placeholder')) {
+          emails.add(email);
+        }
+      }
+    }
+    
+    return Array.from(emails).slice(0, 10); // Limit to 10 emails
   }
 
   /**
@@ -331,8 +771,9 @@ export class FirecrawlService {
         },
         body: JSON.stringify({
           url: url,
-          formats: ["markdown", "html"],
-          onlyMainContent: false, // Need full page to extract nav
+          formats: ["html", "markdown"], // HTML first for better extraction
+          onlyMainContent: false, // CRITICAL: Must be false to get footer/header/nav
+          // Note: Firecrawl automatically handles JavaScript rendering when onlyMainContent is false
         }),
       });
 

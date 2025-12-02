@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Circle, Globe, FileSearch, Mail, ArrowRight, Sparkles, Info } from "lucide-react";
+import { CheckCircle2, Loader2, Circle, Globe, FileSearch, ArrowRight, Sparkles, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import NodeDetailModal from "./NodeDetailModal";
@@ -73,13 +73,6 @@ const WorkflowVisualization = ({ currentStep, error, executionDetails, websiteUr
       name: "Legal Analysis",
       description: "Analyzing documents with AI for compliance issues",
       icon: <FileSearch className="w-5 h-5" />,
-      status: "pending",
-    },
-    {
-      id: "email_generation",
-      name: "Email Generation",
-      description: "Generating personalized email content",
-      icon: <Mail className="w-5 h-5" />,
       status: "pending",
     },
   ];
@@ -267,23 +260,6 @@ const WorkflowVisualization = ({ currentStep, error, executionDetails, websiteUr
               autogenApprovalCount = details.autogenReviews.filter(r => r.approved).length;
               autogenTotalAgents = details.autogenReviews.length;
             } else if (currentStep === "analyzing") {
-              autogenStatus = "running";
-            }
-          }
-          break;
-        case "email_generation":
-          if (currentStep === "generating" || currentStep === "complete") {
-            status = currentStep === "generating" ? "running" : "completed";
-            message = currentStep === "generating" ? "Generating email..." : "Email ready";
-          }
-          // Check if AutoGen is running
-          if (details?.autogenEnabled) {
-            autogenEnabled = true;
-            if (details.autogenReviews) {
-              autogenStatus = "completed";
-              autogenApprovalCount = details.autogenReviews.filter(r => r.approved).length;
-              autogenTotalAgents = details.autogenReviews.length;
-            } else if (currentStep === "generating") {
               autogenStatus = "running";
             }
           }

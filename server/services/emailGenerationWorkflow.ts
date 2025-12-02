@@ -85,6 +85,12 @@ const StateAnnotation = Annotation.Root({
   legalDocuments: Annotation<Record<string, string | undefined>>({
     reducer: (left, right) => right ?? left,
   }),
+  socialMedia: Annotation<{
+    instagram?: string;
+    socialLinks: Record<string, string>;
+  }>({
+    reducer: (left, right) => right ?? left,
+  }),
   analysis: Annotation<EmailGenerationState["analysis"]>({
     reducer: (left, right) => right ?? left,
   }),
@@ -144,27 +150,25 @@ export class EmailGenerationWorkflow {
   }
 
   /**
-   * Build the LangGraph workflow
+   * Build the LangGraph workflow (simplified - no email generation)
    */
   private buildWorkflow() {
     const workflow = new StateGraph(StateAnnotation);
 
-    // Add nodes
+    // Add nodes (removed email generation)
     workflow.addNode("firecrawl", this.firecrawlNode.bind(this));
     workflow.addNode("legal_analysis", this.legalAnalysisNode.bind(this));
-    workflow.addNode("email_generation", this.emailGenerationNode.bind(this));
 
     // Define the flow - using node names as string literals
     workflow.addEdge(START, "firecrawl" as any);
     workflow.addEdge("firecrawl" as any, "legal_analysis" as any);
-    workflow.addEdge("legal_analysis" as any, "email_generation" as any);
-    workflow.addEdge("email_generation" as any, END);
+    workflow.addEdge("legal_analysis" as any, END);
 
     return workflow.compile();
   }
 
   /**
-   * Firecrawl Node: Scrape website and extract legal documents
+   * Firecrawl Node: Scrape website and extract legal documents + social media
    */
   private async firecrawlNode(
     state: typeof StateAnnotation.State
@@ -175,9 +179,22 @@ export class EmailGenerationWorkflow {
     try {
       console.log(`[Firecrawl Node] Scraping website: ${state.websiteUrl}`);
       
-      const legalDocuments = await this.firecrawlService.scrapeWebsite(
-        state.websiteUrl
-      );
+      // Try to use new method that also extracts social media, fallback to regular method if it fails
+      let legalDocuments: any;
+      let socialMedia: { instagram?: string; socialLinks: Record<string, string> } | undefined;
+      
+      try {
+        const result = await (this.firecrawlService as any).scrapeWebsiteWithSocial(
+          state.websiteUrl
+        );
+        legalDocuments = result.legalDocuments;
+        socialMedia = result.socialMedia;
+      } catch (socialError: any) {
+        console.warn("[Firecrawl Node] Failed to scrape with social media, falling back to regular scrape:", socialError);
+        // Fallback to regular scraping
+        legalDocuments = await this.firecrawlService.scrapeWebsite(state.websiteUrl);
+        socialMedia = { socialLinks: {} }; // Empty social media if fallback
+      }
 
       // Convert LegalDocuments to Record<string, string | undefined>
       const legalDocsRecord: Record<string, string | undefined> = {};
@@ -187,7 +204,7 @@ export class EmailGenerationWorkflow {
       if (legalDocuments.cookiePolicy) legalDocsRecord.cookiePolicy = legalDocuments.cookiePolicy;
       if (legalDocuments.disclaimer) legalDocsRecord.disclaimer = legalDocuments.disclaimer;
       if (legalDocuments.other) {
-        legalDocuments.other.forEach((doc, idx) => {
+        legalDocuments.other.forEach((doc: string, idx: number) => {
           legalDocsRecord[`other_${idx}`] = doc;
         });
       }
@@ -212,6 +229,7 @@ export class EmailGenerationWorkflow {
 
       return {
         legalDocuments: legalDocsRecord,
+        socialMedia: socialMedia, // Include social media info
         executionDetails,
       };
     } catch (error: any) {
@@ -833,11 +851,12 @@ Return JSON with "subject" and "body" fields. The body should be HTML formatted 
       company?: string;
       email?: string;
     }
-  ): Promise<EmailGenerationState> {
+  ): Promise<EmailGenerationState & { socialMedia?: { instagram?: string; socialLinks: Record<string, string> } }> {
     const initialState = {
       websiteUrl,
       leadInfo,
       legalDocuments: undefined,
+      socialMedia: undefined,
       analysis: undefined,
       email: undefined,
       error: undefined,

@@ -6,10 +6,16 @@ import {
   FileText, 
   Database, 
   RefreshCw,
-  ChevronLeft,
-  ChevronRight
+  Filter,
+  Play,
+  Mail,
+  MailX,
+  Eye,
+  FileText as FileTextIcon,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WorkflowResultDetail } from "./WorkflowResultDetail";
 import {
   Table,
   TableBody,
@@ -45,33 +51,59 @@ const DatabaseTables = () => {
       description: "Legal analyzer workflow results - website scraping, analysis, and generated emails",
       icon: <FileText className="h-5 w-5" />,
       color: "bg-purple-500",
-      fields: ["website_url", "analysis", "email_subject", "email_body", "legal_documents"],
+      fields: [
+        "website_url", "lead_name", "lead_company", "lead_email",
+        "legal_documents", "analysis",
+        "scraped_email", "scraped_emails",
+        "instagram_url", "facebook_url", "twitter_url", "linkedin_url", "tiktok_url", "other_social_links",
+        "email_subject", "email_body",
+        "status", "error_message",
+        "created_at", "updated_at"
+      ],
     },
     {
       name: "cold_leads",
       description: "Cold leads imported from Instantly or CSV files",
       icon: <Database className="h-5 w-5" />,
       color: "bg-emerald-500",
-      fields: ["first_name", "last_name", "company", "location", "linkedin_url", "email_1", "email_2"],
+      fields: [
+        "first_name", "last_name", "company", "location", 
+        "linkedin_url", "email_1", "email_2", "company_website",
+        "analyzed_at", "scraped_email", "scraped_emails",
+        "instagram_url", "facebook_url", "twitter_url", 
+        "linkedin_url_scraped", "tiktok_url", "other_social_links"
+      ],
     },
   ]);
 
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableData, setTableData] = useState<TableData[]>([]);
+  const [filteredData, setFilteredData] = useState<TableData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [limit] = useState(20);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [emailFilter, setEmailFilter] = useState<"all" | "has-email" | "no-email">("all");
+  const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+  const [processingLeads, setProcessingLeads] = useState<Set<string>>(new Set());
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 
-    (import.meta.env.DEV ? "" : "http://localhost:3001");
+    (import.meta.env.DEV ? "" : "");
 
-  const fetchTableData = async (tableName: string, pageNum: number = 0) => {
-    setLoading(true);
-    setError(null);
+  const fetchTableData = async (tableName: string, append: boolean = false) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setError(null);
+    }
+    
     try {
       let response;
-      const offset = pageNum * limit;
+      const offset = append ? tableData.length : 0;
+      // For cold_leads and workflow_results, fetch all data (use a large limit)
+      const limit = (tableName === "cold_leads" || tableName === "workflow_results") ? 10000 : 1000;
 
       switch (tableName) {
         case "contacts":
@@ -113,31 +145,110 @@ const DatabaseTables = () => {
       }
       
       const data = result.data || [];
-      setTableData(data);
       
-      if (data.length === 0 && page === 0) {
+      if (append) {
+        setTableData(prev => [...prev, ...data]);
+        setHasMore(data.length >= limit);
+      } else {
+        setTableData(data);
+        setHasMore(data.length >= limit);
+      }
+      
+      // Apply filter after updating data
+      const dataToFilter = append ? [...tableData, ...data] : data;
+      applyEmailFilter(dataToFilter, emailFilter, tableName);
+      
+      if (data.length === 0 && !append) {
         console.log(`No data found for table: ${tableName}`, result);
       }
     } catch (err: any) {
       console.error(`Error fetching ${tableName}:`, err);
       setError(err.message || "Failed to fetch table data");
-      setTableData([]);
+      if (!append) {
+        setTableData([]);
+      }
     } finally {
-      setLoading(false);
+      if (append) {
+        setLoadingMore(false);
+      } else {
+        setLoading(false);
+      }
     }
+  };
+
+  const applyEmailFilter = (data: TableData[], filter: "all" | "has-email" | "no-email", tableName: string | null) => {
+    if (tableName !== "cold_leads" || filter === "all") {
+      setFilteredData(data);
+      return;
+    }
+
+    const filtered = data.filter((row) => {
+      const hasEmail = !!(row.email_1 || row.email_2);
+      return filter === "has-email" ? hasEmail : !hasEmail;
+    });
+    setFilteredData(filtered);
   };
 
   useEffect(() => {
     if (selectedTable) {
-      fetchTableData(selectedTable, page);
+      fetchTableData(selectedTable, false);
     }
-  }, [selectedTable, page]);
+  }, [selectedTable]);
 
-  const formatValue = (value: any): string => {
-    if (value === null || value === undefined) return "-";
-    if (typeof value === "object") {
-      return JSON.stringify(value).substring(0, 50) + "...";
+  useEffect(() => {
+    applyEmailFilter(tableData, emailFilter, selectedTable);
+  }, [emailFilter, tableData, selectedTable]);
+
+  // Auto-refresh for cold_leads and workflow_results tables every 30 seconds
+  useEffect(() => {
+    if (selectedTable === "cold_leads" || selectedTable === "workflow_results") {
+      const interval = setInterval(() => {
+        fetchTableData(selectedTable, false);
+      }, 30000); // Refresh every 30 seconds
+      setAutoRefreshInterval(interval);
+      
+      return () => {
+        if (interval) clearInterval(interval);
+      };
+    } else {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        setAutoRefreshInterval(null);
+      }
     }
+  }, [selectedTable]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+    };
+  }, [autoRefreshInterval]);
+
+  const formatValue = (value: any, header?: string): string => {
+    if (value === null || value === undefined) return "-";
+    
+    // Handle arrays (like scraped_emails)
+    if (Array.isArray(value)) {
+      if (value.length === 0) return "-";
+      return value.join(", ");
+    }
+    
+    // Handle objects (like other_social_links)
+    if (typeof value === "object") {
+      const keys = Object.keys(value);
+      if (keys.length === 0) return "-";
+      // Format as "key1: value1, key2: value2"
+      return keys.map(k => `${k}: ${value[k]}`).join(", ");
+    }
+    
+    // Handle URLs - make them clickable in display
+    if (typeof value === "string" && (value.startsWith("http://") || value.startsWith("https://"))) {
+      return value.length > 60 ? value.substring(0, 60) + "..." : value;
+    }
+    
     if (typeof value === "string" && value.length > 50) {
       return value.substring(0, 50) + "...";
     }
@@ -155,10 +266,11 @@ const DatabaseTables = () => {
   };
 
   const getTableHeaders = (tableName: string): string[] => {
-    if (tableData.length === 0) return [];
+    const dataToUse = filteredData.length > 0 ? filteredData : tableData;
+    if (dataToUse.length === 0) return [];
     
     // Get all headers from first row, prioritize important fields
-    const allKeys = Object.keys(tableData[0]);
+    const allKeys = Object.keys(dataToUse[0]);
     const table = tables.find(t => t.name === tableName);
     
     // Sort: put important fields first, then others
@@ -168,7 +280,80 @@ const DatabaseTables = () => {
       ...allKeys.filter(key => !importantFields.some(f => key.includes(f)))
     ];
     
-    return sortedKeys.slice(0, 10); // Show up to 10 columns
+    // For cold_leads and workflow_results, show all columns (no limit)
+    // For other tables, limit to 10
+    return (tableName === "cold_leads" || tableName === "workflow_results") 
+      ? sortedKeys 
+      : sortedKeys.slice(0, 10);
+  };
+
+  const handleRunLegalAnalyzer = async () => {
+    if (selectedLeads.size === 0) return;
+
+    const leadsToProcess = filteredData.filter(row => {
+      const rowId = row.id || String(row.email_1 || row.email_2 || Math.random());
+      return selectedLeads.has(rowId);
+    });
+
+    setProcessingLeads(new Set(selectedLeads));
+    
+    try {
+      for (const lead of leadsToProcess) {
+        const websiteUrl = lead.company_website || lead.linkedin_url;
+        if (!websiteUrl) {
+          console.warn(`Skipping lead ${lead.id || lead.email_1}: No website URL`);
+          continue;
+        }
+
+        const leadInfo = {
+          firstName: lead.first_name,
+          lastName: lead.last_name,
+          company: lead.company,
+          location: lead.location,
+          email: lead.email_1 || lead.email_2,
+          linkedinUrl: lead.linkedin_url,
+        };
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/scrape-and-analyze`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              websiteUrl,
+              leadInfo,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error(`Failed to process ${websiteUrl}:`, errorData);
+          } else {
+            const result = await response.json();
+            console.log(`Successfully processed ${websiteUrl}:`, result);
+          }
+        } catch (error) {
+          console.error(`Error processing ${websiteUrl}:`, error);
+        }
+      }
+
+      // Show success message
+      alert(`Successfully processed ${leadsToProcess.length} lead(s). Refreshing table...`);
+      
+      // Clear selection and refresh table data
+      setSelectedLeads(new Set());
+      
+      // Refresh the table to show updated contact info
+      if (selectedTable) {
+        await fetchTableData(selectedTable, false);
+      }
+    } catch (error) {
+      console.error("Error running legal analyzer:", error);
+      alert("Error processing leads. Check console for details.");
+    } finally {
+      setProcessingLeads(new Set());
+    }
   };
 
   if (selectedTable) {
@@ -185,7 +370,11 @@ const DatabaseTables = () => {
               onClick={() => {
                 setSelectedTable(null);
                 setTableData([]);
-                setPage(0);
+                setFilteredData([]);
+                if (autoRefreshInterval) {
+                  clearInterval(autoRefreshInterval);
+                  setAutoRefreshInterval(null);
+                }
               }}
             >
               ← Back
@@ -205,14 +394,70 @@ const DatabaseTables = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchTableData(selectedTable, page)}
+            onClick={() => fetchTableData(selectedTable, false)}
             disabled={loading}
             className="flex items-center gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
+            {(selectedTable === "cold_leads" || selectedTable === "workflow_results") && (
+              <span className="text-xs ml-1">(Auto-refresh: 30s)</span>
+            )}
           </Button>
         </div>
+
+        {/* Email Filter and Actions (only for cold_leads) */}
+        {selectedTable === "cold_leads" && (
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Filter by Email:</span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={emailFilter === "all" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEmailFilter("all")}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      variant={emailFilter === "has-email" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEmailFilter("has-email")}
+                      className="flex items-center gap-1"
+                    >
+                      <Mail className="h-3 w-3" />
+                      Has Email
+                    </Button>
+                    <Button
+                      variant={emailFilter === "no-email" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEmailFilter("no-email")}
+                      className="flex items-center gap-1"
+                    >
+                      <MailX className="h-3 w-3" />
+                      No Email
+                    </Button>
+                  </div>
+                </div>
+                {selectedLeads.size > 0 && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleRunLegalAnalyzer}
+                    disabled={processingLeads.size > 0}
+                    className="flex items-center gap-2"
+                  >
+                    <Play className="h-4 w-4" />
+                    Run Legal Analyzer ({selectedLeads.size})
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="pt-6">
@@ -224,72 +469,206 @@ const DatabaseTables = () => {
               <div className="text-center py-8 text-red-500">
                 {error}
               </div>
-            ) : error ? (
-              <div className="text-center py-8">
-                <div className="text-red-500 mb-2">{error}</div>
-                <div className="text-sm text-muted-foreground">
-                  Check the browser console for more details
-                </div>
-              </div>
-            ) : tableData.length === 0 ? (
+            ) : filteredData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>No data found</p>
-                <p className="text-xs mt-2">This table may be empty or the data may not be accessible</p>
+                <p className="text-xs mt-2">
+                  {emailFilter !== "all" 
+                    ? `No leads found with ${emailFilter === "has-email" ? "email addresses" : "missing email addresses"}`
+                    : "This table may be empty or the data may not be accessible"}
+                </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {selectedTable === "cold_leads" && (
+                        <TableHead className="w-12">
+                          <input
+                            type="checkbox"
+                            checked={selectedLeads.size === filteredData.length && filteredData.length > 0}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedLeads(new Set(filteredData.map(row => row.id || String(row.email_1 || row.email_2 || Math.random()))));
+                              } else {
+                                setSelectedLeads(new Set());
+                              }
+                            }}
+                            className="rounded"
+                          />
+                        </TableHead>
+                      )}
                       {headers.map((header) => (
                         <TableHead key={header} className="font-semibold">
                           {header.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
                         </TableHead>
                       ))}
+                      {selectedTable === "workflow_results" && (
+                        <TableHead className="font-semibold w-24">Actions</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tableData.map((row, idx) => (
-                      <TableRow key={row.id || idx}>
-                        {headers.map((header) => (
-                          <TableCell key={header} className="max-w-[200px] truncate">
-                            {header.includes("date") || header.includes("created_at") || header.includes("updated_at") || header.includes("imported_at")
-                              ? formatDate(row[header])
-                              : formatValue(row[header])}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
+                    {filteredData.map((row, idx) => {
+                      const rowId = row.id || String(row.email_1 || row.email_2 || idx);
+                      const isSelected = selectedLeads.has(rowId);
+                      const isProcessing = processingLeads.has(rowId);
+                      const hasEmail = !!(row.email_1 || row.email_2);
+                      const websiteUrl = row.company_website || row.linkedin_url;
+                      
+                      return (
+                        <TableRow 
+                          key={rowId}
+                          className={isSelected ? "bg-blue-50 dark:bg-blue-950" : ""}
+                        >
+                          {selectedTable === "cold_leads" && (
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  const newSelected = new Set(selectedLeads);
+                                  if (e.target.checked) {
+                                    newSelected.add(rowId);
+                                  } else {
+                                    newSelected.delete(rowId);
+                                  }
+                                  setSelectedLeads(newSelected);
+                                }}
+                                className="rounded"
+                                disabled={isProcessing}
+                              />
+                            </TableCell>
+                          )}
+                          {headers.map((header) => {
+                            const value = row[header];
+                            const isUrl = typeof value === "string" && (value.startsWith("http://") || value.startsWith("https://"));
+                            const isDate = header.includes("date") || header.includes("created_at") || header.includes("updated_at") || header.includes("imported_at") || header.includes("analyzed_at");
+                            
+                            // Special handling for complex fields in workflow_results
+                            if (selectedTable === "workflow_results") {
+                              if (header === "legal_documents" && value && typeof value === "object") {
+                                const docCount = Object.keys(value).filter(k => value[k]).length;
+                                return (
+                                  <TableCell key={header}>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="secondary" className="text-xs">
+                                        <FileTextIcon className="h-3 w-3 mr-1" />
+                                        {docCount} {docCount === 1 ? "document" : "documents"}
+                                      </Badge>
+                                      <WorkflowResultDetail data={row} />
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+                              
+                              if (header === "analysis" && value && typeof value === "object") {
+                                const issueCount = value.issues?.length || 0;
+                                const missingCount = value.missingDocuments?.length || 0;
+                                const recCount = value.recommendations?.length || 0;
+                                return (
+                                  <TableCell key={header}>
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex flex-col gap-1">
+                                        {issueCount > 0 && (
+                                          <Badge variant="destructive" className="text-xs w-fit">
+                                            <AlertTriangle className="h-3 w-3 mr-1" />
+                                            {issueCount} {issueCount === 1 ? "issue" : "issues"}
+                                          </Badge>
+                                        )}
+                                        {missingCount > 0 && (
+                                          <Badge variant="outline" className="text-xs w-fit">
+                                            {missingCount} missing
+                                          </Badge>
+                                        )}
+                                        {recCount > 0 && (
+                                          <Badge variant="secondary" className="text-xs w-fit">
+                                            {recCount} recommendations
+                                          </Badge>
+                                        )}
+                                        {issueCount === 0 && missingCount === 0 && recCount === 0 && (
+                                          <span className="text-xs text-muted-foreground">No analysis data</span>
+                                        )}
+                                      </div>
+                                      <WorkflowResultDetail data={row} />
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+                              
+                              if ((header === "email_subject" || header === "email_body") && value) {
+                                const preview = typeof value === "string" 
+                                  ? value.substring(0, 50) + (value.length > 50 ? "..." : "")
+                                  : String(value).substring(0, 50) + "...";
+                                return (
+                                  <TableCell key={header}>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-muted-foreground truncate" title={value}>
+                                        {preview}
+                                      </span>
+                                      <WorkflowResultDetail data={row} />
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+                            }
+                            
+                            return (
+                              <TableCell key={header} className="max-w-[200px]">
+                                {isDate ? (
+                                  formatDate(value)
+                                ) : isUrl ? (
+                                  <a 
+                                    href={value} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline truncate block"
+                                    title={value}
+                                  >
+                                    {formatValue(value, header)}
+                                  </a>
+                                ) : (
+                                  <span className="truncate block" title={typeof value === "object" ? JSON.stringify(value) : String(value)}>
+                                    {formatValue(value, header)}
+                                  </span>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                          {selectedTable === "workflow_results" && (
+                            <TableCell>
+                              <WorkflowResultDetail 
+                                data={row}
+                                trigger={
+                                  <Button variant="outline" size="sm" className="flex items-center gap-1">
+                                    <Eye className="h-3 w-3" />
+                                    View
+                                  </Button>
+                                }
+                              />
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
             )}
 
-            {tableData.length > 0 && (
+            {filteredData.length > 0 && (
               <div className="flex items-center justify-between mt-4 pt-4 border-t">
                 <div className="text-sm text-muted-foreground">
-                  Showing {page * limit + 1} - {Math.min((page + 1) * limit, tableData.length)} of {tableData.length}
+                  Showing {filteredData.length} {selectedTable === "cold_leads" ? "leads" : selectedTable === "workflow_results" ? "results" : "rows"}
+                  {emailFilter !== "all" && ` (${tableData.length} total)`}
+                  {(selectedTable === "cold_leads" || selectedTable === "workflow_results") && " - Auto-refreshing every 30 seconds"}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(Math.max(0, page - 1))}
-                    disabled={page === 0 || loading}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(page + 1)}
-                    disabled={tableData.length < limit || loading}
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+                {loadingMore && (
+                  <div className="text-sm text-muted-foreground">
+                    Loading more...
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

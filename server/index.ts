@@ -49,13 +49,17 @@ const openaiService = new OpenAIService(
 const instantlyService = new InstantlyService(
   process.env.INSTANTLY_AI_API_KEY || ""
 );
+// Use service_role key if available (bypasses RLS), otherwise use anon key
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "";
 const supabaseService = new SupabaseService(
   process.env.SUPABASE_URL || "",
-  process.env.SUPABASE_ANON_KEY || ""
+  supabaseKey
 );
+// Use service_role key for workflowResultsService to bypass RLS (same as supabaseService)
+const workflowResultsKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "";
 const workflowResultsService = new WorkflowResultsService(
   process.env.SUPABASE_URL || "",
-  process.env.SUPABASE_ANON_KEY || ""
+  workflowResultsKey
 );
 const coldLeadsService = new ColdLeadsService(
   process.env.SUPABASE_URL || "",
@@ -203,25 +207,50 @@ app.post("/api/scrape-and-analyze", async (req, res) => {
     }
 
     // Save successful workflow results to Supabase
+    let saveSuccess = false;
+    let saveError: any = null;
     try {
-      await workflowResultsService.saveWorkflowResult({
+      // Extract contact information from socialMedia if available
+      const contactInfo = result.socialMedia ? {
+        instagram: result.socialMedia.instagram,
+        socialLinks: result.socialMedia.socialLinks,
+        emails: result.socialMedia.emails || [],
+      } : undefined;
+
+      const savedResult = await workflowResultsService.saveWorkflowResult({
         websiteUrl: result.websiteUrl,
         leadInfo,
         legalDocuments: result.legalDocuments,
         analysis: result.analysis,
         email: result.email,
+        contactInfo,
         executionDetails: result.executionDetails,
         status: "completed",
       });
       console.log("[Workflow] Successfully saved workflow results to Supabase");
-    } catch (saveError: any) {
-      console.error("[Workflow] Error saving workflow results to Supabase:", saveError);
+      console.log("[Workflow] Saved record ID:", savedResult?.id);
+      saveSuccess = true;
+    } catch (saveErr: any) {
+      saveError = saveErr;
+      console.error("[Workflow] Error saving workflow results to Supabase:", saveErr);
+      console.error("[Workflow] Error details:", JSON.stringify(saveErr, null, 2));
+      console.error("[Workflow] Error message:", saveErr?.message);
+      console.error("[Workflow] Error code:", saveErr?.code);
+      console.error("[Workflow] Error hint:", saveErr?.hint);
+      console.error("[Workflow] Error details:", saveErr?.details);
       // Continue even if save fails - don't break the API response
     }
 
     // Return results
     res.json({
       success: true,
+      savedToDatabase: saveSuccess,
+      saveError: saveError ? {
+        message: saveError.message,
+        code: saveError.code,
+        hint: saveError.hint,
+        details: saveError.details,
+      } : null,
       data: {
         websiteUrl: result.websiteUrl,
         legalDocuments: result.legalDocuments
@@ -232,6 +261,7 @@ app.post("/api/scrape-and-analyze", async (req, res) => {
         analysis: result.analysis,
         email: result.email,
         executionDetails: result.executionDetails || {},
+        socialMedia: result.socialMedia || undefined,
       },
     });
   } catch (error: any) {
@@ -702,6 +732,9 @@ app.post("/api/website-redesign-stream", async (req, res) => {
 // Save contact to Supabase endpoint
 app.post("/api/save-contact", async (req, res) => {
   try {
+    console.log("[Save Contact] Request received:", req.body);
+    console.log("[Save Contact] Using Supabase key type:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "service_role" : "anon");
+    
     const { name, email, phone, website } = req.body;
 
     if (!email || !name) {
@@ -723,17 +756,98 @@ app.post("/api/save-contact", async (req, res) => {
       website: normalizedWebsite,
     };
 
+    console.log("[Save Contact] Attempting to save:", contactData);
     const result = await supabaseService.saveContact(contactData);
+    console.log("[Save Contact] Successfully saved:", result);
+
+    // Automatically trigger legal analyzer workflow if website URL is provided
+    // Run asynchronously - don't block the response
+    if (normalizedWebsite) {
+      // Validate URL format before triggering workflow
+      let isValidUrl = false;
+      try {
+        new URL(normalizedWebsite);
+        isValidUrl = true;
+      } catch (urlError) {
+        console.warn("[Save Contact] Invalid website URL, skipping workflow:", normalizedWebsite);
+      }
+
+      if (isValidUrl) {
+        (async () => {
+        try {
+          console.log("[Save Contact] Auto-triggering legal analyzer for:", normalizedWebsite);
+          
+          const leadInfo = {
+            name: name,
+            company: "", // Could extract from name if needed
+            email: email,
+          };
+
+          const workflowResult = await emailWorkflow.execute(normalizedWebsite, leadInfo);
+
+          if (workflowResult.error) {
+            console.error("[Save Contact] Workflow error:", workflowResult.error);
+            // Save error result to database
+            try {
+              await workflowResultsService.saveWorkflowResult({
+                websiteUrl: normalizedWebsite,
+                leadInfo,
+                error: workflowResult.error,
+                status: "error",
+              });
+            } catch (saveError) {
+              console.error("[Save Contact] Error saving failed workflow result:", saveError);
+            }
+          } else {
+            // Save successful workflow results
+            try {
+              const contactInfo = workflowResult.socialMedia ? {
+                instagram: workflowResult.socialMedia.instagram,
+                socialLinks: workflowResult.socialMedia.socialLinks,
+                emails: workflowResult.socialMedia.emails || [],
+              } : undefined;
+
+              await workflowResultsService.saveWorkflowResult({
+                websiteUrl: workflowResult.websiteUrl,
+                leadInfo,
+                legalDocuments: workflowResult.legalDocuments,
+                analysis: workflowResult.analysis,
+                email: workflowResult.email,
+                contactInfo,
+                executionDetails: workflowResult.executionDetails,
+                status: "completed",
+              });
+              console.log("[Save Contact] Successfully saved workflow results for contact");
+            } catch (saveError: any) {
+              console.error("[Save Contact] Error saving workflow results:", saveError);
+            }
+          }
+        } catch (workflowError: any) {
+          console.error("[Save Contact] Error running workflow:", workflowError);
+          // Don't throw - we don't want to break the contact save
+          }
+        })(); // Immediately invoke async function
+      }
+    }
 
     res.json({
       success: true,
       data: result,
     });
   } catch (error: any) {
-    console.error("Error saving contact to Supabase:", error);
+    console.error("[Save Contact] Error saving contact:", error);
+    console.error("[Save Contact] Error details:", {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
     res.status(500).json({
       error: "Internal server error",
       message: error.message || "Failed to save contact to Supabase",
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
     });
   }
 });

@@ -7,12 +7,12 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL || "http://localhost:80",
+        target: process.env.VITE_API_URL || "http://localhost:3001",
         changeOrigin: true,
-        rewrite: (path) => path,
+        rewrite: (path) => path, // Express server handles /api/* directly
       },
     },
   },

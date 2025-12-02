@@ -24,4 +24,17 @@ dist-ssr
 *.sw?
 .env
 node_modules/
-node_modules/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+functions/lib/
+functions/node_modules/
+
+# Build artifacts
+*.js.map
+server/services/*.js
+.env.bak
+.env.test

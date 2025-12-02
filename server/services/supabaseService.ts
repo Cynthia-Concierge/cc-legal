@@ -26,6 +26,11 @@ export class SupabaseService {
    */
   async saveContact(contactData: ContactData): Promise<any> {
     try {
+      // Validate required fields
+      if (!contactData.email || !contactData.name) {
+        throw new Error("Email and name are required");
+      }
+
       // Split name into first and last name
       const nameParts = contactData.name.trim().split(/\s+/);
       const first_name = nameParts[0] || "";
@@ -35,24 +40,44 @@ export class SupabaseService {
         .from("contacts")
         .insert([
           {
-            email: contactData.email,
-            name: contactData.name,
+            email: contactData.email.trim().toLowerCase(),
+            name: contactData.name.trim(),
             first_name: first_name,
             last_name: last_name,
-            phone: contactData.phone,
-            website: contactData.website,
+            phone: contactData.phone?.trim() || "",
+            website: contactData.website?.trim() || "",
             created_at: new Date().toISOString(),
           },
         ])
         .select();
 
       if (error) {
+        // Handle duplicate email error gracefully
+        if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("unique")) {
+          console.log("Contact with this email already exists:", contactData.email);
+          // Return the existing contact instead of throwing an error
+          const { data: existingData } = await this.supabase
+            .from("contacts")
+            .select()
+            .eq("email", contactData.email.trim().toLowerCase())
+            .limit(1);
+          
+          if (existingData && existingData.length > 0) {
+            return existingData;
+          }
+        }
         throw error;
       }
 
       return data;
     } catch (error: any) {
       console.error("Error saving contact to Supabase:", error);
+      console.error("Error details:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
       throw error;
     }
   }
