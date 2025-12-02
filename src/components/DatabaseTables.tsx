@@ -89,7 +89,7 @@ const DatabaseTables = () => {
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 
-    (import.meta.env.DEV ? "" : "https://us-central1-cc-legal.cloudfunctions.net");
+    (import.meta.env.DEV ? "" : "");
 
   const fetchTableData = async (tableName: string, append: boolean = false) => {
     if (append) {

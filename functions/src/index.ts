@@ -233,8 +233,8 @@ async function initializeRoutes() {
         }
       });
 
-      // Get cold leads
-      app.get("/api/cold-leads", async (req, res) => {
+      // Get cold leads (handle both /api/cold-leads and /cold-leads paths)
+      const coldLeadsHandler = async (req: any, res: any) => {
         try {
           const limit = parseInt(req.query.limit as string) || 50;
           const offset = parseInt(req.query.offset as string) || 0;
@@ -270,7 +270,10 @@ async function initializeRoutes() {
             message: error.message || "Failed to fetch cold leads",
           });
         }
-      });
+      };
+      
+      app.get("/api/cold-leads", coldLeadsHandler);
+      app.get("/cold-leads", coldLeadsHandler);
 
       // Save contact
       app.post("/api/save-contact", async (req, res) => {
