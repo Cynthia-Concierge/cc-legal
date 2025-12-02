@@ -76,22 +76,35 @@ async function initializeRoutes() {
 
       // Initialize services (only the ones we actually use in routes)
       // Get Supabase config from secrets (env vars) - in v2, secrets are automatically available as env vars
-      const supabaseUrl = process.env.SUPABASE_URL || "";
-      const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-      const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+      // Trim whitespace in case secrets have extra spaces
+      const supabaseUrl = (process.env.SUPABASE_URL || "").trim();
+      const supabaseServiceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+      const supabaseAnonKey = (process.env.SUPABASE_ANON_KEY || "").trim();
       
       // Use service_role key if available (bypasses RLS), otherwise use anon key
       const supabaseKey = supabaseServiceRoleKey || supabaseAnonKey;
       
       console.log("[Firebase Functions] Supabase config:", {
         hasUrl: !!supabaseUrl,
+        urlLength: supabaseUrl.length,
+        urlPrefix: supabaseUrl.substring(0, 30),
         hasServiceRoleKey: !!supabaseServiceRoleKey,
+        serviceRoleKeyLength: supabaseServiceRoleKey.length,
         hasAnonKey: !!supabaseAnonKey,
+        anonKeyLength: supabaseAnonKey.length,
         usingKeyType: supabaseServiceRoleKey ? "service_role" : (supabaseAnonKey ? "anon" : "none"),
+        finalKeyLength: supabaseKey.length,
       });
       
       if (!supabaseUrl || !supabaseKey) {
-        throw new Error(`Missing Supabase configuration. URL: ${!!supabaseUrl}, Key: ${!!supabaseKey}`);
+        throw new Error(`Missing Supabase configuration. URL: ${!!supabaseUrl} (${supabaseUrl.length} chars), Key: ${!!supabaseKey} (${supabaseKey.length} chars)`);
+      }
+      
+      // Validate URL format
+      try {
+        new URL(supabaseUrl);
+      } catch (e) {
+        throw new Error(`Invalid Supabase URL format: ${supabaseUrl.substring(0, 50)}`);
       }
       
       const supabaseService = new SupabaseService(supabaseUrl, supabaseKey);
@@ -240,13 +253,33 @@ async function initializeRoutes() {
           const offset = parseInt(req.query.offset as string) || 0;
           const search = req.query.search as string;
 
-          const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-          const serviceUrl = process.env.SUPABASE_URL || "";
+          const serviceKey = ((process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || "").trim();
+          const serviceUrl = (process.env.SUPABASE_URL || "").trim();
+          
+          console.log("[Cold Leads API] Config check:", {
+            hasUrl: !!serviceUrl,
+            urlLength: serviceUrl.length,
+            urlPrefix: serviceUrl.substring(0, 30),
+            hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+            hasAnonKey: !!process.env.SUPABASE_ANON_KEY,
+            keyLength: serviceKey.length,
+            keyPrefix: serviceKey.substring(0, 20) + "...",
+          });
           
           if (!serviceUrl || !serviceKey) {
             return res.status(500).json({
               error: "Configuration error",
-              message: "Supabase credentials not configured",
+              message: `Supabase credentials not configured. URL: ${!!serviceUrl}, Key: ${!!serviceKey}`,
+            });
+          }
+          
+          // Validate URL format
+          try {
+            new URL(serviceUrl);
+          } catch (e) {
+            return res.status(500).json({
+              error: "Configuration error",
+              message: `Invalid Supabase URL format: ${serviceUrl.substring(0, 50)}`,
             });
           }
 
@@ -427,19 +460,39 @@ async function initializeRoutes() {
         }
       });
 
-      // Get contacts endpoint
-      app.get("/api/contacts", async (req, res) => {
+      // Get contacts endpoint (handle both /api/contacts and /contacts paths)
+      const contactsHandler = async (req: any, res: any) => {
         try {
           const limit = parseInt(req.query.limit as string) || 50;
           const offset = parseInt(req.query.offset as string) || 0;
 
-          const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-          const serviceUrl = process.env.SUPABASE_URL || "";
+          const serviceKey = ((process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || "").trim();
+          const serviceUrl = (process.env.SUPABASE_URL || "").trim();
+          
+          console.log("[Contacts API] Config check:", {
+            hasUrl: !!serviceUrl,
+            urlLength: serviceUrl.length,
+            urlPrefix: serviceUrl.substring(0, 30),
+            hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+            hasAnonKey: !!process.env.SUPABASE_ANON_KEY,
+            keyLength: serviceKey.length,
+            keyPrefix: serviceKey.substring(0, 20) + "...",
+          });
           
           if (!serviceUrl || !serviceKey) {
             return res.status(500).json({
               error: "Configuration error",
-              message: "Supabase credentials not configured",
+              message: `Supabase credentials not configured. URL: ${!!serviceUrl}, Key: ${!!serviceKey}`,
+            });
+          }
+          
+          // Validate URL format
+          try {
+            new URL(serviceUrl);
+          } catch (e) {
+            return res.status(500).json({
+              error: "Configuration error",
+              message: `Invalid Supabase URL format: ${serviceUrl.substring(0, 50)}`,
             });
           }
 
@@ -468,21 +521,44 @@ async function initializeRoutes() {
             message: error.message || "Failed to fetch contacts",
           });
         }
-      });
+      };
+      
+      app.get("/api/contacts", contactsHandler);
+      app.get("/contacts", contactsHandler);
 
-      // Get workflow results endpoint
-      app.get("/api/workflow-results", async (req, res) => {
+      // Get workflow results endpoint (handle both /api/workflow-results and /workflow-results paths)
+      const workflowResultsHandler = async (req: any, res: any) => {
         try {
           const limit = parseInt(req.query.limit as string) || 50;
           const offset = parseInt(req.query.offset as string) || 0;
 
-          const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-          const serviceUrl = process.env.SUPABASE_URL || "";
+          const serviceKey = ((process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || "").trim();
+          const serviceUrl = (process.env.SUPABASE_URL || "").trim();
+          
+          console.log("[Workflow Results API] Config check:", {
+            hasUrl: !!serviceUrl,
+            urlLength: serviceUrl.length,
+            urlPrefix: serviceUrl.substring(0, 30),
+            hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+            hasAnonKey: !!process.env.SUPABASE_ANON_KEY,
+            keyLength: serviceKey.length,
+            keyPrefix: serviceKey.substring(0, 20) + "...",
+          });
           
           if (!serviceUrl || !serviceKey) {
             return res.status(500).json({
               error: "Configuration error",
-              message: "Supabase credentials not configured",
+              message: `Supabase credentials not configured. URL: ${!!serviceUrl}, Key: ${!!serviceKey}`,
+            });
+          }
+          
+          // Validate URL format
+          try {
+            new URL(serviceUrl);
+          } catch (e) {
+            return res.status(500).json({
+              error: "Configuration error",
+              message: `Invalid Supabase URL format: ${serviceUrl.substring(0, 50)}`,
             });
           }
 
@@ -501,7 +577,10 @@ async function initializeRoutes() {
             message: error.message || "Failed to fetch workflow results",
           });
         }
-      });
+      };
+      
+      app.get("/api/workflow-results", workflowResultsHandler);
+      app.get("/workflow-results", workflowResultsHandler);
 
       routesInitialized = true;
       console.log("[Firebase Functions] Routes initialized successfully");
