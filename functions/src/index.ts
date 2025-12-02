@@ -12,7 +12,7 @@
  * - For local dev: Use .env file or firebase emulators with --env-file flag
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 import express from "express";
 import cors from "cors";
@@ -75,10 +75,10 @@ async function initializeRoutes() {
       const { ConfigService } = require(path.join(servicesPath, "configService.js"));
 
       // Initialize services (only the ones we actually use in routes)
-      // Get Supabase config from secrets (env vars) or legacy config
-      const supabaseUrl = process.env.SUPABASE_URL || functions.config().supabase?.url || "";
-      const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || functions.config().supabase?.service_role_key || "";
-      const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || functions.config().supabase?.anon_key || "";
+      // Get Supabase config from secrets (env vars) - in v2, secrets are automatically available as env vars
+      const supabaseUrl = process.env.SUPABASE_URL || "";
+      const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+      const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
       
       // Use service_role key if available (bypasses RLS), otherwise use anon key
       const supabaseKey = supabaseServiceRoleKey || supabaseAnonKey;
@@ -528,14 +528,21 @@ app.use(async (req, res, next) => {
 });
 
 // Export the Express app as a Firebase Function
-// Using v1 API - secrets are automatically available as environment variables
+// Using v2 API - secrets must be explicitly declared
 // Make sure these secrets are set: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
-export const api = functions
-  .region("us-central1")
-  .runWith({
+export const api = functions.https.onRequest(
+  {
     timeoutSeconds: 540,
-    memory: "1GB",
-    // Secrets set via firebase functions:secrets:set are automatically available
-    // No need to explicitly declare them in v1 functions
-  })
-  .https.onRequest(app);
+    memory: "1GiB",
+    secrets: [
+      "SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_ANON_KEY",
+      "FIRECRAWL_API_KEY",
+      "OPENAI_API_KEY",
+      "INSTANTLY_AI_API_KEY",
+    ],
+    region: "us-central1",
+  },
+  app
+);
