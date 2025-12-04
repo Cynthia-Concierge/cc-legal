@@ -23,10 +23,15 @@ interface PricingPlan {
   platforms: string[];
 }
 
-// Declare Facebook Pixel function
+// Declare Facebook Pixel function with support for eventID
 declare global {
   interface Window {
-    fbq: (action: string, event: string, params?: Record<string, any>) => void;
+    fbq: (
+      action: string,
+      event: string,
+      params?: Record<string, any>,
+      ...args: any[]
+    ) => void;
   }
 }
 
@@ -156,44 +161,66 @@ const Index = () => {
         } else {
           const result = JSON.parse(responseText);
           console.log("Contact saved to Supabase successfully:", result);
+          
+          // Log Instantly.ai result if available
+          if (result.instantly) {
+            console.log("Lead added to Instantly.ai successfully:", result.instantly);
+          } else if (result.instantlyError) {
+            console.warn("Instantly.ai error (non-blocking):", result.instantlyError);
+          }
         }
       } catch (supabaseError) {
         console.error("Error saving contact to Supabase:", supabaseError);
         // Continue even if Supabase fails - don't block the user experience
       }
 
-      // Add lead to Instantly.ai
-      const response = await fetch(`${API_BASE_URL}/api/add-lead`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          campaignId: import.meta.env.VITE_INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934",
-          leadData: {
-            first_name: formData.name?.split(" ")[0] || "",
-            last_name: formData.name?.split(" ").slice(1).join(" ") || "",
-            phone: formData.phone,
-            website: normalizedWebsite,
-          },
-        }),
-      });
+      // Note: Instantly.ai integration is now handled server-side in /api/save-contact
+      // The lead is automatically added to the Instantly.ai campaign/list when saved to Supabase
 
-      if (!response.ok) {
-        console.error("Failed to add lead to Instantly.ai");
+      // Generate a unique event_id for deduplication between Pixel and CAPI
+      const eventId = `lead_${crypto.randomUUID()}`;
+
+      // Track Lead event via Meta Conversions API (server-side)
+      try {
+        const metaResponse = await fetch(`${API_BASE_URL}/api/track-meta-lead`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            phone: formData.phone,
+            firstName: formData.name?.split(" ")[0] || "",
+            lastName: formData.name?.split(" ").slice(1).join(" ") || "",
+            website: normalizedWebsite,
+            eventSourceUrl: window.location.href,
+            eventId: eventId, // Send event_id to backend for deduplication
+          }),
+        });
+
+        if (!metaResponse.ok) {
+          console.error("Failed to track lead in Meta Conversions API");
+        } else {
+          console.log("Lead tracked in Meta Conversions API successfully");
+        }
+      } catch (metaError) {
+        console.error("Error tracking lead in Meta:", metaError);
+        // Continue even if Meta tracking fails
+      }
+
+      // Track Lead event immediately on form submission (client-side pixel)
+      // Use the same event_id for deduplication
+      if (typeof window !== 'undefined' && window.fbq) {
+        window.fbq('track', 'Lead', {
+          content_name: 'Legal Documents Form Submission',
+          content_category: 'Lead Generation'
+        }, {
+          eventID: eventId // Pass event_id to Pixel for deduplication
+        });
       }
     } catch (error) {
       console.error("Error submitting form:", error);
       // Continue to show thank you page even if services fail
-    }
-
-    // Track Lead event immediately on form submission
-    if (typeof window !== 'undefined' && window.fbq) {
-      window.fbq('track', 'Lead', {
-        content_name: 'Legal Documents Form Submission',
-        content_category: 'Lead Generation'
-      });
     }
     
     // Redirect to thank you page

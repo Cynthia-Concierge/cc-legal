@@ -246,6 +246,85 @@ async function initializeRoutes() {
         }
       });
 
+      // Get workflow prompts and autogen configs (before execution)
+      app.get("/api/workflow-config", async (req, res) => {
+        try {
+          const { websiteUrl, leadInfo } = req.query;
+
+          console.log("[API] /api/workflow-config called with:", { websiteUrl, leadInfo });
+
+          if (!emailWorkflow) {
+            return res.status(500).json({
+              error: "Email workflow not initialized",
+            });
+          }
+
+          // Reload config to ensure we have the latest
+          let latestConfig;
+          try {
+            latestConfig = await configService.loadConfig();
+            console.log("[API] Config loaded successfully");
+          } catch (configError: any) {
+            console.error("[API] Error loading config:", configError);
+            latestConfig = { nodePrompts: {}, autogenAgents: {} };
+          }
+
+          // Update or create workflow instance
+          try {
+            emailWorkflow.updateConfig(latestConfig);
+            console.log("[API] Workflow config updated");
+          } catch (updateError: any) {
+            console.error("[API] Error updating workflow config:", updateError);
+            // Try to reinitialize if update fails
+            emailWorkflow = new EmailGenerationWorkflow(
+              process.env.FIRECRAWL_API_KEY || "",
+              process.env.OPENAI_API_KEY || "",
+              process.env.USE_AUTOGEN !== "false",
+              latestConfig
+            );
+            console.log("[API] Workflow reinitialized");
+          }
+
+          // Get prompts for nodes
+          let prompts;
+          try {
+            prompts = emailWorkflow.getNodePrompts(
+              (websiteUrl as string) || "https://example.com",
+              leadInfo ? JSON.parse(leadInfo as string) : undefined
+            );
+            console.log("[API] Prompts retrieved:", Object.keys(prompts));
+          } catch (promptError: any) {
+            console.error("[API] Error getting prompts:", promptError);
+            throw promptError;
+          }
+
+          // Get AutoGen configurations
+          let autogenConfigs;
+          try {
+            autogenConfigs = emailWorkflow.getAutoGenConfigs();
+            console.log("[API] AutoGen configs retrieved:", Object.keys(autogenConfigs));
+          } catch (autogenError: any) {
+            console.error("[API] Error getting autogen configs:", autogenError);
+            throw autogenError;
+          }
+
+          return res.json({
+            success: true,
+            data: {
+              prompts,
+              autogenConfigs,
+            },
+          });
+        } catch (error: any) {
+          console.error("[API] Error getting workflow config:", error);
+          console.error("[API] Error stack:", error.stack);
+          return res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "An error occurred while fetching workflow configuration",
+          });
+        }
+      });
+
       // Get cold leads (handle both /api/cold-leads and /cold-leads paths)
       const coldLeadsHandler = async (req: any, res: any) => {
         try {

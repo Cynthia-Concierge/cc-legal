@@ -23,6 +23,7 @@ import { BusinessConfigService } from "./services/businessConfigService.js";
 import { OnboardingPipeline } from "./services/onboardingPipeline.js";
 import { WidgetService } from "./services/widgetService.js";
 import { BookingService } from "./services/bookingService.js";
+import { MetaService } from "./services/metaService.js";
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +65,12 @@ const workflowResultsService = new WorkflowResultsService(
 const coldLeadsService = new ColdLeadsService(
   process.env.SUPABASE_URL || "",
   process.env.SUPABASE_ANON_KEY || ""
+);
+
+// Initialize Meta service
+const metaService = new MetaService(
+  process.env.META_ACCESS_TOKEN || "",
+  process.env.META_PIXEL_ID || ""
 );
 
 // Initialize configuration service
@@ -396,6 +403,68 @@ app.post("/api/add-lead", async (req, res) => {
     } else if (error.message?.includes("400")) {
       statusCode = 400;
       errorMessage = "Invalid request to Instantly.ai. Check campaign ID and lead data format.";
+    }
+    
+    res.status(statusCode).json({
+      error: "Internal server error",
+      message: errorMessage,
+    });
+  }
+});
+
+// Track Meta Lead event
+app.post("/api/track-meta-lead", async (req, res) => {
+  try {
+    const { email, phone, firstName, lastName, website, eventSourceUrl, eventId } = req.body;
+
+    // Check if Meta credentials are configured
+    if (!process.env.META_ACCESS_TOKEN || !process.env.META_PIXEL_ID) {
+      console.error("META_ACCESS_TOKEN or META_PIXEL_ID is not set in environment variables");
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Meta API credentials are not configured. Please add META_ACCESS_TOKEN and META_PIXEL_ID to your .env file.",
+      });
+    }
+
+    // Validate eventId is provided (required for deduplication)
+    if (!eventId) {
+      console.warn("Warning: eventId not provided in request. Deduplication may not work correctly.");
+    }
+
+    // Send lead event to Meta
+    const result = await metaService.sendLeadEvent(
+      {
+        email,
+        phone,
+        firstName,
+        lastName,
+        website,
+      },
+      {
+        eventName: "Lead",
+        eventSourceUrl: eventSourceUrl || req.headers.referer || undefined,
+        actionSource: "website",
+        eventId: eventId, // Pass event_id for deduplication with Pixel events
+      }
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    console.error("Error tracking Meta lead:", error);
+    
+    // Provide more specific error messages
+    let statusCode = 500;
+    let errorMessage = error.message || "Failed to track lead in Meta";
+    
+    if (error.message?.includes("401") || error.message?.includes("Invalid OAuth")) {
+      statusCode = 401;
+      errorMessage = "Meta API authentication failed. Please check your META_ACCESS_TOKEN in .env file.";
+    } else if (error.message?.includes("400")) {
+      statusCode = 400;
+      errorMessage = "Invalid request to Meta API. Check pixel ID and event data format.";
     }
     
     res.status(statusCode).json({
@@ -757,8 +826,69 @@ app.post("/api/save-contact", async (req, res) => {
     };
 
     console.log("[Save Contact] Attempting to save:", contactData);
-    const result = await supabaseService.saveContact(contactData);
-    console.log("[Save Contact] Successfully saved:", result);
+    const supabaseResult = await supabaseService.saveContact(contactData);
+    console.log("[Save Contact] Successfully saved to Supabase:", supabaseResult);
+
+    // After Supabase succeeds, send to GoHighLevel
+    let ghlResult = null;
+    let ghlError = null;
+    try {
+      // Split name into firstName and lastName (same logic as Supabase service)
+      const nameParts = name.trim().split(/\s+/);
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+
+      const ghlPayload = {
+        firstName: firstName,
+        lastName: lastName,
+        email: email.trim().toLowerCase(),
+        phone: phone?.trim() || "",
+        locationId: "7HUNbHEuRf1cXZD4hxxr",
+        tags: ["ricki new funnel"],
+        source: "Cynthia AI",
+      };
+
+      console.log("[Save Contact] Sending to GoHighLevel:", { ...ghlPayload, phone: phone ? "[REDACTED]" : "" });
+
+      const ghlResponse = await fetch("https://services.leadconnectorhq.com/contacts/", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+          Version: "2021-07-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(ghlPayload),
+      });
+
+      if (!ghlResponse.ok) {
+        const errorText = await ghlResponse.text();
+        let errorData: any;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+        const error: any = new Error(`GoHighLevel API error: ${errorData.message || errorText} (Status: ${ghlResponse.status})`);
+        error.status = ghlResponse.status;
+        error.responseData = errorData;
+        throw error;
+      }
+
+      ghlResult = await ghlResponse.json();
+      console.log("[Save Contact] Successfully sent to GoHighLevel:", ghlResult);
+    } catch (ghlErr: any) {
+      ghlError = {
+        message: ghlErr.message || "Unknown error",
+        status: ghlErr.status || null,
+        responseData: ghlErr.responseData || null,
+      };
+      console.error("[Save Contact] Error sending to GoHighLevel:", ghlErr);
+      // Don't throw - we don't want to block Supabase success
+    }
+
+    // NOTE: Instantly.ai lead will be added AFTER workflow completes with email content
+    // This ensures the personalized email is included as custom variables
+    // The campaign sequence in Instantly.ai should have a 24-hour delay and use {{email_subject}} and {{email_body_html}} variables
 
     // Automatically trigger legal analyzer workflow if website URL is provided
     // Run asynchronously - don't block the response
@@ -818,6 +948,57 @@ app.post("/api/save-contact", async (req, res) => {
                 status: "completed",
               });
               console.log("[Save Contact] Successfully saved workflow results for contact");
+
+              // NOW add lead to Instantly.ai with the generated email content as custom variables
+              // The campaign sequence should have a 24-hour delay and use these variables
+              if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
+                try {
+                  const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
+                  
+                  // Split name into first and last name
+                  const nameParts = name.trim().split(/\s+/);
+                  const firstName = nameParts[0] || "";
+                  const lastName = nameParts.slice(1).join(" ") || "";
+
+                  // Clean up the email body HTML for Instantly AI (remove excessive inline styles)
+                  const cleanEmailBody = workflowResult.email.body
+                    .replace(/style="[^"]*line-height:\s*[^;"]*[^"]*"/g, "")
+                    .replace(/style="[^"]*margin[^"]*"/g, "")
+                    .replace(/style="[^"]*"/g, "")
+                    .replace(/\n{3,}/g, "\n\n")
+                    .trim();
+
+                  const instantlyLeadData = {
+                    first_name: firstName,
+                    last_name: lastName,
+                    phone: phone?.trim() || "",
+                    website: normalizedWebsite,
+                    custom_variables: {
+                      email_subject: workflowResult.email.subject,
+                      email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
+                      email_body: cleanEmailBody, // Cleaned version as backup
+                    },
+                  };
+
+                  console.log("[Save Contact] Adding lead to Instantly.ai with email content:", {
+                    email: email.trim().toLowerCase(),
+                    campaignId,
+                    hasEmailSubject: !!workflowResult.email.subject,
+                    hasEmailBody: !!workflowResult.email.body,
+                  });
+
+                  await instantlyService.addLeadToCampaign(
+                    email.trim().toLowerCase(),
+                    campaignId,
+                    instantlyLeadData
+                  );
+
+                  console.log("[Save Contact] Successfully added lead to Instantly.ai with personalized email content");
+                } catch (instantlyErr: any) {
+                  console.error("[Save Contact] Error adding lead to Instantly.ai with email:", instantlyErr);
+                  // Don't throw - workflow already succeeded
+                }
+              }
             } catch (saveError: any) {
               console.error("[Save Contact] Error saving workflow results:", saveError);
             }
@@ -832,7 +1013,11 @@ app.post("/api/save-contact", async (req, res) => {
 
     res.json({
       success: true,
-      data: result,
+      supabase: supabaseResult,
+      ghl: ghlResult,
+      ghlError: ghlError || null,
+      // Note: Instantly.ai lead is added after workflow completes (asynchronously)
+      // The lead will be added with personalized email content as custom variables
     });
   } catch (error: any) {
     console.error("[Save Contact] Error saving contact:", error);
