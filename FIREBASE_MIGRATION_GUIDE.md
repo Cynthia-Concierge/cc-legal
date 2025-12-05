@@ -101,3 +101,6 @@ firebase emulators:start --env-file .env
 - Check that environment variables are being read in the function logs
 - Verify the function is using the correct region and project
 
+
+
+

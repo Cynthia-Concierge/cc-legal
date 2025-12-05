@@ -41,3 +41,6 @@ echo ""
 echo "Next: Deploy your functions"
 echo "Run: firebase deploy --only functions"
 
+
+
+

@@ -108,7 +108,7 @@ const WorkflowVisualization = ({ currentStep, error, executionDetails, websiteUr
         try {
           const API_BASE_URL =
             import.meta.env.VITE_API_URL ||
-            (import.meta.env.DEV ? "" : "http://localhost:3001");
+            ""; // Empty string uses Firebase Hosting rewrites in production, Vite proxy in dev
           
           // Determine which endpoint to use based on workflow steps
           const isWebsiteRedesign = workflowSteps?.some(step => 

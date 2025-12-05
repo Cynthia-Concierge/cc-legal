@@ -17,7 +17,8 @@ CREATE INDEX IF NOT EXISTS idx_workflow_config_updated_at ON workflow_config(upd
 COMMENT ON TABLE workflow_config IS 'Stores custom prompts for workflow nodes and AutoGen agent configurations';
 
 -- Create a function to automatically update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
+-- Using a specific function name to avoid conflicts with other tables
+CREATE OR REPLACE FUNCTION update_workflow_config_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = now();
@@ -26,8 +27,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger to auto-update updated_at
-CREATE TRIGGER update_workflow_config_updated_at
+CREATE OR REPLACE TRIGGER update_workflow_config_updated_at
   BEFORE UPDATE ON workflow_config
   FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+  EXECUTE FUNCTION update_workflow_config_updated_at();
 

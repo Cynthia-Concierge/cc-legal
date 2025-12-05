@@ -12,9 +12,22 @@ const Footer: React.FC = () => {
         </div>
         
         <div className="flex justify-center gap-6 mb-8 text-sm">
-          <a href="#" className="hover:text-emerald-400 transition-colors">Privacy Policy</a>
-          <a href="#" className="hover:text-emerald-400 transition-colors">Terms of Service</a>
-          <a href="#" className="hover:text-emerald-400 transition-colors">Contact Us</a>
+          <a 
+            href="https://consciouscounsel.kartra.com/page/IYO43" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="hover:text-emerald-400 transition-colors"
+          >
+            Privacy Policy
+          </a>
+          <a 
+            href="https://consciouscounsel.kartra.com/page/nkS45" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="hover:text-emerald-400 transition-colors"
+          >
+            Terms of Service
+          </a>
         </div>
 
         <p className="text-xs text-slate-600 max-w-2xl mx-auto leading-relaxed">

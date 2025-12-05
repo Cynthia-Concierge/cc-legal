@@ -15,6 +15,7 @@ export class InstantlyService {
   /**
    * Add a lead to an Instantly.ai campaign
    * Uses API v2 format with Bearer token authentication
+   * @param updateIfExists - If true, will update existing lead in campaign (skip_if_in_campaign: true)
    */
   async addLeadToCampaign(
     email: string,
@@ -26,7 +27,8 @@ export class InstantlyService {
       website?: string;
       phone?: string;
       custom_variables?: Record<string, any>;
-    }
+    },
+    updateIfExists: boolean = false
   ): Promise<any> {
     try {
       // API v2 uses Bearer token authentication
@@ -52,7 +54,7 @@ export class InstantlyService {
             ],
             campaign_id: campaignId,
             skip_if_in_workspace: false,
-            skip_if_in_campaign: false,
+            skip_if_in_campaign: updateIfExists, // If true, will update existing lead
             skip_if_in_list: false,
           }),
         }

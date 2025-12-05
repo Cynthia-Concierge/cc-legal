@@ -94,7 +94,7 @@ const WebsiteRedesign = () => {
 
   const API_BASE_URL =
     import.meta.env.VITE_API_URL ||
-    (import.meta.env.DEV ? "" : "http://localhost:3001");
+    ""; // Empty string uses Firebase Hosting rewrites in production, Vite proxy in dev
 
   const handleRedesign = async () => {
     if (!websiteUrl.trim()) {

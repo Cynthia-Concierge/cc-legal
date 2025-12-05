@@ -56,6 +56,8 @@ SUPABASE_ANON_KEY=your-supabase-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key (optional)
 GEMINI_API_KEY=your-gemini-api-key (optional)
 USE_AUTOGEN=true (optional, defaults to true)
+META_ACCESS_TOKEN=your-meta-access-token (optional, for Meta Pixel Conversions API)
+META_PIXEL_ID=your-meta-pixel-id (optional, for Meta Pixel Conversions API)
 ```
 
 **For Firebase Functions (Production):**
@@ -75,7 +77,8 @@ firebase functions:secrets:set SUPABASE_ANON_KEY
 firebase functions:secrets:set SUPABASE_SERVICE_ROLE_KEY
 firebase functions:secrets:set INSTANTLY_AI_API_KEY
 firebase functions:secrets:set GEMINI_API_KEY
-```
+firebase functions:secrets:set META_ACCESS_TOKEN
+firebase functions:secrets:set META_PIXEL_ID
 
 After setting secrets, update your function to use them:
 ```bash

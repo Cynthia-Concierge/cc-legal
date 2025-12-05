@@ -33,3 +33,6 @@ echo "  supabase.service_role_key=\"YOUR_KEY\" \\"
 echo "  instantly.api_key=\"YOUR_KEY\" \\"
 echo "  gemini.api_key=\"YOUR_KEY\""
 
+
+
+

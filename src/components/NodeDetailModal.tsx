@@ -245,7 +245,7 @@ const NodeDetailModal = ({
         try {
           const API_BASE_URL =
             import.meta.env.VITE_API_URL ||
-            (import.meta.env.DEV ? "" : "http://localhost:3001");
+            ""; // Empty string uses Firebase Hosting rewrites in production, Vite proxy in dev
           
           // Detect if this is a website redesign workflow
           const isWebsiteRedesign = node.id === "full_scrape" || node.id === "normalize_data" || node.id === "website_design";

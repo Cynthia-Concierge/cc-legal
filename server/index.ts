@@ -360,6 +360,166 @@ app.post("/api/scrape", async (req, res) => {
   }
 });
 
+// Simple website compliance scan endpoint (no AutoGen, no complex workflow)
+// Just scrapes footer, extracts legal links, and briefly analyzes each
+app.post("/api/scan-website-compliance", async (req, res) => {
+  try {
+    const { websiteUrl } = req.body;
+
+    if (!websiteUrl) {
+      return res.status(400).json({
+        error: "websiteUrl is required",
+      });
+    }
+
+    // Validate URL format
+    let normalizedUrl = websiteUrl.trim();
+    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+      normalizedUrl = "https://" + normalizedUrl;
+    }
+
+    try {
+      new URL(normalizedUrl);
+    } catch {
+      return res.status(400).json({
+        error: "Invalid URL format",
+      });
+    }
+
+    console.log(`[Simple Scan] Starting compliance scan for: ${normalizedUrl}`);
+
+    // Step 1: Scrape homepage footer to get legal links
+    let html = "";
+    let markdown = "";
+    
+    try {
+      const pageData = await (firecrawlService as any).scrapePageWithHtml(normalizedUrl);
+      html = pageData.html || "";
+      markdown = pageData.markdown || "";
+    } catch (error: any) {
+      console.warn("[Simple Scan] Failed to scrape with HTML, trying markdown only:", error.message);
+      markdown = await (firecrawlService as any).scrapePage(normalizedUrl);
+      html = "";
+    }
+
+    // Step 2: Extract legal links from footer
+    const legalLinks = html 
+      ? (firecrawlService as any).findLegalDocumentLinksFromHtml(html, normalizedUrl, markdown)
+      : (firecrawlService as any).findLegalDocumentLinks(markdown, normalizedUrl);
+
+    // Step 3: Determine which documents are missing
+    const requiredDocuments = {
+      privacyPolicy: "Privacy Policy",
+      termsOfService: "Terms of Service",
+      refundPolicy: "Refund Policy",
+      cookiePolicy: "Cookie Policy",
+      disclaimer: "Disclaimer",
+    };
+
+    const missingDocuments: string[] = [];
+    const foundDocuments: Record<string, { url: string; content: string }> = {};
+
+    // Step 4: Scrape each found document
+    for (const [docType, docName] of Object.entries(requiredDocuments)) {
+      const docUrl = legalLinks[docType];
+      
+      if (!docUrl) {
+        missingDocuments.push(docName);
+      } else {
+        try {
+          const content = await (firecrawlService as any).scrapePage(docUrl);
+          if (content && content.length > 100) {
+            foundDocuments[docType] = { url: docUrl, content: content.substring(0, 5000) };
+          } else {
+            missingDocuments.push(docName);
+          }
+        } catch (error) {
+          console.error(`[Simple Scan] Error scraping ${docName}:`, error);
+          missingDocuments.push(docName);
+        }
+      }
+    }
+
+    // Step 5: Briefly analyze each found document
+    const issues: Array<{
+      document: string;
+      issue: string;
+      severity: "high" | "medium" | "low";
+      whyItMatters: string;
+    }> = [];
+
+    for (const [docType, docData] of Object.entries(foundDocuments)) {
+      try {
+        const docName = requiredDocuments[docType as keyof typeof requiredDocuments];
+        
+        const analysisPrompt = `You are a legal compliance expert. Briefly analyze this ${docName} and identify 1-3 critical issues.
+
+Document content:
+${docData.content.substring(0, 5000)}
+
+Website: ${normalizedUrl}
+
+Return JSON only:
+{
+  "issues": [
+    {
+      "issue": "Brief description of the problem",
+      "severity": "high|medium|low",
+      "whyItMatters": "Simple explanation of why this matters"
+    }
+  ]
+}
+
+Keep it brief and practical. Focus on the most important problems.`;
+
+        const analysisResponse = await openaiService.callChatGPT(analysisPrompt);
+        
+        try {
+          const jsonMatch = analysisResponse.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const analysis = JSON.parse(jsonMatch[0]);
+            if (analysis.issues && Array.isArray(analysis.issues)) {
+              for (const issue of analysis.issues) {
+                issues.push({
+                  document: docName,
+                  issue: issue.issue || "Issue found in document",
+                  severity: issue.severity || "medium",
+                  whyItMatters: issue.whyItMatters || "This could create legal risk",
+                });
+              }
+            }
+          }
+        } catch (parseError) {
+          console.error(`[Simple Scan] Error parsing analysis for ${docName}:`, parseError);
+        }
+      } catch (error) {
+        console.error(`[Simple Scan] Error analyzing ${docType}:`, error);
+      }
+    }
+
+    // Step 6: Generate summary
+    const summary = missingDocuments.length > 0 || issues.length > 0
+      ? `Found ${missingDocuments.length} missing document${missingDocuments.length !== 1 ? 's' : ''} and ${issues.length} issue${issues.length !== 1 ? 's' : ''} in existing documents. Review the details below.`
+      : "Great news! Your website appears to have all required legal documents and no major issues were found.";
+
+    // Return simple analysis result
+    res.json({
+      success: true,
+      analysis: {
+        missingDocuments,
+        issues,
+        summary,
+      },
+    });
+  } catch (error: any) {
+    console.error("[Simple Scan] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "An error occurred during the compliance scan",
+    });
+  }
+});
+
 // Add lead to Instantly.ai endpoint
 app.post("/api/add-lead", async (req, res) => {
   try {
@@ -883,11 +1043,64 @@ app.post("/api/save-contact", async (req, res) => {
         responseData: ghlErr.responseData || null,
       };
       console.error("[Save Contact] Error sending to GoHighLevel:", ghlErr);
+      console.error("[Save Contact] GoHighLevel error details:", {
+        message: ghlErr.message,
+        status: ghlErr.status,
+        responseData: ghlErr.responseData,
+      });
       // Don't throw - we don't want to block Supabase success
     }
 
-    // NOTE: Instantly.ai lead will be added AFTER workflow completes with email content
-    // This ensures the personalized email is included as custom variables
+    // Add lead to Instantly.ai IMMEDIATELY (don't wait for workflow)
+    // This ensures leads are captured even if workflow fails or doesn't run
+    let instantlyResult = null;
+    let instantlyError = null;
+    if (process.env.INSTANTLY_AI_API_KEY) {
+      try {
+        const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
+        
+        // Split name into first and last name
+        const nameParts = name.trim().split(/\s+/);
+        const firstName = nameParts[0] || "";
+        const lastName = nameParts.slice(1).join(" ") || "";
+
+        const instantlyLeadData = {
+          first_name: firstName,
+          last_name: lastName,
+          phone: phone?.trim() || "",
+          website: normalizedWebsite || "",
+          custom_variables: {
+            // Will be updated later if workflow completes
+          },
+        };
+
+        console.log("[Save Contact] Adding lead to Instantly.ai immediately:", {
+          email: email.trim().toLowerCase(),
+          campaignId,
+          firstName,
+          lastName,
+        });
+
+        instantlyResult = await instantlyService.addLeadToCampaign(
+          email.trim().toLowerCase(),
+          campaignId,
+          instantlyLeadData
+        );
+
+        console.log("[Save Contact] Successfully added lead to Instantly.ai:", instantlyResult);
+      } catch (instantlyErr: any) {
+        instantlyError = {
+          message: instantlyErr.message || "Unknown error",
+          status: instantlyErr.status || null,
+        };
+        console.error("[Save Contact] Error adding lead to Instantly.ai:", instantlyErr);
+        // Don't throw - we don't want to block Supabase success
+      }
+    } else {
+      console.warn("[Save Contact] INSTANTLY_AI_API_KEY not configured, skipping Instantly.ai integration");
+    }
+
+    // NOTE: If workflow completes successfully, we'll update the Instantly lead with email content
     // The campaign sequence in Instantly.ai should have a 24-hour delay and use {{email_subject}} and {{email_body_html}} variables
 
     // Automatically trigger legal analyzer workflow if website URL is provided
@@ -949,8 +1162,9 @@ app.post("/api/save-contact", async (req, res) => {
               });
               console.log("[Save Contact] Successfully saved workflow results for contact");
 
-              // NOW add lead to Instantly.ai with the generated email content as custom variables
-              // The campaign sequence should have a 24-hour delay and use these variables
+              // UPDATE Instantly.ai lead with the generated email content as custom variables
+              // Since we already added the lead immediately, we'll update it with email content
+              // Using skip_if_in_campaign: true will update the existing lead
               if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
                 try {
                   const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
@@ -980,23 +1194,26 @@ app.post("/api/save-contact", async (req, res) => {
                     },
                   };
 
-                  console.log("[Save Contact] Adding lead to Instantly.ai with email content:", {
+                  console.log("[Save Contact] Updating Instantly.ai lead with email content:", {
                     email: email.trim().toLowerCase(),
                     campaignId,
                     hasEmailSubject: !!workflowResult.email.subject,
                     hasEmailBody: !!workflowResult.email.body,
                   });
 
+                  // Update the lead by adding again with updateIfExists: true
+                  // This will update the existing lead's custom variables
                   await instantlyService.addLeadToCampaign(
                     email.trim().toLowerCase(),
                     campaignId,
-                    instantlyLeadData
+                    instantlyLeadData,
+                    true // updateIfExists - will update existing lead in campaign
                   );
 
-                  console.log("[Save Contact] Successfully added lead to Instantly.ai with personalized email content");
+                  console.log("[Save Contact] Successfully updated Instantly.ai lead with personalized email content");
                 } catch (instantlyErr: any) {
-                  console.error("[Save Contact] Error adding lead to Instantly.ai with email:", instantlyErr);
-                  // Don't throw - workflow already succeeded
+                  console.error("[Save Contact] Error updating Instantly.ai lead with email:", instantlyErr);
+                  // Don't throw - workflow already succeeded and lead was already added
                 }
               }
             } catch (saveError: any) {
@@ -1016,8 +1233,9 @@ app.post("/api/save-contact", async (req, res) => {
       supabase: supabaseResult,
       ghl: ghlResult,
       ghlError: ghlError || null,
-      // Note: Instantly.ai lead is added after workflow completes (asynchronously)
-      // The lead will be added with personalized email content as custom variables
+      instantly: instantlyResult,
+      instantlyError: instantlyError || null,
+      // Note: Instantly.ai lead is added immediately, then updated with email content if workflow completes
     });
   } catch (error: any) {
     console.error("[Save Contact] Error saving contact:", error);

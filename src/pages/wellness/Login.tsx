@@ -1,0 +1,192 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/wellness/ui/Card';
+import { Button } from '../../components/wellness/ui/Button';
+import { ShieldCheck, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+
+export const Login = () => {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!supabase) {
+        setIsCheckingAuth(false);
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // User is already logged in, redirect to dashboard
+          navigate('/wellness/dashboard');
+        }
+      } catch (err) {
+        console.error('Error checking auth:', err);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
+    if (!supabase) {
+      setError('Supabase is not configured. Please contact support.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
+
+      if (signInError) {
+        setError(signInError.message || 'Invalid email or password. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (data.session) {
+        // Successfully logged in
+        navigate('/wellness/dashboard');
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError('An unexpected error occurred. Please try again.');
+      setIsLoading(false);
+    }
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 mx-auto"></div>
+          <p className="mt-4 text-slate-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* Logo/Header */}
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 bg-brand-100 text-brand-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+            <ShieldCheck size={32} />
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+            Welcome Back
+          </h1>
+          <p className="text-slate-600">
+            Sign in to access your legal dashboard and documents
+          </p>
+        </div>
+
+        {/* Login Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sign In</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              {error && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2">
+                  <AlertCircle className="text-red-600 mt-0.5" size={18} />
+                  <p className="text-sm text-red-800">{error}</p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="password"
+                    placeholder="Enter your password"
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                fullWidth
+                size="lg"
+                disabled={isLoading || !email || !password}
+                className="text-lg h-12"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Sign In <ArrowRight className="ml-2" size={18} />
+                  </>
+                )}
+              </Button>
+            </form>
+
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <p className="text-sm text-center text-slate-600">
+                Don't have an account?{' '}
+                <button
+                  onClick={() => navigate('/wellness/onboarding')}
+                  className="text-brand-600 hover:text-brand-700 font-medium"
+                >
+                  Start your assessment
+                </button>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Help Text */}
+        <p className="text-xs text-center text-slate-500">
+          Having trouble? Make sure you completed the onboarding and set a password.
+        </p>
+      </div>
+    </div>
+  );
+};

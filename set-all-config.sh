@@ -71,3 +71,6 @@ echo "1. Build frontend: npm run build"
 echo "2. Deploy everything: firebase deploy"
 echo ""
 
+
+
+

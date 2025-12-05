@@ -20,24 +20,30 @@ console.log(`API Key: ${API_KEY.substring(0, 20)}...`);
 console.log(`Campaign ID: ${CAMPAIGN_ID}\n`);
 
 const testEmail = `test-${Date.now()}@example.com`;
-const testData = {
+const testLead = {
   email: testEmail,
-  campaign_id: CAMPAIGN_ID,
   first_name: 'Test',
   last_name: 'User',
   phone: '(555) 123-4567',
   website: 'https://testwebsite.com'
 };
 
-console.log('Making API call to Instantly.ai...\n');
+console.log('Making API call to Instantly.ai (API v2 with Bearer token)...\n');
 
-fetch('https://api.instantly.ai/api/v1/lead/add', {
+// API v2 with Bearer token (recommended)
+fetch('https://api.instantly.ai/api/v2/leads/add', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'X-Api-Key': API_KEY,
+    'Authorization': `Bearer ${API_KEY}`,
   },
-  body: JSON.stringify(testData),
+  body: JSON.stringify({
+    leads: [testLead],
+    campaign_id: CAMPAIGN_ID,
+    skip_if_in_workspace: false,
+    skip_if_in_campaign: false,
+    skip_if_in_list: false,
+  }),
 })
   .then(async (response) => {
     const data = await response.json().catch(() => ({}));

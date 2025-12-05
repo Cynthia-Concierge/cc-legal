@@ -104,6 +104,11 @@ const Index = () => {
     phone: string;
     website: string;
   }) => {
+    // Store email in sessionStorage for autofill in onboarding
+    if (formData.email) {
+      sessionStorage.setItem('wellness_form_email', formData.email.trim().toLowerCase());
+    }
+
     // Normalize website URL
     let normalizedWebsite = formData.website.trim();
     if (normalizedWebsite && !normalizedWebsite.startsWith("http")) {

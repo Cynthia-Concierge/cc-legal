@@ -149,8 +149,10 @@ export class FirecrawlService {
         socialMedia.emails = emails;
       }
 
-      // Find links to legal documents
-      const legalLinks = this.findLegalDocumentLinks(markdown, url);
+      // Find links to legal documents (use HTML if available for better footer extraction)
+      const legalLinks = html 
+        ? this.findLegalDocumentLinksFromHtml(html, url, markdown)
+        : this.findLegalDocumentLinks(markdown, url);
 
       // Scrape each legal document
       const legalDocuments: LegalDocuments = {};
@@ -578,7 +580,124 @@ export class FirecrawlService {
   }
 
   /**
-   * Find links to legal documents from the main page content
+   * Find links to legal documents from HTML (prioritizes footer)
+   * Falls back to markdown if HTML parsing doesn't find enough links
+   */
+  private findLegalDocumentLinksFromHtml(
+    html: string,
+    baseUrl: string,
+    markdownFallback: string
+  ): Record<string, string | null> {
+    const legalLinks: Record<string, string | null> = {
+      privacyPolicy: null,
+      termsOfService: null,
+      refundPolicy: null,
+      cookiePolicy: null,
+      disclaimer: null,
+    };
+
+    // Common patterns for legal document links
+    const patterns = {
+      privacyPolicy: [
+        /privacy[\s-]?policy/gi,
+        /privacy[\s-]?notice/gi,
+        /data[\s-]?protection/gi,
+      ],
+      termsOfService: [
+        /terms[\s-]?of[\s-]?service/gi,
+        /terms[\s-]?and[\s-]?conditions/gi,
+        /terms[\s-]?of[\s-]?use/gi,
+        /user[\s-]?agreement/gi,
+      ],
+      refundPolicy: [
+        /refund[\s-]?policy/gi,
+        /return[\s-]?policy/gi,
+        /cancellation[\s-]?policy/gi,
+      ],
+      cookiePolicy: [
+        /cookie[\s-]?policy/gi,
+        /cookie[\s-]?notice/gi,
+      ],
+      disclaimer: [
+        /disclaimer/gi,
+        /legal[\s-]?notice/gi,
+      ],
+    };
+
+    // Extract footer section from HTML (where legal links are usually located)
+    const footerMatch = html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i);
+    const footerContent = footerMatch ? footerMatch[1] : "";
+    
+    // Also look for common footer class/ID patterns
+    const footerPatterns = [
+      /<div[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
+      /<section[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi,
+    ];
+    
+    let allFooterContent = footerContent;
+    for (const pattern of footerPatterns) {
+      let match;
+      while ((match = pattern.exec(html)) !== null) {
+        allFooterContent += " " + match[1];
+      }
+    }
+
+    // Search areas: footer first (highest priority), then entire page
+    const searchAreas = [
+      { content: allFooterContent, priority: 2 },
+      { content: html, priority: 1 },
+    ];
+
+    // Extract all <a> tags with href attributes
+    const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    
+    for (const area of searchAreas) {
+      let match;
+      while ((match = linkRegex.exec(area.content)) !== null) {
+        const href = match[1].trim();
+        const linkText = match[2].replace(/<[^>]+>/g, "").trim(); // Remove HTML tags from link text
+        
+        // Resolve relative URLs
+        let fullUrl: string;
+        try {
+          fullUrl = href.startsWith("http") ? href : new URL(href, baseUrl).href;
+        } catch {
+          continue; // Skip invalid URLs
+        }
+
+        const combinedText = (linkText + " " + href).toLowerCase();
+
+        // Match to document types
+        for (const [docType, docPatterns] of Object.entries(patterns)) {
+          if (!legalLinks[docType]) {
+            for (const pattern of docPatterns) {
+              if (pattern.test(combinedText)) {
+                legalLinks[docType] = fullUrl;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // If we didn't find all links in HTML, fall back to markdown extraction
+    const foundCount = Object.values(legalLinks).filter(link => link !== null).length;
+    if (foundCount < 2) {
+      const markdownLinks = this.findLegalDocumentLinks(markdownFallback, baseUrl);
+      // Merge results, preferring HTML results
+      for (const [docType, url] of Object.entries(markdownLinks)) {
+        if (!legalLinks[docType] && url) {
+          legalLinks[docType] = url;
+        }
+      }
+    }
+
+    return legalLinks;
+  }
+
+  /**
+   * Find links to legal documents from the main page content (markdown)
    */
   private findLegalDocumentLinks(
     content: string,

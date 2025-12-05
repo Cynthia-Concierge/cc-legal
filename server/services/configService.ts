@@ -43,7 +43,13 @@ export class ConfigService {
         .order("updated_at", { ascending: false });
 
       if (error) {
-        console.error("[ConfigService] Error loading config:", error);
+        // If table doesn't exist (PGRST205), log a warning instead of error
+        // This is expected if the table hasn't been created in production yet
+        if (error.code === 'PGRST205') {
+          console.warn("[ConfigService] workflow_config table not found. Run supabase_workflow_config_table.sql in your Supabase database.");
+        } else {
+          console.error("[ConfigService] Error loading config:", error);
+        }
         return { nodePrompts: {}, autogenAgents: {} };
       }
 

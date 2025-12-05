@@ -19,6 +19,12 @@ firebase functions:secrets:set SUPABASE_ANON_KEY
 # firebase functions:secrets:set GEMINI_API_KEY
 # firebase functions:secrets:set USE_AUTOGEN
 
+# Meta/Facebook Pixel secrets
+firebase functions:secrets:set META_ACCESS_TOKEN
+firebase functions:secrets:set META_PIXEL_ID
+
 echo ""
 echo "✅ Secrets set! Remember to deploy: firebase deploy --only functions"
+
+
 
