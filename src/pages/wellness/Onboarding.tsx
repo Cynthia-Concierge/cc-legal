@@ -27,45 +27,106 @@ export const Onboarding: React.FC = () => {
   // Email step state - must be at top level (Rules of Hooks)
   const [emailInput, setEmailInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCheckingExistingUser, setIsCheckingExistingUser] = useState(true);
 
   const updateAnswer = (key: keyof UserAnswers, value: any) => {
     setAnswers(prev => ({ ...prev, [key]: value }));
   };
 
   // Check if user is already logged in and has completed onboarding
+  // This MUST run immediately before rendering anything
   useEffect(() => {
     const checkExistingUser = async () => {
-      // Check if they have completed onboarding data
+      // Check if they have completed onboarding data FIRST
       const saved = localStorage.getItem('wellness_onboarding_answers');
+      console.log('[Onboarding] Checking for existing user, saved data:', !!saved);
+      
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
+          console.log('[Onboarding] Parsed data (full):', JSON.stringify(parsed, null, 2));
+          console.log('[Onboarding] Data breakdown:', {
+            hasServices: !!parsed.services, 
+            servicesType: typeof parsed.services,
+            isArray: Array.isArray(parsed.services),
+            servicesLength: parsed.services?.length,
+            servicesValue: parsed.services,
+            hasPhysicalMovement: parsed.hasPhysicalMovement,
+            hasPhysicalMovementType: typeof parsed.hasPhysicalMovement,
+            collectsOnline: parsed.collectsOnline,
+            collectsOnlineType: typeof parsed.collectsOnline,
+            hiresStaff: parsed.hiresStaff,
+            hiresStaffType: typeof parsed.hiresStaff,
+            isOffsiteOrInternational: parsed.isOffsiteOrInternational,
+            isOffsiteOrInternationalType: typeof parsed.isOffsiteOrInternational
+          });
           
-          // If they have completed onboarding (have answers with services array), redirect to dashboard
-          if (parsed.services && parsed.services.length > 0) {
-            // Check if they're logged in via Supabase
-            if (supabase) {
+          // Check if onboarding is complete by verifying all required fields are answered
+          // Required fields: services (array with items), and all 4 boolean questions
+          const hasServices = parsed.services && Array.isArray(parsed.services) && parsed.services.length > 0;
+          const hasAllBooleans = typeof parsed.hasPhysicalMovement === 'boolean' &&
+                                 typeof parsed.collectsOnline === 'boolean' &&
+                                 typeof parsed.hiresStaff === 'boolean' &&
+                                 typeof parsed.isOffsiteOrInternational === 'boolean';
+          const hasCompletedOnboarding = hasServices && hasAllBooleans;
+          
+          console.log('[Onboarding] Completion check result:', {
+            hasCompletedOnboarding,
+            hasServices,
+            hasAllBooleans,
+            breakdown: {
+              servicesCheck: `${!!parsed.services} && ${Array.isArray(parsed.services)} && ${parsed.services?.length} > 0 = ${hasServices}`,
+              booleansCheck: `all 4 are boolean = ${hasAllBooleans}`
+            }
+          });
+          
+          // Check if user has a session (has password = onboarding complete)
+          let hasActiveSession = false;
+          let onboardingCompleteInMetadata = false;
+          
+          if (supabase) {
+            try {
               const { data: { session } } = await supabase.auth.getSession();
-              if (session) {
-                // User is logged in and has completed onboarding - go to dashboard
-                navigate('/wellness/dashboard');
+              hasActiveSession = !!session;
+              onboardingCompleteInMetadata = session?.user?.user_metadata?.onboarding_complete === true;
+              console.log('[Onboarding] Session check:', { 
+                hasActiveSession, 
+                userId: session?.user?.id,
+                onboardingCompleteInMetadata,
+                hasPassword: hasActiveSession // If they have a session, they have a password
+              });
+              
+              // If user has a session (can log in), they have a password = onboarding is complete
+              // Redirect to dashboard
+              if (hasActiveSession) {
+                console.log('[Onboarding] User has password (onboarding complete) - redirecting to dashboard');
+                navigate('/wellness/dashboard', { replace: true });
                 return;
               }
+            } catch (sessionErr) {
+              console.error('[Onboarding] Error checking session:', sessionErr);
             }
-            // Even without Supabase session, if they have completed onboarding, go to dashboard
-            navigate('/wellness/dashboard');
+          }
+          
+          // Fallback: If they have completed onboarding data in localStorage, also redirect
+          if (hasCompletedOnboarding) {
+            console.log('[Onboarding] User has completed onboarding data - redirecting to dashboard');
+            navigate('/wellness/dashboard', { replace: true });
             return;
           }
           
           // They have partial data, continue onboarding
+          console.log('[Onboarding] User has partial data, continuing onboarding');
           setAnswers(parsed);
           // Set email input if it exists in saved answers
           if (parsed.email) {
             setEmailInput(parsed.email);
           }
         } catch (e) {
-          console.error("Failed to parse saved answers");
+          console.error("[Onboarding] Failed to parse saved answers:", e);
         }
+      } else {
+        console.log('[Onboarding] No saved onboarding data found');
       }
 
       // Check for email from URL params (if passed)
@@ -85,13 +146,18 @@ export const Onboarding: React.FC = () => {
       }
     };
 
-    checkExistingUser();
+    checkExistingUser().finally(() => {
+      setIsCheckingExistingUser(false);
+    });
   }, [searchParams, navigate]);
 
   // Save to local storage on change
+  // Only save if we're not checking for existing user (to avoid overwriting during redirect check)
   useEffect(() => {
-    localStorage.setItem('wellness_onboarding_answers', JSON.stringify(answers));
-  }, [answers]);
+    if (!isCheckingExistingUser) {
+      localStorage.setItem('wellness_onboarding_answers', JSON.stringify(answers));
+    }
+  }, [answers, isCheckingExistingUser]);
 
   const handleEmailSubmit = async (email: string) => {
     if (!email || !email.includes('@')) {
@@ -224,6 +290,18 @@ export const Onboarding: React.FC = () => {
     }
   };
 
+  // Show loading while checking for existing user
+  if (isCheckingExistingUser) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 mx-auto"></div>
+          <p className="mt-4 text-slate-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Step 0: Welcome
   if (step === 0) {
     return (
@@ -233,18 +311,17 @@ export const Onboarding: React.FC = () => {
             <ShieldCheck size={32} />
           </div>
           <h1 className="text-4xl font-semibold tracking-tight text-slate-900">
-            Wellness Business <br/> Legal Checkup
+            Customize Your Wellness Legal Documents
           </h1>
           <p className="text-lg text-slate-600 leading-relaxed max-w-md mx-auto">
-            Take our free 20-second assessment to uncover your legal blind spots and get a personalized protection plan.
+            Answer a few quick questions so we can tailor every agreement, waiver, and policy to your specific business.
           </p>
           <button 
             onClick={nextStep}
             className="inline-flex h-12 items-center justify-center rounded-full bg-brand-600 px-8 text-lg font-medium text-white shadow-lg shadow-brand-200 transition-all hover:bg-brand-700 hover:-translate-y-0.5"
           >
-            Start Assessment
+            Start Customization
           </button>
-          <p className="text-xs text-slate-400 uppercase tracking-widest pt-4">Trusted by 500+ Studios</p>
         </div>
       </div>
     );

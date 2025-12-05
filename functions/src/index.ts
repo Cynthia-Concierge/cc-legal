@@ -73,6 +73,7 @@ async function initializeRoutes() {
       const { ColdLeadsService } = require(path.join(servicesPath, "coldLeadsService.js"));
       const { EmailGenerationWorkflow } = require(path.join(servicesPath, "emailGenerationWorkflow.js"));
       const { ConfigService } = require(path.join(servicesPath, "configService.js"));
+      const { InstantlyService } = require(path.join(servicesPath, "instantlyService.js"));
 
       // Initialize services (only the ones we actually use in routes)
       // Get Supabase config from secrets (env vars) - in v2, secrets are automatically available as env vars
@@ -117,6 +118,11 @@ async function initializeRoutes() {
       const configService = new ConfigService(
         process.env.SUPABASE_URL || "",
         process.env.SUPABASE_ANON_KEY || ""
+      );
+      
+      // Initialize InstantlyService
+      const instantlyService = new InstantlyService(
+        (process.env.INSTANTLY_AI_API_KEY || "").trim()
       );
 
       // Load workflow configurations
@@ -434,8 +440,122 @@ async function initializeRoutes() {
           };
 
           console.log("[Save Contact] Attempting to save:", contactData);
-          const result = await supabaseService.saveContact(contactData);
-          console.log("[Save Contact] Successfully saved:", result);
+          const supabaseResult = await supabaseService.saveContact(contactData);
+          console.log("[Save Contact] Successfully saved to Supabase:", supabaseResult);
+
+          // After Supabase succeeds, send to GoHighLevel
+          let ghlResult = null;
+          let ghlError = null;
+          try {
+            // Split name into firstName and lastName (same logic as Supabase service)
+            const nameParts = name.trim().split(/\s+/);
+            const firstName = nameParts[0] || "";
+            const lastName = nameParts.slice(1).join(" ") || "";
+
+            const ghlPayload = {
+              firstName: firstName,
+              lastName: lastName,
+              email: email.trim().toLowerCase(),
+              phone: phone?.trim() || "",
+              locationId: "7HUNbHEuRf1cXZD4hxxr",
+              tags: ["ricki new funnel"],
+              source: "Cynthia AI",
+            };
+
+            console.log("[Save Contact] Sending to GoHighLevel:", { ...ghlPayload, phone: phone ? "[REDACTED]" : "" });
+
+            const ghlResponse = await fetch("https://services.leadconnectorhq.com/contacts/", {
+              method: "POST",
+              headers: {
+                Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+                Version: "2021-07-28",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(ghlPayload),
+            });
+
+            if (!ghlResponse.ok) {
+              const errorText = await ghlResponse.text();
+              let errorData: any;
+              try {
+                errorData = JSON.parse(errorText);
+              } catch {
+                errorData = { message: errorText };
+              }
+              const error: any = new Error(`GoHighLevel API error: ${errorData.message || errorText} (Status: ${ghlResponse.status})`);
+              error.status = ghlResponse.status;
+              error.responseData = errorData;
+              throw error;
+            }
+
+            ghlResult = await ghlResponse.json();
+            console.log("[Save Contact] Successfully sent to GoHighLevel:", ghlResult);
+          } catch (ghlErr: any) {
+            ghlError = {
+              message: ghlErr.message || "Unknown error",
+              status: ghlErr.status || null,
+              responseData: ghlErr.responseData || null,
+            };
+            console.error("[Save Contact] Error sending to GoHighLevel:", ghlErr);
+            console.error("[Save Contact] GoHighLevel error details:", {
+              message: ghlErr.message,
+              status: ghlErr.status,
+              responseData: ghlErr.responseData,
+            });
+            // Don't throw - we don't want to block Supabase success
+          }
+
+          // Add lead to Instantly.ai IMMEDIATELY (don't wait for workflow)
+          // This ensures leads are captured even if workflow fails or doesn't run
+          let instantlyResult = null;
+          let instantlyError = null;
+          if (process.env.INSTANTLY_AI_API_KEY) {
+            try {
+              const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
+              
+              // Split name into first and last name
+              const nameParts = name.trim().split(/\s+/);
+              const firstName = nameParts[0] || "";
+              const lastName = nameParts.slice(1).join(" ") || "";
+
+              const instantlyLeadData = {
+                first_name: firstName,
+                last_name: lastName,
+                phone: phone?.trim() || "",
+                website: normalizedWebsite || "",
+                custom_variables: {
+                  // Will be updated later if workflow completes
+                },
+              };
+
+              console.log("[Save Contact] Adding lead to Instantly.ai immediately:", {
+                email: email.trim().toLowerCase(),
+                campaignId,
+                firstName,
+                lastName,
+              });
+
+              instantlyResult = await instantlyService.addLeadToCampaign(
+                email.trim().toLowerCase(),
+                campaignId,
+                instantlyLeadData
+              );
+
+              console.log("[Save Contact] Successfully added lead to Instantly.ai:", instantlyResult);
+            } catch (instantlyErr: any) {
+              instantlyError = {
+                message: instantlyErr.message || "Unknown error",
+                status: instantlyErr.status || null,
+              };
+              console.error("[Save Contact] Error adding lead to Instantly.ai:", instantlyErr);
+              // Don't throw - we don't want to block Supabase success
+            }
+          } else {
+            console.warn("[Save Contact] INSTANTLY_AI_API_KEY not configured, skipping Instantly.ai integration");
+          }
+
+          // NOTE: If workflow completes successfully, we'll update the Instantly lead with email content
+          // The campaign sequence in Instantly.ai should have a 24-hour delay and use {{email_subject}} and {{email_body_html}} variables
 
           // Automatically trigger legal analyzer workflow if website URL is provided
           // Run asynchronously - don't block the response
@@ -493,12 +613,68 @@ async function initializeRoutes() {
                       status: "completed",
                     });
                     console.log("[Save Contact] Successfully saved workflow results for contact");
+
+                    // UPDATE Instantly.ai lead with the generated email content as custom variables
+                    // Since we already added the lead immediately, we'll update it with email content
+                    // Using skip_if_in_campaign: true will update the existing lead
+                    if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
+                      try {
+                        const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
+                        
+                        // Split name into first and last name
+                        const nameParts = name.trim().split(/\s+/);
+                        const firstName = nameParts[0] || "";
+                        const lastName = nameParts.slice(1).join(" ") || "";
+
+                        // Clean up the email body HTML for Instantly AI (remove excessive inline styles)
+                        const cleanEmailBody = workflowResult.email.body
+                          .replace(/style="[^"]*line-height:\s*[^;"]*[^"]*"/g, "")
+                          .replace(/style="[^"]*margin[^"]*"/g, "")
+                          .replace(/style="[^"]*"/g, "")
+                          .replace(/\n{3,}/g, "\n\n")
+                          .trim();
+
+                        const instantlyLeadData = {
+                          first_name: firstName,
+                          last_name: lastName,
+                          phone: phone?.trim() || "",
+                          website: normalizedWebsite,
+                          custom_variables: {
+                            email_subject: workflowResult.email.subject,
+                            email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
+                            email_body: cleanEmailBody, // Cleaned version as backup
+                          },
+                        };
+
+                        console.log("[Save Contact] Updating Instantly.ai lead with email content:", {
+                          email: email.trim().toLowerCase(),
+                          campaignId,
+                          hasEmailSubject: !!workflowResult.email.subject,
+                          hasEmailBody: !!workflowResult.email.body,
+                        });
+
+                        // Update the lead by adding again with updateIfExists: true
+                        // This will update the existing lead's custom variables
+                        await instantlyService.addLeadToCampaign(
+                          email.trim().toLowerCase(),
+                          campaignId,
+                          instantlyLeadData,
+                          true // updateIfExists - will update existing lead in campaign
+                        );
+
+                        console.log("[Save Contact] Successfully updated Instantly.ai lead with personalized email content");
+                      } catch (instantlyErr: any) {
+                        console.error("[Save Contact] Error updating Instantly.ai lead with email:", instantlyErr);
+                        // Don't throw - workflow already succeeded and lead was already added
+                      }
+                    }
                   } catch (saveError: any) {
                     console.error("[Save Contact] Error saving workflow results:", saveError);
                   }
                 }
               } catch (workflowError: any) {
                 console.error("[Save Contact] Error running workflow:", workflowError);
+                // Don't throw - we don't want to break the contact save
               }
             })(); // Immediately invoke async function
             }
@@ -506,7 +682,12 @@ async function initializeRoutes() {
 
           return res.json({
             success: true,
-            data: result,
+            supabase: supabaseResult,
+            ghl: ghlResult,
+            ghlError: ghlError || null,
+            instantly: instantlyResult,
+            instantlyError: instantlyError || null,
+            // Note: Instantly.ai lead is added immediately, then updated with email content if workflow completes
           });
         } catch (error: any) {
           console.error("[Save Contact] Error saving contact:", error);

@@ -13,6 +13,7 @@ import { Onboarding } from "./pages/wellness/Onboarding";
 import { BusinessProfile } from "./pages/wellness/BusinessProfile";
 import { WellnessDashboard } from "./pages/wellness/WellnessDashboard";
 import { Login } from "./pages/wellness/Login";
+import { ResetPassword } from "./pages/wellness/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/wellness/onboarding" element={<Onboarding />} />
             <Route path="/wellness/profile" element={<BusinessProfile />} />
             <Route path="/wellness/dashboard" element={<WellnessDashboard />} />
+            <Route path="/wellness/reset-password" element={<ResetPassword />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

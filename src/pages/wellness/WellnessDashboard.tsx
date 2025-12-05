@@ -263,17 +263,15 @@ export const WellnessDashboard: React.FC = () => {
             <Button size="sm" variant="secondary" onClick={() => setIsCalendlyModalOpen(true)}>
               Book Consultation
             </Button>
-            {user && (
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={handleLogout}
-                className="flex items-center gap-2"
-              >
-                <LogOut size={16} />
-                Logout
-              </Button>
-            )}
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleLogout}
+              className="flex items-center gap-2"
+            >
+              <LogOut size={16} />
+              Sign Out
+            </Button>
           </div>
         </div>
       </header>
