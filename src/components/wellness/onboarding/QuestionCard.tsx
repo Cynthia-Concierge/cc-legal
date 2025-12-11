@@ -10,19 +10,22 @@ interface QuestionProps {
   selected: string | string[] | boolean | null;
   onAnswer: (val: any) => void;
   onNext: () => void;
+  onBack?: () => void;
+  subtext?: string;
   isLast?: boolean;
 }
 
-export const QuestionCard: React.FC<QuestionProps> = ({ 
-  question, 
-  type, 
-  options, 
-  selected, 
-  onAnswer, 
+export const QuestionCard: React.FC<QuestionProps> = ({
+  question,
+  subtext,
+  type,
+  options,
+  selected,
+  onAnswer,
   onNext,
+  onBack,
   isLast = false
 }) => {
-  
   const handleSelect = (option: string) => {
     if (type === 'single') {
       // Map Yes/No to boolean if applicable
@@ -35,11 +38,11 @@ export const QuestionCard: React.FC<QuestionProps> = ({
         onAnswer(current.filter(item => item !== option));
       } else {
         if (option === 'None') {
-            onAnswer(['None']);
+          onAnswer(['None']);
         } else {
-            // Remove 'None' if selecting others
-            const withoutNone = current.filter(i => i !== 'None');
-            onAnswer([...withoutNone, option]);
+          // Remove 'None' if selecting others
+          const withoutNone = current.filter(i => i !== 'None');
+          onAnswer([...withoutNone, option]);
         }
       }
     }
@@ -47,20 +50,29 @@ export const QuestionCard: React.FC<QuestionProps> = ({
 
   const isSelected = (option: string) => {
     if (type === 'single') {
-       const val = option === 'Yes' ? true : option === 'No' ? false : option;
-       return selected === val;
+      const val = option === 'Yes' ? true : option === 'No' ? false : option;
+      return selected === val;
     }
     return Array.isArray(selected) && selected.includes(option);
   };
 
   const canProceed = selected !== null && (Array.isArray(selected) ? selected.length > 0 : true);
-
   return (
     <Card className="w-full max-w-lg mx-auto shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500">
       <CardHeader>
         <CardTitle className="text-xl md:text-2xl text-slate-900 text-center font-normal leading-relaxed">
           {question}
         </CardTitle>
+        {subtext && (
+          <p className="text-center text-sm text-slate-500 mt-1">
+            {subtext}
+          </p>
+        )}
+        {type === 'multi' && (
+          <p className="text-center text-sm text-slate-500 mt-1">
+            (Select all that apply)
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3">
@@ -70,8 +82,8 @@ export const QuestionCard: React.FC<QuestionProps> = ({
               onClick={() => handleSelect(option)}
               className={`
                 relative flex items-center w-full min-h-[56px] p-4 text-left border rounded-xl transition-all duration-200
-                ${isSelected(option) 
-                  ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500' 
+                ${isSelected(option)
+                  ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500'
                   : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50 text-slate-700'}
               `}
             >
@@ -85,13 +97,23 @@ export const QuestionCard: React.FC<QuestionProps> = ({
           ))}
         </div>
 
-        <div className="pt-6">
-          <Button 
-            fullWidth 
-            size="lg" 
-            onClick={onNext} 
+        <div className="pt-6 flex gap-3">
+          {onBack && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={onBack}
+              className="px-6"
+            >
+              Back
+            </Button>
+          )}
+          <Button
+            fullWidth
+            size="lg"
+            onClick={onNext}
             disabled={!canProceed}
-            className="group"
+            className="group flex-1"
           >
             {isLast ? 'Complete Assessment' : 'Next Step'}
             {!isLast && <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />}

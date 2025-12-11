@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
 import ValueStack from "@/components/ValueStack";
@@ -41,6 +42,25 @@ const Index = () => {
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [monthlyPlan, setMonthlyPlan] = useState<PricingPlan | null>(null);
   const [isLoadingPricing, setIsLoadingPricing] = useState(true);
+
+  // Check if user is already logged in -> Redirect to Dashboard
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!supabase) return;
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('[Index] User already authenticated - redirecting to dashboard');
+          navigate('/wellness/dashboard', { replace: true });
+        }
+      } catch (err) {
+        console.error('Error checking auth in Index:', err);
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
 
   // Fetch pricing plans from API
   const fetchPricingPlans = async () => {
@@ -166,7 +186,7 @@ const Index = () => {
         } else {
           const result = JSON.parse(responseText);
           console.log("Contact saved to Supabase successfully:", result);
-          
+
           // Log Instantly.ai result if available
           if (result.instantly) {
             console.log("Lead added to Instantly.ai successfully:", result.instantly);
@@ -227,7 +247,7 @@ const Index = () => {
       console.error("Error submitting form:", error);
       // Continue to show thank you page even if services fail
     }
-    
+
     // Redirect to thank you page
     navigate('/thank-you');
   };
@@ -329,7 +349,7 @@ const Index = () => {
       <ValueStack onGetDocumentsClick={handleScrollToForm} />
       <Testimonials />
       <Footer />
-      
+
       {/* Sticky Mobile Button */}
       <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden p-4 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
         <button

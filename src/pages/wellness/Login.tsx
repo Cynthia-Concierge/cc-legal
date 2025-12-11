@@ -109,7 +109,7 @@ export const Login = () => {
     try {
       // Get the current origin for the redirect URL
       const redirectUrl = `${window.location.origin}/wellness/reset-password`;
-      
+
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: redirectUrl,
       });
@@ -324,7 +324,7 @@ export const Login = () => {
                   onClick={() => navigate('/wellness/onboarding')}
                   className="text-brand-600 hover:text-brand-700 font-medium"
                 >
-                  Start your assessment
+                  Get your customized legal documents
                 </button>
               </p>
             </div>
@@ -333,7 +333,10 @@ export const Login = () => {
 
         {/* Help Text */}
         <p className="text-xs text-center text-slate-500">
-          Having trouble? Make sure you completed the onboarding and set a password.
+          Having trouble?{' '}
+          <a href="mailto:chad@consciouscounsel.ca" className="text-brand-600 hover:text-brand-700 font-medium underline">
+            Contact us here.
+          </a>
         </p>
       </div>
     </div>

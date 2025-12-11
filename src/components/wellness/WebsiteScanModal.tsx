@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Globe, Loader2, CheckCircle2, AlertTriangle, X } from 'lucide-react';
@@ -8,9 +8,11 @@ interface WebsiteScanModalProps {
   onClose: () => void;
   onComplete: () => void;
   initialWebsite?: string;
+  initialResults?: ScanResult | null;
 }
 
 interface ScanResult {
+  foundDocuments: string[];
   missingDocuments: string[];
   issues: Array<{
     document: string;
@@ -26,11 +28,19 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
   onClose,
   onComplete,
   initialWebsite = '',
+  initialResults = null,
 }) => {
   const [websiteUrl, setWebsiteUrl] = useState(initialWebsite);
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(initialResults);
   const [error, setError] = useState<string | null>(null);
+
+  // Update state when initialResults changes (e.g. if loaded after mount)
+  useEffect(() => {
+    if (initialResults) {
+      setScanResult(initialResults);
+    }
+  }, [initialResults]);
 
   const handleScan = async () => {
     if (!websiteUrl || !websiteUrl.trim()) {
@@ -65,23 +75,33 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
       }
 
       const data = await response.json();
-      
+
       // Extract analysis result from the response
-      // The new simple endpoint returns: { success: true, analysis: {...} }
       if (data.analysis) {
-        setScanResult({
+        const result: ScanResult = {
+          foundDocuments: data.analysis.foundDocuments || [],
           missingDocuments: data.analysis.missingDocuments || [],
           issues: data.analysis.issues || [],
           summary: data.analysis.summary || 'Website scan completed.',
-        });
+        };
+
+        setScanResult(result);
+
+        // Save to localStorage for persistence
+        localStorage.setItem('wellness_website_scan_result', JSON.stringify({
+          ...result,
+          websiteUrl: normalizedUrl,
+          timestamp: new Date().toISOString()
+        }));
       } else {
         // If no analysis, create a basic result
-        console.warn('No analysis found in response:', data);
-        setScanResult({
+        const result: ScanResult = {
+          foundDocuments: [],
           missingDocuments: [],
           issues: [],
           summary: 'Website scan completed. No major issues found.',
-        });
+        };
+        setScanResult(result);
       }
     } catch (err: any) {
       console.error('Error scanning website:', err);
@@ -191,17 +211,35 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
                 </div>
               </div>
 
+              {/* Found Documents Section */}
+              {scanResult.foundDocuments.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                    <CheckCircle2 className="text-green-600" size={16} />
+                    Found Documents
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {scanResult.foundDocuments.map((doc, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-green-50/50 border border-green-100">
+                        <CheckCircle2 className="text-green-600 h-4 w-4" />
+                        <span className="text-sm text-slate-700 font-medium">{doc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {scanResult.missingDocuments.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
                     <AlertTriangle className="text-orange-600" size={16} />
                     Missing Documents
                   </h3>
-                  <ul className="space-y-2">
+                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {scanResult.missingDocuments.map((doc, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
-                        <span className="text-orange-600 mt-1">•</span>
-                        <span>{doc}</span>
+                      <li key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-orange-50/50 border border-orange-100">
+                        <AlertTriangle className="text-orange-500 h-4 w-4" />
+                        <span className="text-sm text-slate-700 font-medium">{doc}</span>
                       </li>
                     ))}
                   </ul>
@@ -215,24 +253,22 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
                     {scanResult.issues.map((issue, idx) => (
                       <div
                         key={idx}
-                        className={`p-3 rounded-lg border ${
-                          issue.severity === 'high'
-                            ? 'bg-red-50 border-red-200'
-                            : issue.severity === 'medium'
+                        className={`p-3 rounded-lg border ${issue.severity === 'high'
+                          ? 'bg-red-50 border-red-200'
+                          : issue.severity === 'medium'
                             ? 'bg-orange-50 border-orange-200'
                             : 'bg-yellow-50 border-yellow-200'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start justify-between mb-1">
                           <p className="text-sm font-medium text-slate-900">{issue.document}</p>
                           <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded ${
-                              issue.severity === 'high'
-                                ? 'bg-red-100 text-red-700'
-                                : issue.severity === 'medium'
+                            className={`text-xs font-medium px-2 py-0.5 rounded ${issue.severity === 'high'
+                              ? 'bg-red-100 text-red-700'
+                              : issue.severity === 'medium'
                                 ? 'bg-orange-100 text-orange-700'
                                 : 'bg-yellow-100 text-yellow-700'
-                            }`}
+                              }`}
                           >
                             {issue.severity.toUpperCase()}
                           </span>

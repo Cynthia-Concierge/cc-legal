@@ -139,6 +139,17 @@ const bookingService = new BookingService(
   process.env.SUPABASE_ANON_KEY || ""
 );
 
+// Initialize Email Service
+import { EmailService } from "./services/emailService.js";
+const emailService = new EmailService(
+  process.env.RESEND_API_KEY || "",
+  process.env.EMAIL_FROM_ADDRESS
+);
+
+// Initialize Document Generation Service
+import { DocumentGenerationService } from "./services/documentGenerationService.js";
+const documentGenerationService = new DocumentGenerationService();
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "Scraping API is running" });
@@ -262,8 +273,8 @@ app.post("/api/scrape-and-analyze", async (req, res) => {
         websiteUrl: result.websiteUrl,
         legalDocuments: result.legalDocuments
           ? Object.keys(result.legalDocuments).filter(
-              (key) => result.legalDocuments![key as keyof typeof result.legalDocuments]
-            )
+            (key) => result.legalDocuments![key as keyof typeof result.legalDocuments]
+          )
           : [],
         analysis: result.analysis,
         email: result.email,
@@ -307,7 +318,7 @@ app.post("/api/scrape-and-analyze-stream", async (req, res) => {
 
     // Execute workflow with streaming
     console.log(`[Workflow Stream] Starting streaming workflow for: ${websiteUrl}`);
-    
+
     try {
       for await (const stateUpdate of emailWorkflow.stream(websiteUrl, leadInfo)) {
         // Send each state update as an SSE event
@@ -391,7 +402,7 @@ app.post("/api/scan-website-compliance", async (req, res) => {
     // Step 1: Scrape homepage footer to get legal links
     let html = "";
     let markdown = "";
-    
+
     try {
       const pageData = await (firecrawlService as any).scrapePageWithHtml(normalizedUrl);
       html = pageData.html || "";
@@ -403,7 +414,7 @@ app.post("/api/scan-website-compliance", async (req, res) => {
     }
 
     // Step 2: Extract legal links from footer
-    const legalLinks = html 
+    const legalLinks = html
       ? (firecrawlService as any).findLegalDocumentLinksFromHtml(html, normalizedUrl, markdown)
       : (firecrawlService as any).findLegalDocumentLinks(markdown, normalizedUrl);
 
@@ -422,7 +433,7 @@ app.post("/api/scan-website-compliance", async (req, res) => {
     // Step 4: Scrape each found document
     for (const [docType, docName] of Object.entries(requiredDocuments)) {
       const docUrl = legalLinks[docType];
-      
+
       if (!docUrl) {
         missingDocuments.push(docName);
       } else {
@@ -451,7 +462,7 @@ app.post("/api/scan-website-compliance", async (req, res) => {
     for (const [docType, docData] of Object.entries(foundDocuments)) {
       try {
         const docName = requiredDocuments[docType as keyof typeof requiredDocuments];
-        
+
         const analysisPrompt = `You are a legal compliance expert. Briefly analyze this ${docName} and identify 1-3 critical issues.
 
 Document content:
@@ -473,7 +484,7 @@ Return JSON only:
 Keep it brief and practical. Focus on the most important problems.`;
 
         const analysisResponse = await openaiService.callChatGPT(analysisPrompt);
-        
+
         try {
           const jsonMatch = analysisResponse.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
@@ -506,6 +517,7 @@ Keep it brief and practical. Focus on the most important problems.`;
     res.json({
       success: true,
       analysis: {
+        foundDocuments: Object.keys(foundDocuments).map(key => requiredDocuments[key as keyof typeof requiredDocuments]),
         missingDocuments,
         issues,
         summary,
@@ -516,6 +528,81 @@ Keep it brief and practical. Focus on the most important problems.`;
     res.status(500).json({
       error: "Internal server error",
       message: error.message || "An error occurred during the compliance scan",
+    });
+  }
+});
+
+// Endpoint for AI Contract Review (Proxy to avoid CORS/Frontend issues)
+app.post("/api/analyze-contract", async (req, res) => {
+  try {
+    const { content, prompt } = req.body;
+
+    if (!content || !Array.isArray(content) || content.length === 0) {
+      return res.status(400).json({
+        error: "Content array is required",
+      });
+    }
+
+    // Check if API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY is not set in environment variables");
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "OpenAI API key is not configured.",
+      });
+    }
+
+    console.log("[Contract Analysis] Analyzing document...");
+
+    // Construct messages for OpenAI
+    // If prompt is provided, prepend it as a system or user message
+    const messages = [
+      {
+        role: "user",
+        content: content
+      }
+    ];
+
+    // Use pure fetch to call OpenAI directly to support vision/multimodal structure easily
+    // or use openaiService if it supports this specific format.
+    // For safety and custom structure, let's use direct fetch here similar to frontend but secure.
+
+    // Note: OpenAIService might not expose a direct "chat completion with complex content" method easily
+    // so we'll do a direct call here using the server's key.
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 4000
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("[Contract Analysis] OpenAI Error:", errorData);
+      throw new Error(`OpenAI API error: ${errorData.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const analysis = data.choices?.[0]?.message?.content || "";
+
+    res.json({
+      success: true,
+      analysis: analysis,
+    });
+
+  } catch (error: any) {
+    console.error("[Contract Analysis] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to analyze contract",
     });
   }
 });
@@ -552,11 +639,11 @@ app.post("/api/add-lead", async (req, res) => {
     });
   } catch (error: any) {
     console.error("Error adding lead:", error);
-    
+
     // Provide more specific error messages
     let statusCode = 500;
     let errorMessage = error.message || "Failed to add lead to Instantly.ai";
-    
+
     if (error.message?.includes("401")) {
       statusCode = 401;
       errorMessage = "Instantly.ai API authentication failed. Please check your INSTANTLY_AI_API_KEY in .env file.";
@@ -564,7 +651,7 @@ app.post("/api/add-lead", async (req, res) => {
       statusCode = 400;
       errorMessage = "Invalid request to Instantly.ai. Check campaign ID and lead data format.";
     }
-    
+
     res.status(statusCode).json({
       error: "Internal server error",
       message: errorMessage,
@@ -614,11 +701,11 @@ app.post("/api/track-meta-lead", async (req, res) => {
     });
   } catch (error: any) {
     console.error("Error tracking Meta lead:", error);
-    
+
     // Provide more specific error messages
     let statusCode = 500;
     let errorMessage = error.message || "Failed to track lead in Meta";
-    
+
     if (error.message?.includes("401") || error.message?.includes("Invalid OAuth")) {
       statusCode = 401;
       errorMessage = "Meta API authentication failed. Please check your META_ACCESS_TOKEN in .env file.";
@@ -626,10 +713,49 @@ app.post("/api/track-meta-lead", async (req, res) => {
       statusCode = 400;
       errorMessage = "Invalid request to Meta API. Check pixel ID and event data format.";
     }
-    
+
     res.status(statusCode).json({
       error: "Internal server error",
       message: errorMessage,
+    });
+  }
+});
+
+// Send Welcome Email
+app.post("/api/emails/welcome", async (req, res) => {
+  try {
+    const { email, name } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required",
+      });
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      console.error("RESEND_API_KEY is not set in environment variables");
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Email service is not configured.",
+      });
+    }
+
+    const result = await emailService.sendWelcomeEmail(email, name);
+
+    // Also notify admin (fire and forget)
+    emailService.sendAdminAlert(email, name).catch((err: any) =>
+      console.error("Failed to send admin alert:", err)
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    console.error("Error sending welcome email:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to send welcome email",
     });
   }
 });
@@ -921,7 +1047,7 @@ app.post("/api/website-redesign-stream", async (req, res) => {
     // Helper to emit agent progress
     const emitAgentProgress = (agent: string, status: "starting" | "completed") => {
       currentAgent = status === "starting" ? agent : null;
-      res.write(`data: ${JSON.stringify({ 
+      res.write(`data: ${JSON.stringify({
         agentProgress: { agent, status },
         node: "website_design",
         activeAgent: currentAgent
@@ -930,7 +1056,7 @@ app.post("/api/website-redesign-stream", async (req, res) => {
 
     // Execute workflow with streaming
     console.log(`[Website Redesign Stream] Starting streaming workflow for: ${websiteUrl}`);
-    
+
     try {
       for await (const stateUpdate of websiteRedesignWorkflow.stream(websiteUrl)) {
         // Send each state update as an SSE event
@@ -963,7 +1089,7 @@ app.post("/api/save-contact", async (req, res) => {
   try {
     console.log("[Save Contact] Request received:", req.body);
     console.log("[Save Contact] Using Supabase key type:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "service_role" : "anon");
-    
+
     const { name, email, phone, website } = req.body;
 
     if (!email || !name) {
@@ -989,9 +1115,14 @@ app.post("/api/save-contact", async (req, res) => {
     const supabaseResult = await supabaseService.saveContact(contactData);
     console.log("[Save Contact] Successfully saved to Supabase:", supabaseResult);
 
-    // After Supabase succeeds, send to GoHighLevel
+    // STEP 1: Supabase ✅ (Complete)
+    // STEP 2: GoHighLevel (PRIORITY - Must complete before Instantly.ai)
+    // IMPORTANT: GoHighLevel is MORE IMPORTANT than Instantly.ai
+    console.log("[Save Contact] ===== STEP 2: GOHIGHLEVEL INTEGRATION (PRIORITY) =====");
     let ghlResult = null;
     let ghlError = null;
+
+    // GoHighLevel MUST be attempted - no conditions
     try {
       // Split name into firstName and lastName (same logic as Supabase service)
       const nameParts = name.trim().split(/\s+/);
@@ -1008,7 +1139,15 @@ app.post("/api/save-contact", async (req, res) => {
         source: "Cynthia AI",
       };
 
-      console.log("[Save Contact] Sending to GoHighLevel:", { ...ghlPayload, phone: phone ? "[REDACTED]" : "" });
+      console.log("[Save Contact] Sending to GoHighLevel:", {
+        firstName,
+        lastName,
+        email: email.trim().toLowerCase(),
+        phone: phone ? "[REDACTED]" : "",
+        locationId: ghlPayload.locationId,
+        tags: ghlPayload.tags,
+        source: ghlPayload.source,
+      });
 
       const ghlResponse = await fetch("https://services.leadconnectorhq.com/contacts/", {
         method: "POST",
@@ -1020,6 +1159,9 @@ app.post("/api/save-contact", async (req, res) => {
         body: JSON.stringify(ghlPayload),
       });
 
+      console.log("[Save Contact] GoHighLevel API response status:", ghlResponse.status);
+      console.log("[Save Contact] GoHighLevel API response headers:", Object.fromEntries(ghlResponse.headers.entries()));
+
       if (!ghlResponse.ok) {
         const errorText = await ghlResponse.text();
         let errorData: any;
@@ -1028,6 +1170,12 @@ app.post("/api/save-contact", async (req, res) => {
         } catch {
           errorData = { message: errorText };
         }
+        console.error("[Save Contact] GoHighLevel API error response:", {
+          status: ghlResponse.status,
+          statusText: ghlResponse.statusText,
+          errorData,
+          errorText,
+        });
         const error: any = new Error(`GoHighLevel API error: ${errorData.message || errorText} (Status: ${ghlResponse.status})`);
         error.status = ghlResponse.status;
         error.responseData = errorData;
@@ -1035,30 +1183,39 @@ app.post("/api/save-contact", async (req, res) => {
       }
 
       ghlResult = await ghlResponse.json();
-      console.log("[Save Contact] Successfully sent to GoHighLevel:", ghlResult);
+      console.log("[Save Contact] ===== GOHIGHLEVEL SUCCESS =====");
+      console.log("[Save Contact] Successfully sent to GoHighLevel:", JSON.stringify(ghlResult, null, 2));
+      console.log("[Save Contact] GoHighLevel Contact ID:", ghlResult?.contact?.id || ghlResult?.id || "N/A");
     } catch (ghlErr: any) {
+      console.error("[Save Contact] ===== GOHIGHLEVEL ERROR (CRITICAL) =====");
       ghlError = {
         message: ghlErr.message || "Unknown error",
         status: ghlErr.status || null,
         responseData: ghlErr.responseData || null,
       };
+      console.error("[Save Contact] CRITICAL: GoHighLevel integration failed!");
       console.error("[Save Contact] Error sending to GoHighLevel:", ghlErr);
       console.error("[Save Contact] GoHighLevel error details:", {
         message: ghlErr.message,
         status: ghlErr.status,
         responseData: ghlErr.responseData,
+        stack: ghlErr.stack,
       });
-      // Don't throw - we don't want to block Supabase success
+      // Log error but continue - Instantly.ai should still run
+      console.error("[Save Contact] Continuing to Instantly.ai despite GoHighLevel error");
     }
 
-    // Add lead to Instantly.ai IMMEDIATELY (don't wait for workflow)
-    // This ensures leads are captured even if workflow fails or doesn't run
+    // STEP 3: Instantly.ai (After GoHighLevel completes)
+    // This runs AFTER GoHighLevel to ensure GoHighLevel gets priority
+    console.log("[Save Contact] ===== STEP 3: INSTANTLY.AI INTEGRATION =====");
     let instantlyResult = null;
     let instantlyError = null;
+
+    // Instantly.ai is less critical than GoHighLevel, but should still run
     if (process.env.INSTANTLY_AI_API_KEY) {
       try {
         const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
-        
+
         // Split name into first and last name
         const nameParts = name.trim().split(/\s+/);
         const firstName = nameParts[0] || "";
@@ -1117,115 +1274,127 @@ app.post("/api/save-contact", async (req, res) => {
 
       if (isValidUrl) {
         (async () => {
-        try {
-          console.log("[Save Contact] Auto-triggering legal analyzer for:", normalizedWebsite);
-          
-          const leadInfo = {
-            name: name,
-            company: "", // Could extract from name if needed
-            email: email,
-          };
+          try {
+            console.log("[Save Contact] Auto-triggering legal analyzer for:", normalizedWebsite);
 
-          const workflowResult = await emailWorkflow.execute(normalizedWebsite, leadInfo);
+            const leadInfo = {
+              name: name,
+              company: "", // Could extract from name if needed
+              email: email,
+            };
 
-          if (workflowResult.error) {
-            console.error("[Save Contact] Workflow error:", workflowResult.error);
-            // Save error result to database
-            try {
-              await workflowResultsService.saveWorkflowResult({
-                websiteUrl: normalizedWebsite,
-                leadInfo,
-                error: workflowResult.error,
-                status: "error",
-              });
-            } catch (saveError) {
-              console.error("[Save Contact] Error saving failed workflow result:", saveError);
-            }
-          } else {
-            // Save successful workflow results
-            try {
-              const contactInfo = workflowResult.socialMedia ? {
-                instagram: workflowResult.socialMedia.instagram,
-                socialLinks: workflowResult.socialMedia.socialLinks,
-                emails: workflowResult.socialMedia.emails || [],
-              } : undefined;
+            const workflowResult = await emailWorkflow.execute(normalizedWebsite, leadInfo);
 
-              await workflowResultsService.saveWorkflowResult({
-                websiteUrl: workflowResult.websiteUrl,
-                leadInfo,
-                legalDocuments: workflowResult.legalDocuments,
-                analysis: workflowResult.analysis,
-                email: workflowResult.email,
-                contactInfo,
-                executionDetails: workflowResult.executionDetails,
-                status: "completed",
-              });
-              console.log("[Save Contact] Successfully saved workflow results for contact");
-
-              // UPDATE Instantly.ai lead with the generated email content as custom variables
-              // Since we already added the lead immediately, we'll update it with email content
-              // Using skip_if_in_campaign: true will update the existing lead
-              if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
-                try {
-                  const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
-                  
-                  // Split name into first and last name
-                  const nameParts = name.trim().split(/\s+/);
-                  const firstName = nameParts[0] || "";
-                  const lastName = nameParts.slice(1).join(" ") || "";
-
-                  // Clean up the email body HTML for Instantly AI (remove excessive inline styles)
-                  const cleanEmailBody = workflowResult.email.body
-                    .replace(/style="[^"]*line-height:\s*[^;"]*[^"]*"/g, "")
-                    .replace(/style="[^"]*margin[^"]*"/g, "")
-                    .replace(/style="[^"]*"/g, "")
-                    .replace(/\n{3,}/g, "\n\n")
-                    .trim();
-
-                  const instantlyLeadData = {
-                    first_name: firstName,
-                    last_name: lastName,
-                    phone: phone?.trim() || "",
-                    website: normalizedWebsite,
-                    custom_variables: {
-                      email_subject: workflowResult.email.subject,
-                      email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
-                      email_body: cleanEmailBody, // Cleaned version as backup
-                    },
-                  };
-
-                  console.log("[Save Contact] Updating Instantly.ai lead with email content:", {
-                    email: email.trim().toLowerCase(),
-                    campaignId,
-                    hasEmailSubject: !!workflowResult.email.subject,
-                    hasEmailBody: !!workflowResult.email.body,
-                  });
-
-                  // Update the lead by adding again with updateIfExists: true
-                  // This will update the existing lead's custom variables
-                  await instantlyService.addLeadToCampaign(
-                    email.trim().toLowerCase(),
-                    campaignId,
-                    instantlyLeadData,
-                    true // updateIfExists - will update existing lead in campaign
-                  );
-
-                  console.log("[Save Contact] Successfully updated Instantly.ai lead with personalized email content");
-                } catch (instantlyErr: any) {
-                  console.error("[Save Contact] Error updating Instantly.ai lead with email:", instantlyErr);
-                  // Don't throw - workflow already succeeded and lead was already added
-                }
+            if (workflowResult.error) {
+              console.error("[Save Contact] Workflow error:", workflowResult.error);
+              // Save error result to database
+              try {
+                await workflowResultsService.saveWorkflowResult({
+                  websiteUrl: normalizedWebsite,
+                  leadInfo,
+                  error: workflowResult.error,
+                  status: "error",
+                });
+              } catch (saveError) {
+                console.error("[Save Contact] Error saving failed workflow result:", saveError);
               }
-            } catch (saveError: any) {
-              console.error("[Save Contact] Error saving workflow results:", saveError);
+            } else {
+              // Save successful workflow results
+              try {
+                const contactInfo = workflowResult.socialMedia ? {
+                  instagram: workflowResult.socialMedia.instagram,
+                  socialLinks: workflowResult.socialMedia.socialLinks,
+                  emails: workflowResult.socialMedia.emails || [],
+                } : undefined;
+
+                await workflowResultsService.saveWorkflowResult({
+                  websiteUrl: workflowResult.websiteUrl,
+                  leadInfo,
+                  legalDocuments: workflowResult.legalDocuments,
+                  analysis: workflowResult.analysis,
+                  email: workflowResult.email,
+                  contactInfo,
+                  executionDetails: workflowResult.executionDetails,
+                  status: "completed",
+                });
+                console.log("[Save Contact] Successfully saved workflow results for contact");
+
+                // UPDATE Instantly.ai lead with the generated email content as custom variables
+                // Since we already added the lead immediately, we'll update it with email content
+                // Using skip_if_in_campaign: true will update the existing lead
+                if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
+                  try {
+                    const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
+
+                    // Split name into first and last name
+                    const nameParts = name.trim().split(/\s+/);
+                    const firstName = nameParts[0] || "";
+                    const lastName = nameParts.slice(1).join(" ") || "";
+
+                    // Clean up the email body HTML for Instantly AI (remove excessive inline styles)
+                    const cleanEmailBody = workflowResult.email.body
+                      .replace(/style="[^"]*line-height:\s*[^;"]*[^"]*"/g, "")
+                      .replace(/style="[^"]*margin[^"]*"/g, "")
+                      .replace(/style="[^"]*"/g, "")
+                      .replace(/\n{3,}/g, "\n\n")
+                      .trim();
+
+                    const instantlyLeadData = {
+                      first_name: firstName,
+                      last_name: lastName,
+                      phone: phone?.trim() || "",
+                      website: normalizedWebsite,
+                      custom_variables: {
+                        email_subject: workflowResult.email.subject,
+                        email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
+                        email_body: cleanEmailBody, // Cleaned version as backup
+                      },
+                    };
+
+                    console.log("[Save Contact] Updating Instantly.ai lead with email content:", {
+                      email: email.trim().toLowerCase(),
+                      campaignId,
+                      hasEmailSubject: !!workflowResult.email.subject,
+                      hasEmailBody: !!workflowResult.email.body,
+                    });
+
+                    // Update the lead by adding again with updateIfExists: true
+                    // This will update the existing lead's custom variables
+                    await instantlyService.addLeadToCampaign(
+                      email.trim().toLowerCase(),
+                      campaignId,
+                      instantlyLeadData,
+                      true // updateIfExists - will update existing lead in campaign
+                    );
+
+                    console.log("[Save Contact] Successfully updated Instantly.ai lead with personalized email content");
+                  } catch (instantlyErr: any) {
+                    console.error("[Save Contact] Error updating Instantly.ai lead with email:", instantlyErr);
+                    // Don't throw - workflow already succeeded and lead was already added
+                  }
+                }
+              } catch (saveError: any) {
+                console.error("[Save Contact] Error saving workflow results:", saveError);
+              }
             }
-          }
-        } catch (workflowError: any) {
-          console.error("[Save Contact] Error running workflow:", workflowError);
-          // Don't throw - we don't want to break the contact save
+          } catch (workflowError: any) {
+            console.error("[Save Contact] Error running workflow:", workflowError);
+            // Don't throw - we don't want to break the contact save
           }
         })(); // Immediately invoke async function
       }
+    }
+
+    // Log final integration status (in priority order)
+    console.log("[Save Contact] ===== FINAL INTEGRATION STATUS (PRIORITY ORDER) =====");
+    console.log("[Save Contact] 1. Supabase:", supabaseResult ? "✅ Success" : "❌ Failed");
+    console.log("[Save Contact] 2. GoHighLevel (PRIORITY):", ghlResult ? "✅ Success" : (ghlError ? `❌ Error: ${ghlError.message}` : "⚠️ Not attempted"));
+    console.log("[Save Contact] 3. Instantly.ai:", instantlyResult ? "✅ Success" : (instantlyError ? `❌ Error: ${instantlyError.message}` : "⚠️ Not attempted"));
+
+    // Alert if GoHighLevel failed
+    if (!ghlResult && ghlError) {
+      console.error("[Save Contact] ⚠️⚠️⚠️ WARNING: GoHighLevel FAILED - This is critical! ⚠️⚠️⚠️");
+      console.error("[Save Contact] GoHighLevel error:", ghlError.message);
     }
 
     res.json({
@@ -1251,6 +1420,613 @@ app.post("/api/save-contact", async (req, res) => {
       code: error.code,
       details: error.details,
       hint: error.hint,
+    });
+  }
+});
+
+// ONE-TIME MIGRATION: Tag all existing business profile users in GoHighLevel
+app.post("/api/migrate-business-profile-tags", async (req, res) => {
+  try {
+    console.log("[Migration] Starting migration to tag all existing business profile users...");
+
+    // Get all business profiles with user emails from Supabase
+    const supabase = createClient(
+      process.env.SUPABASE_URL || "",
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+    );
+
+    // Query all business profiles and join with auth.users to get emails
+    const { data: profiles, error: queryError } = await supabase
+      .from('business_profiles')
+      .select(`
+        user_id,
+        business_name,
+        website_url,
+        instagram,
+        business_type,
+        team_size,
+        monthly_clients,
+        uses_photos,
+        primary_concern,
+        hosts_retreats,
+        offers_online_courses,
+        has_w2_employees,
+        sells_products,
+        services,
+        has_physical_movement,
+        collects_online,
+        hires_staff,
+        is_offsite_or_international,
+        created_at
+      `);
+
+    if (queryError) {
+      console.error("[Migration] Error querying business profiles:", queryError);
+      return res.status(500).json({
+        error: "Failed to query business profiles",
+        message: queryError.message,
+      });
+    }
+
+    if (!profiles || profiles.length === 0) {
+      console.log("[Migration] No business profiles found");
+      return res.json({
+        success: true,
+        message: "No business profiles found to migrate",
+        results: [],
+      });
+    }
+
+    console.log(`[Migration] Found ${profiles.length} business profiles to migrate`);
+
+    // For each profile, get the user's email and tag them
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const profile of profiles) {
+      try {
+        // Get user email from auth.users
+        const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(
+          profile.user_id
+        );
+
+        if (userError || !user) {
+          console.error(`[Migration] Error getting user for profile ${profile.user_id}:`, userError);
+          results.push({
+            userId: profile.user_id,
+            businessName: profile.business_name,
+            success: false,
+            error: "User not found",
+          });
+          errorCount++;
+          continue;
+        }
+
+        const email = user.email;
+        console.log(`[Migration] Processing user: ${email} (${profile.business_name || 'No name'})`);
+
+        // Step 1: Look up the contact in GoHighLevel by email
+        const lookupResponse = await fetch(
+          `https://services.leadconnectorhq.com/contacts/lookup?email=${encodeURIComponent(email.trim().toLowerCase())}&locationId=7HUNbHEuRf1cXZD4hxxr`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+              Version: "2021-07-28",
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        // If contact doesn't exist in GHL, create them first
+        if (!lookupResponse.ok) {
+          console.log(`[Migration] Contact not found in GHL for ${email}, creating new contact...`);
+
+          // Split name from email or use business name
+          const nameParts = (user.user_metadata?.name || profile.business_name || email.split('@')[0]).trim().split(/\s+/);
+          const firstName = nameParts[0] || "";
+          const lastName = nameParts.slice(1).join(" ") || "";
+
+          // Create new contact with both tags
+          const createPayload = {
+            firstName,
+            lastName,
+            email: email.trim().toLowerCase(),
+            locationId: "7HUNbHEuRf1cXZD4hxxr",
+            tags: ["ricki new funnel", "created business profile"],
+            source: "Cynthia AI - Migration",
+          };
+
+          const createResponse = await fetch("https://services.leadconnectorhq.com/contacts/", {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+              Version: "2021-07-28",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(createPayload),
+          });
+
+          if (!createResponse.ok) {
+            const errorText = await createResponse.text();
+            let errorData: any;
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { message: errorText };
+            }
+
+            // Check if it's a duplicate contact error - if so, we can extract the contactId and update it!
+            if (errorData.statusCode === 400 && errorData.message?.includes("duplicated contacts") && errorData.meta?.contactId) {
+              console.log(`[Migration] Contact already exists in GHL (${email}), updating tags using contactId from error...`);
+
+              const existingContactId = errorData.meta.contactId;
+
+              // First, get the existing contact to retrieve current tags
+              const getContactResponse = await fetch(
+                `https://services.leadconnectorhq.com/contacts/${existingContactId}`,
+                {
+                  method: "GET",
+                  headers: {
+                    Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+                    Version: "2021-07-28",
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+
+              if (!getContactResponse.ok) {
+                console.error(`[Migration] Failed to get existing contact details for ${email}`);
+                results.push({
+                  email,
+                  businessName: profile.business_name,
+                  success: false,
+                  error: `Contact exists but couldn't retrieve details`,
+                });
+                errorCount++;
+                continue;
+              }
+
+              const contactData = await getContactResponse.json();
+              const existingTags = contactData.contact?.tags || [];
+
+              // Add the new tag if it doesn't already exist
+              const newTag = "created business profile";
+              if (existingTags.includes(newTag)) {
+                console.log(`[Migration] User ${email} already has the tag, skipping`);
+                results.push({
+                  email,
+                  businessName: profile.business_name,
+                  success: true,
+                  alreadyTagged: true,
+                  message: "Already had the tag",
+                });
+                successCount++;
+                await new Promise(resolve => setTimeout(resolve, 100));
+                continue;
+              }
+
+              const updatedTags = [...existingTags, newTag];
+
+              // Build custom fields from business profile data
+              const customFields: any = {};
+              if (profile.business_name) customFields.business_name = profile.business_name;
+              if (profile.website_url) customFields.website = profile.website_url;
+              if (profile.instagram) customFields.instagram_handle = profile.instagram;
+              if (profile.business_type) customFields.business_type = profile.business_type;
+              if (profile.team_size) customFields.team_size = profile.team_size;
+              if (profile.monthly_clients) customFields.monthly_clients = profile.monthly_clients;
+              if (profile.primary_concern) customFields.primary_concern = profile.primary_concern;
+
+              // Yes/No boolean fields
+              if (profile.uses_photos !== null && profile.uses_photos !== undefined) {
+                customFields.uses_client_photos = profile.uses_photos ? 'Yes' : 'No';
+              }
+              if (profile.hosts_retreats !== null && profile.hosts_retreats !== undefined) {
+                customFields.hosts_retreats = profile.hosts_retreats ? 'Yes' : 'No';
+              }
+              if (profile.offers_online_courses !== null && profile.offers_online_courses !== undefined) {
+                customFields.offers_online_courses = profile.offers_online_courses ? 'Yes' : 'No';
+              }
+              if (profile.has_w2_employees !== null && profile.has_w2_employees !== undefined) {
+                customFields.has_w2_employees = profile.has_w2_employees ? 'Yes' : 'No';
+              }
+              if (profile.sells_products !== null && profile.sells_products !== undefined) {
+                customFields.sells_products = profile.sells_products ? 'Yes' : 'No';
+              }
+              if (profile.has_physical_movement !== null && profile.has_physical_movement !== undefined) {
+                customFields.physical_movement = profile.has_physical_movement ? 'Yes' : 'No';
+              }
+              if (profile.collects_online !== null && profile.collects_online !== undefined) {
+                customFields.online_payments = profile.collects_online ? 'Yes' : 'No';
+              }
+              if (profile.hires_staff !== null && profile.hires_staff !== undefined) {
+                customFields.hires_staff = profile.hires_staff ? 'Yes' : 'No';
+              }
+              if (profile.is_offsite_or_international !== null && profile.is_offsite_or_international !== undefined) {
+                customFields.offsite_international = profile.is_offsite_or_international ? 'Yes' : 'No';
+              }
+
+              // Services array
+              if (profile.services && Array.isArray(profile.services) && profile.services.length > 0) {
+                customFields.services_offered = profile.services.join(', ');
+              }
+
+              const updatePayload: any = { tags: updatedTags };
+              if (Object.keys(customFields).length > 0) {
+                updatePayload.customField = customFields;
+              }
+
+              // Update the contact with new tags AND custom fields
+              const updateResponse = await fetch(
+                `https://services.leadconnectorhq.com/contacts/${existingContactId}`,
+                {
+                  method: "PUT",
+                  headers: {
+                    Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+                    Version: "2021-07-28",
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify(updatePayload),
+                }
+              );
+
+              if (!updateResponse.ok) {
+                const updateError = await updateResponse.text();
+                console.error(`[Migration] Failed to update tags for existing contact ${email}:`, updateError);
+                results.push({
+                  email,
+                  businessName: profile.business_name,
+                  success: false,
+                  error: `Failed to update existing contact tags`,
+                });
+                errorCount++;
+                continue;
+              }
+
+              console.log(`[Migration] ✅ Successfully updated existing contact ${email} with business profile tag`);
+              results.push({
+                email,
+                businessName: profile.business_name,
+                success: true,
+                updated: true,
+                previousTags: existingTags,
+                newTags: updatedTags,
+              });
+              successCount++;
+
+              await new Promise(resolve => setTimeout(resolve, 100));
+              continue;
+            }
+
+            // Not a duplicate error, log the failure
+            console.error(`[Migration] Error creating contact in GHL for ${email}:`, errorText);
+            results.push({
+              email,
+              businessName: profile.business_name,
+              success: false,
+              error: `Failed to create contact in GoHighLevel: ${errorData.message || errorText}`,
+            });
+            errorCount++;
+            continue;
+          }
+
+          const createResult = await createResponse.json();
+          console.log(`[Migration] ✅ Created new contact in GHL for ${email} with both tags`);
+          results.push({
+            email,
+            businessName: profile.business_name,
+            success: true,
+            created: true,
+            tags: ["ricki new funnel", "created business profile"],
+          });
+          successCount++;
+
+          // Add delay
+          await new Promise(resolve => setTimeout(resolve, 100));
+          continue;
+        }
+
+        const lookupData = await lookupResponse.json();
+        const contactId = lookupData.contacts?.[0]?.id || lookupData.contact?.id;
+
+        if (!contactId) {
+          console.error(`[Migration] No contact ID found for ${email}`);
+          results.push({
+            email,
+            businessName: profile.business_name,
+            success: false,
+            error: "No contact ID in GoHighLevel response",
+          });
+          errorCount++;
+          continue;
+        }
+
+        // Step 2: Get existing tags
+        const existingTags = lookupData.contacts?.[0]?.tags || lookupData.contact?.tags || [];
+
+        // Step 3: Add the new tag if it doesn't already exist
+        const newTag = "created business profile";
+        if (existingTags.includes(newTag)) {
+          console.log(`[Migration] User ${email} already has the tag, skipping`);
+          results.push({
+            email,
+            businessName: profile.business_name,
+            success: true,
+            alreadyTagged: true,
+            message: "Already had the tag",
+          });
+          successCount++;
+          continue;
+        }
+
+        const updatedTags = [...existingTags, newTag];
+
+        // Build custom fields from business profile data
+        const customFields: any = {};
+        if (profile.business_name) customFields.business_name = profile.business_name;
+        if (profile.website_url) customFields.website = profile.website_url;
+        if (profile.instagram) customFields.instagram_handle = profile.instagram;
+        if (profile.business_type) customFields.business_type = profile.business_type;
+        if (profile.team_size) customFields.team_size = profile.team_size;
+        if (profile.monthly_clients) customFields.monthly_clients = profile.monthly_clients;
+        if (profile.primary_concern) customFields.primary_concern = profile.primary_concern;
+
+        // Yes/No boolean fields
+        if (profile.uses_photos !== null && profile.uses_photos !== undefined) {
+          customFields.uses_client_photos = profile.uses_photos ? 'Yes' : 'No';
+        }
+        if (profile.hosts_retreats !== null && profile.hosts_retreats !== undefined) {
+          customFields.hosts_retreats = profile.hosts_retreats ? 'Yes' : 'No';
+        }
+        if (profile.offers_online_courses !== null && profile.offers_online_courses !== undefined) {
+          customFields.offers_online_courses = profile.offers_online_courses ? 'Yes' : 'No';
+        }
+        if (profile.has_w2_employees !== null && profile.has_w2_employees !== undefined) {
+          customFields.has_w2_employees = profile.has_w2_employees ? 'Yes' : 'No';
+        }
+        if (profile.sells_products !== null && profile.sells_products !== undefined) {
+          customFields.sells_products = profile.sells_products ? 'Yes' : 'No';
+        }
+        if (profile.has_physical_movement !== null && profile.has_physical_movement !== undefined) {
+          customFields.physical_movement = profile.has_physical_movement ? 'Yes' : 'No';
+        }
+        if (profile.collects_online !== null && profile.collects_online !== undefined) {
+          customFields.online_payments = profile.collects_online ? 'Yes' : 'No';
+        }
+        if (profile.hires_staff !== null && profile.hires_staff !== undefined) {
+          customFields.hires_staff = profile.hires_staff ? 'Yes' : 'No';
+        }
+        if (profile.is_offsite_or_international !== null && profile.is_offsite_or_international !== undefined) {
+          customFields.offsite_international = profile.is_offsite_or_international ? 'Yes' : 'No';
+        }
+
+        // Services array
+        if (profile.services && Array.isArray(profile.services) && profile.services.length > 0) {
+          customFields.services_offered = profile.services.join(', ');
+        }
+
+        const updatePayload: any = { tags: updatedTags };
+        if (Object.keys(customFields).length > 0) {
+          updatePayload.customField = customFields;
+        }
+
+        // Step 4: Update the contact with the new tags AND custom fields
+        const updateResponse = await fetch(
+          `https://services.leadconnectorhq.com/contacts/${contactId}`,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+              Version: "2021-07-28",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(updatePayload),
+          }
+        );
+
+        if (!updateResponse.ok) {
+          const errorText = await updateResponse.text();
+          console.error(`[Migration] Error updating contact for ${email}:`, errorText);
+          results.push({
+            email,
+            businessName: profile.business_name,
+            success: false,
+            error: "Failed to update contact in GoHighLevel",
+          });
+          errorCount++;
+          continue;
+        }
+
+        console.log(`[Migration] ✅ Successfully tagged ${email} and synced ${Object.keys(customFields).length} custom fields`);
+        results.push({
+          email,
+          businessName: profile.business_name,
+          success: true,
+          previousTags: existingTags,
+          newTags: updatedTags,
+          customFieldsUpdated: Object.keys(customFields).length,
+        });
+        successCount++;
+
+        // Add a small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+      } catch (profileError: any) {
+        console.error(`[Migration] Error processing profile ${profile.user_id}:`, profileError);
+        results.push({
+          userId: profile.user_id,
+          businessName: profile.business_name,
+          success: false,
+          error: profileError.message,
+        });
+        errorCount++;
+      }
+    }
+
+    console.log(`[Migration] Migration complete! Success: ${successCount}, Errors: ${errorCount}`);
+
+    res.json({
+      success: true,
+      message: `Migration complete. Tagged ${successCount} users, ${errorCount} errors.`,
+      summary: {
+        total: profiles.length,
+        success: successCount,
+        errors: errorCount,
+      },
+      results,
+    });
+  } catch (error: any) {
+    console.error("[Migration] Error in migration:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to run migration",
+    });
+  }
+});
+
+// Add GoHighLevel tag for business profile creation + sync all profile data
+app.post("/api/add-ghl-business-profile-tag", async (req, res) => {
+  try {
+    const { email, profileData } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "email is required",
+      });
+    }
+
+    console.log("[GHL Tag] Adding 'created business profile' tag and syncing data for:", email);
+
+    // Step 1: Look up the contact in GoHighLevel by email
+    const lookupResponse = await fetch(
+      `https://services.leadconnectorhq.com/contacts/lookup?email=${encodeURIComponent(email.trim().toLowerCase())}&locationId=7HUNbHEuRf1cXZD4hxxr`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+          Version: "2021-07-28",
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!lookupResponse.ok) {
+      const errorText = await lookupResponse.text();
+      console.error("[GHL Tag] Error looking up contact:", errorText);
+      return res.status(404).json({
+        error: "Contact not found in GoHighLevel",
+        message: errorText,
+      });
+    }
+
+    const lookupData = await lookupResponse.json();
+    const contactId = lookupData.contacts?.[0]?.id || lookupData.contact?.id;
+
+    if (!contactId) {
+      console.error("[GHL Tag] No contact ID found in lookup response:", lookupData);
+      return res.status(404).json({
+        error: "Contact not found in GoHighLevel",
+        message: "No contact ID in response",
+      });
+    }
+
+    console.log("[GHL Tag] Found contact ID:", contactId);
+
+    // Step 2: Get the existing tags for this contact
+    const existingTags = lookupData.contacts?.[0]?.tags || lookupData.contact?.tags || [];
+    console.log("[GHL Tag] Existing tags:", existingTags);
+
+    // Step 3: Add the new tag if it doesn't already exist
+    const newTag = "created business profile";
+    const updatedTags = existingTags.includes(newTag)
+      ? existingTags
+      : [...existingTags, newTag];
+
+    // Step 4: Build custom fields from profile data
+    const customFields: any = {};
+
+    if (profileData) {
+      // Basic business info
+      if (profileData.businessName) customFields.business_name = profileData.businessName;
+      if (profileData.website) customFields.website = profileData.website;
+      if (profileData.instagram) customFields.instagram_handle = profileData.instagram;
+      if (profileData.businessType) customFields.business_type = profileData.businessType;
+
+      // Scale & operations
+      if (profileData.staffCount) customFields.team_size = profileData.staffCount;
+      if (profileData.clientCount) customFields.monthly_clients = profileData.clientCount;
+      if (profileData.primaryConcern) customFields.primary_concern = profileData.primaryConcern;
+
+      // Yes/No fields
+      if (profileData.usesPhotos !== undefined) customFields.uses_client_photos = profileData.usesPhotos ? 'Yes' : 'No';
+      if (profileData.hostsRetreats !== undefined) customFields.hosts_retreats = profileData.hostsRetreats ? 'Yes' : 'No';
+      if (profileData.offersOnlineCourses !== undefined) customFields.offers_online_courses = profileData.offersOnlineCourses ? 'Yes' : 'No';
+      if (profileData.hasEmployees !== undefined) customFields.has_w2_employees = profileData.hasEmployees ? 'Yes' : 'No';
+      if (profileData.sellsProducts !== undefined) customFields.sells_products = profileData.sellsProducts ? 'Yes' : 'No';
+
+      // Onboarding questions
+      if (profileData.services && Array.isArray(profileData.services)) {
+        customFields.services_offered = profileData.services.join(', ');
+      }
+      if (profileData.hasPhysicalMovement !== undefined) customFields.physical_movement = profileData.hasPhysicalMovement ? 'Yes' : 'No';
+      if (profileData.collectsOnline !== undefined) customFields.online_payments = profileData.collectsOnline ? 'Yes' : 'No';
+      if (profileData.hiresStaff !== undefined) customFields.hires_staff = profileData.hiresStaff ? 'Yes' : 'No';
+      if (profileData.isOffsiteOrInternational !== undefined) customFields.offsite_international = profileData.isOffsiteOrInternational ? 'Yes' : 'No';
+    }
+
+    console.log("[GHL Tag] Custom fields to update:", Object.keys(customFields).length);
+
+    // Step 5: Update the contact with tags AND custom fields
+    const updatePayload: any = {
+      tags: updatedTags,
+    };
+
+    // Only add customField if we have data
+    if (Object.keys(customFields).length > 0) {
+      updatePayload.customField = customFields;
+    }
+
+    const updateResponse = await fetch(
+      `https://services.leadconnectorhq.com/contacts/${contactId}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+          Version: "2021-07-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatePayload),
+      }
+    );
+
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text();
+      console.error("[GHL Tag] Error updating contact:", errorText);
+      return res.status(500).json({
+        error: "Failed to update contact in GoHighLevel",
+        message: errorText,
+      });
+    }
+
+    const updateResult = await updateResponse.json();
+    console.log("[GHL Tag] Successfully added 'created business profile' tag and synced custom fields");
+    console.log("[GHL Tag] Updated tags:", updatedTags);
+    console.log("[GHL Tag] Updated custom fields:", Object.keys(customFields).join(', '));
+
+    res.json({
+      success: true,
+      contactId,
+      tags: updatedTags,
+      customFieldsUpdated: Object.keys(customFields).length,
+      message: "Successfully updated GoHighLevel contact with profile data",
+    });
+  } catch (error: any) {
+    console.error("[GHL Tag] Error adding business profile tag:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to add GoHighLevel tag",
     });
   }
 });
@@ -1291,7 +2067,7 @@ app.get("/api/cold-leads", async (req, res) => {
     // Use service role key if available for better access (bypasses RLS)
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
     const serviceUrl = process.env.SUPABASE_URL || "";
-    
+
     if (!serviceUrl || !serviceKey) {
       console.error("[Cold Leads API] Missing Supabase credentials");
       return res.status(500).json({
@@ -1304,7 +2080,7 @@ app.get("/api/cold-leads", async (req, res) => {
 
     // Create service instance with the appropriate key
     const leadsService = new ColdLeadsService(serviceUrl, serviceKey);
-    
+
     let leads;
     if (search) {
       console.log("[Cold Leads API] Searching for:", search);
@@ -1384,7 +2160,7 @@ app.get("/api/workflow-results", async (req, res) => {
     // Use service role key if available for better access
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
     const serviceUrl = process.env.SUPABASE_URL || "";
-    
+
     if (serviceKey && serviceUrl) {
       const tempService = new WorkflowResultsService(serviceUrl, serviceKey);
       const results = await tempService.getAllWorkflowResults(limit, offset);
@@ -1404,6 +2180,95 @@ app.get("/api/workflow-results", async (req, res) => {
     res.status(500).json({
       error: "Internal server error",
       message: error.message || "Failed to fetch workflow results",
+    });
+  }
+});
+
+// ============================================
+// Document Generation API Endpoints
+// ============================================
+
+// Generate personalized document from template
+app.post("/api/documents/generate", async (req, res) => {
+  try {
+    const { templateName, userId } = req.body;
+
+    if (!templateName) {
+      return res.status(400).json({
+        error: "templateName is required",
+      });
+    }
+
+    console.log(`[API] Generating document: ${templateName} for user: ${userId || 'anonymous'}`);
+
+    // Get user's business profile data
+    let profileData: any = {};
+
+    if (userId && process.env.SUPABASE_URL) {
+      try {
+        const { data: profile, error: profileError } = await createClient(
+          process.env.SUPABASE_URL || "",
+          process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+        )
+          .from('business_profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        if (!profileError && profile) {
+          console.log('[API] Loaded business profile from database');
+          profileData = {
+            businessName: profile.business_name,
+            legalEntityName: profile.legal_entity_name,
+            entityType: profile.entity_type,
+            state: profile.state,
+            businessAddress: profile.business_address,
+            ownerName: profile.owner_name,
+            phone: profile.phone,
+            website: profile.website_url,
+            instagram: profile.instagram,
+            businessType: profile.business_type,
+            services: profile.services || [],
+          };
+
+          // Also get user's email
+          const { data: { user } } = await createClient(
+            process.env.SUPABASE_URL || "",
+            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+          ).auth.admin.getUserById(userId);
+
+          if (user) {
+            profileData.email = user.email;
+          }
+        } else {
+          console.log('[API] No business profile found for user, using empty data');
+        }
+      } catch (err) {
+        console.error('[API] Error loading business profile:', err);
+        // Continue with empty profile data
+      }
+    }
+
+    // Generate the document
+    const pdfBuffer = await documentGenerationService.generateDocument(
+      templateName,
+      profileData
+    );
+
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${templateName}-${Date.now()}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    // Send the PDF
+    res.send(pdfBuffer);
+  } catch (error: any) {
+    console.error("[API] Error generating document:", error);
+    console.error("[API] Error stack:", error.stack);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to generate document",
+      stack: error.stack,
     });
   }
 });
@@ -1558,7 +2423,7 @@ app.post("/api/business/onboard", async (req, res) => {
 
     // Check if business already exists
     let business = await businessService.getBusinessByDomain(normalizedDomain);
-    
+
     if (!business) {
       // Create business
       business = await businessService.createBusiness({

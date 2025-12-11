@@ -3,15 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserAnswers } from '../../types/wellness';
 import { ProgressBar } from '../../components/wellness/ui/ProgressBar';
 import { QuestionCard } from '../../components/wellness/onboarding/QuestionCard';
-import { ShieldCheck, Mail } from 'lucide-react';
+import { ShieldCheck, Mail, Globe, Upload, Download } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 const INITIAL_ANSWERS: UserAnswers = {
   services: [],
-  hasPhysicalMovement: false,
-  collectsOnline: false,
-  hiresStaff: false,
-  isOffsiteOrInternational: false,
+  hasPhysicalMovement: true,
+  collectsOnline: true,
+  hiresStaff: true,
+  isOffsiteOrInternational: true,
 };
 
 export const Onboarding: React.FC = () => {
@@ -40,13 +40,13 @@ export const Onboarding: React.FC = () => {
       // Check if they have completed onboarding data FIRST
       const saved = localStorage.getItem('wellness_onboarding_answers');
       console.log('[Onboarding] Checking for existing user, saved data:', !!saved);
-      
+
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           console.log('[Onboarding] Parsed data (full):', JSON.stringify(parsed, null, 2));
           console.log('[Onboarding] Data breakdown:', {
-            hasServices: !!parsed.services, 
+            hasServices: !!parsed.services,
             servicesType: typeof parsed.services,
             isArray: Array.isArray(parsed.services),
             servicesLength: parsed.services?.length,
@@ -60,16 +60,17 @@ export const Onboarding: React.FC = () => {
             isOffsiteOrInternational: parsed.isOffsiteOrInternational,
             isOffsiteOrInternationalType: typeof parsed.isOffsiteOrInternational
           });
-          
+
           // Check if onboarding is complete by verifying all required fields are answered
-          // Required fields: services (array with items), and all 4 boolean questions
+          // Required fields: primaryBusinessType, services (array with items), and all 4 boolean questions
+          const hasPrimaryBusinessType = !!parsed.primaryBusinessType;
           const hasServices = parsed.services && Array.isArray(parsed.services) && parsed.services.length > 0;
           const hasAllBooleans = typeof parsed.hasPhysicalMovement === 'boolean' &&
-                                 typeof parsed.collectsOnline === 'boolean' &&
-                                 typeof parsed.hiresStaff === 'boolean' &&
-                                 typeof parsed.isOffsiteOrInternational === 'boolean';
-          const hasCompletedOnboarding = hasServices && hasAllBooleans;
-          
+            typeof parsed.collectsOnline === 'boolean' &&
+            typeof parsed.hiresStaff === 'boolean' &&
+            typeof parsed.isOffsiteOrInternational === 'boolean';
+          const hasCompletedOnboarding = hasPrimaryBusinessType && hasServices && hasAllBooleans;
+
           console.log('[Onboarding] Completion check result:', {
             hasCompletedOnboarding,
             hasServices,
@@ -79,23 +80,23 @@ export const Onboarding: React.FC = () => {
               booleansCheck: `all 4 are boolean = ${hasAllBooleans}`
             }
           });
-          
+
           // Check if user has a session (has password = onboarding complete)
           let hasActiveSession = false;
           let onboardingCompleteInMetadata = false;
-          
+
           if (supabase) {
             try {
               const { data: { session } } = await supabase.auth.getSession();
               hasActiveSession = !!session;
               onboardingCompleteInMetadata = session?.user?.user_metadata?.onboarding_complete === true;
-              console.log('[Onboarding] Session check:', { 
-                hasActiveSession, 
+              console.log('[Onboarding] Session check:', {
+                hasActiveSession,
                 userId: session?.user?.id,
                 onboardingCompleteInMetadata,
                 hasPassword: hasActiveSession // If they have a session, they have a password
               });
-              
+
               // If user has a session (can log in), they have a password = onboarding is complete
               // Redirect to dashboard
               if (hasActiveSession) {
@@ -107,14 +108,14 @@ export const Onboarding: React.FC = () => {
               console.error('[Onboarding] Error checking session:', sessionErr);
             }
           }
-          
+
           // Fallback: If they have completed onboarding data in localStorage, also redirect
           if (hasCompletedOnboarding) {
             console.log('[Onboarding] User has completed onboarding data - redirecting to dashboard');
             navigate('/wellness/dashboard', { replace: true });
             return;
           }
-          
+
           // They have partial data, continue onboarding
           console.log('[Onboarding] User has partial data, continuing onboarding');
           setAnswers(parsed);
@@ -168,7 +169,7 @@ export const Onboarding: React.FC = () => {
 
     setIsSubmitting(true);
     const trimmedEmail = email.trim().toLowerCase();
-    
+
     // Save email to answers
     updateAnswer('email', trimmedEmail);
 
@@ -178,9 +179,9 @@ export const Onboarding: React.FC = () => {
         // Create user with a temporary random password
         // They'll set their real password on the Business Profile page
         const tempPassword = Math.random().toString(36).slice(-12) + 'A1!@';
-        
+
         console.log('🔐 Creating Supabase user for:', trimmedEmail);
-        
+
         const { data, error } = await supabase.auth.signUp({
           email: trimmedEmail,
           password: tempPassword,
@@ -195,19 +196,19 @@ export const Onboarding: React.FC = () => {
 
         if (error) {
           console.error('❌ Error creating user:', error);
-          
+
           // If user already exists, try to sign in
-          if (error.message?.includes('already registered') || 
-              error.message?.includes('already exists') ||
-              error.message?.includes('User already registered')) {
+          if (error.message?.includes('already registered') ||
+            error.message?.includes('already exists') ||
+            error.message?.includes('User already registered')) {
             console.log('ℹ️ User already exists, attempting to sign in...');
-            
+
             // Try to sign in with the temp password (in case they're returning)
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
               email: trimmedEmail,
               password: tempPassword
             });
-            
+
             if (signInError) {
               // If sign in fails, try magic link
               console.log('ℹ️ Sign in failed, trying magic link...');
@@ -217,7 +218,7 @@ export const Onboarding: React.FC = () => {
                   emailRedirectTo: window.location.origin + '/wellness/dashboard'
                 }
               });
-              
+
               if (otpError) {
                 console.error('Error sending magic link:', otpError);
                 // Continue anyway - user creation will be handled on Business Profile page
@@ -238,14 +239,34 @@ export const Onboarding: React.FC = () => {
         } else if (data.user) {
           console.log('✅ User created successfully:', data.user.id);
           console.log('📧 Email confirmation required:', data.user.email_confirmed_at ? 'No' : 'Yes');
-          
+
+          // Send welcome email
+          try {
+            console.log('📧 Triggering welcome email...');
+            // Fetch handles relative URLs by using current origin
+            // In dev: Vite proxies /api -> localhost:3001
+            // In prod: Firebase rewrites /api -> Functions
+            fetch('/api/emails/welcome', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: trimmedEmail,
+                name: trimmedEmail.split('@')[0] // Fallback name until we have real name
+              })
+            }).then(res => res.json())
+              .then(data => console.log('📧 Welcome email result:', data))
+              .catch(err => console.error('❌ Welcome email error:', err));
+          } catch (emailErr) {
+            console.error('❌ Error triggering welcome email:', emailErr);
+          }
+
           // User created - try to auto-sign in (may require email confirmation depending on Supabase settings)
           try {
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
               email: trimmedEmail,
               password: tempPassword
             });
-            
+
             if (signInError) {
               // May require email confirmation - that's okay, user can set password on profile page
               console.log('ℹ️ Auto-signin requires email confirmation:', signInError.message);
@@ -278,11 +299,11 @@ export const Onboarding: React.FC = () => {
   const nextStep = () => {
     // Step 0: Welcome
     // Step 1: Email collection (handled separately)
-    // Steps 2-6: Questions (5 questions)
+    // Steps 2-7: Questions (6 questions)
     if (step === 0) {
       // Move to email collection
       setStep(1);
-    } else if (step < 6) { // 1 is email, 2-6 are questions
+    } else if (step < 7) { // 1 is email, 2-7 are questions
       setStep(step + 1);
     } else {
       // Finished - go directly to dashboard (Business Profile is optional and can be accessed later)
@@ -316,7 +337,30 @@ export const Onboarding: React.FC = () => {
           <p className="text-lg text-slate-600 leading-relaxed max-w-md mx-auto">
             Answer a few quick questions so we can tailor every agreement, waiver, and policy to your specific business.
           </p>
-          <button 
+
+          {/* Feature Bullet Points */}
+          <div className="space-y-3 max-w-md mx-auto text-left">
+            <div className="flex items-start gap-3 text-slate-700">
+              <div className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center mt-0.5">
+                <Globe size={14} />
+              </div>
+              <span className="text-base leading-relaxed">Scan your website compliance</span>
+            </div>
+            <div className="flex items-start gap-3 text-slate-700">
+              <div className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center mt-0.5">
+                <Upload size={14} />
+              </div>
+              <span className="text-base leading-relaxed">Upload current documents for analysis</span>
+            </div>
+            <div className="flex items-start gap-3 text-slate-700">
+              <div className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center mt-0.5">
+                <Download size={14} />
+              </div>
+              <span className="text-base leading-relaxed">Downloadable templates</span>
+            </div>
+          </div>
+
+          <button
             onClick={nextStep}
             className="inline-flex h-12 items-center justify-center rounded-full bg-brand-600 px-8 text-lg font-medium text-white shadow-lg shadow-brand-200 transition-all hover:bg-brand-700 hover:-translate-y-0.5"
           >
@@ -378,13 +422,25 @@ export const Onboarding: React.FC = () => {
     );
   }
 
-  // Steps 2-6: Questions (5 questions)
-  const totalSteps = 6; // 1 email + 5 questions
+  // Steps 2-9: Questions (8 questions)
+  const totalSteps = 9; // 1 email + 8 questions
   const currentQuestionIndex = step - 2; // Adjust for email step
 
   const renderQuestion = () => {
     switch (currentQuestionIndex) {
       case 0:
+        return (
+          <QuestionCard
+            question="Primary Business Type"
+            type="single"
+            options={['Yoga', 'Pilates', 'Gym', 'Retreats', 'Coaching', 'Breathwork']}
+            selected={answers.primaryBusinessType || null}
+            onAnswer={(val) => updateAnswer('primaryBusinessType', val)}
+            onNext={nextStep}
+          // No back button on first question
+          />
+        );
+      case 1:
         return (
           <QuestionCard
             question="What services does your business offer?"
@@ -393,9 +449,10 @@ export const Onboarding: React.FC = () => {
             selected={answers.services}
             onAnswer={(val) => updateAnswer('services', val)}
             onNext={nextStep}
+            onBack={() => setStep(step - 1)}
           />
         );
-      case 1:
+      case 2:
         return (
           <QuestionCard
             question="Do clients participate in physical movement or hands-on activities?"
@@ -404,9 +461,10 @@ export const Onboarding: React.FC = () => {
             selected={answers.hasPhysicalMovement}
             onAnswer={(val) => updateAnswer('hasPhysicalMovement', val)}
             onNext={nextStep}
+            onBack={() => setStep(step - 1)}
           />
         );
-      case 2:
+      case 3:
         return (
           <QuestionCard
             question="Do you collect payments, bookings, or client information online?"
@@ -415,9 +473,10 @@ export const Onboarding: React.FC = () => {
             selected={answers.collectsOnline}
             onAnswer={(val) => updateAnswer('collectsOnline', val)}
             onNext={nextStep}
+            onBack={() => setStep(step - 1)}
           />
         );
-      case 3:
+      case 4:
         return (
           <QuestionCard
             question="Do you hire instructors, contractors, staff, or co-facilitators?"
@@ -426,9 +485,10 @@ export const Onboarding: React.FC = () => {
             selected={answers.hiresStaff}
             onAnswer={(val) => updateAnswer('hiresStaff', val)}
             onNext={nextStep}
+            onBack={() => setStep(step - 1)}
           />
         );
-      case 4:
+      case 5:
         return (
           <QuestionCard
             question="Do you run any events, classes, or retreats off-site or internationally?"
@@ -437,6 +497,33 @@ export const Onboarding: React.FC = () => {
             selected={answers.isOffsiteOrInternational}
             onAnswer={(val) => updateAnswer('isOffsiteOrInternational', val)}
             onNext={nextStep}
+            onBack={() => setStep(step - 1)}
+          />
+        );
+      case 6:
+        return (
+          <QuestionCard
+            question="Do you hire W-2 Employees?"
+            subtext="Distinct from independent contractors (1099)."
+            type="single"
+            options={['Yes', 'No']}
+            selected={answers.hasEmployees}
+            onAnswer={(val) => updateAnswer('hasEmployees', val)}
+            onNext={nextStep}
+            onBack={() => setStep(step - 1)}
+          />
+        );
+      case 7:
+        return (
+          <QuestionCard
+            question="Do you sell physical products?"
+            subtext="Supplements, clothing, equipment, etc."
+            type="single"
+            options={['Yes', 'No']}
+            selected={answers.sellsProducts}
+            onAnswer={(val) => updateAnswer('sellsProducts', val)}
+            onNext={nextStep}
+            onBack={() => setStep(step - 1)}
             isLast={true}
           />
         );
@@ -449,10 +536,10 @@ export const Onboarding: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center pt-12 p-4">
       <div className="w-full max-w-lg mb-8">
         <div className="flex justify-between text-xs font-semibold uppercase text-slate-400 mb-2">
-          <span>Question {step - 1} of 5</span>
-          <span>{Math.round(((step - 1) / 5) * 100)}% Complete</span>
+          <span>Question {step - 1} of 6</span>
+          <span>{Math.round(((step - 1) / 6) * 100)}% Complete</span>
         </div>
-        <ProgressBar current={step - 1} total={5} />
+        <ProgressBar current={step - 1} total={6} />
       </div>
       {renderQuestion()}
     </div>

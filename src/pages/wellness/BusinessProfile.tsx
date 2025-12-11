@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserAnswers, BusinessType, StaffCount, ClientCount, PrimaryConcern } from '../../types/wellness';
+import { UserAnswers, BusinessType, StaffCount, ClientCount, PrimaryConcern, EntityType } from '../../types/wellness';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/wellness/ui/Card';
 import { Button } from '../../components/wellness/ui/Button';
-import { ArrowLeft, Store, Users, Target, Building2, Lock } from 'lucide-react';
+import { ArrowLeft, Store, Users, Target, Building2, Lock, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export const BusinessProfile = () => {
@@ -20,6 +20,18 @@ export const BusinessProfile = () => {
     clientCount: '' as ClientCount,
     usesPhotos: false,
     primaryConcern: '' as PrimaryConcern,
+    // Phase 7 Fields
+    hostsRetreats: false,
+    offersOnlineCourses: false,
+    hasEmployees: false,
+    sellsProducts: false,
+    // Legal Entity Fields (for document auto-fill)
+    legalEntityName: '',
+    entityType: '' as EntityType,
+    state: '',
+    businessAddress: '',
+    ownerName: '',
+    phone: '',
   });
 
   // Password State
@@ -32,21 +44,54 @@ export const BusinessProfile = () => {
       // First, try to load from localStorage (for backward compatibility)
       const saved = localStorage.getItem('wellness_onboarding_answers');
       let parsedAnswers: UserAnswers | null = null;
-      
+
       if (saved) {
         try {
           parsedAnswers = JSON.parse(saved);
           setAnswers(parsedAnswers);
+          // Map Primary Business Type from Onboarding to Profile Business Type
+          let mappedBusinessType = parsedAnswers?.businessType || '';
+          if (!mappedBusinessType && parsedAnswers?.primaryBusinessType) {
+            switch (parsedAnswers.primaryBusinessType) {
+              case 'Yoga': mappedBusinessType = 'Yoga Studio'; break;
+              case 'Pilates': mappedBusinessType = 'Pilates Studio'; break;
+              case 'Gym': mappedBusinessType = 'Gym / Fitness Studio'; break;
+              case 'Retreats': mappedBusinessType = 'Retreat Leader'; break;
+              case 'Coaching': mappedBusinessType = 'Online Coach'; break;
+              case 'Breathwork': mappedBusinessType = 'Breathwork / Meditation'; break;
+            }
+          }
+
+          // Smart Map: Hosts Retreats
+          // True if: Type is Retreats OR Services has Retreats OR isOffsiteOrInternational is true
+          const mappedHostsRetreats = parsedAnswers?.hostsRetreats ||
+            (parsedAnswers?.primaryBusinessType === 'Retreats') ||
+            (parsedAnswers?.services?.includes('Retreats or workshops')) ||
+            (parsedAnswers?.isOffsiteOrInternational) ||
+            false;
+
+          // Smart Map: Online Courses
+          // True if: Type is Coaching OR Services has Online coaching
+          const mappedOffersOnlineCourses = parsedAnswers?.offersOnlineCourses ||
+            (parsedAnswers?.primaryBusinessType === 'Coaching') ||
+            (parsedAnswers?.services?.includes('Online coaching / digital programs')) ||
+            false;
+
           setFormData(prev => ({
             ...prev,
             businessName: parsedAnswers?.businessName || '',
             website: parsedAnswers?.website || '',
             instagram: parsedAnswers?.instagram || '',
-            businessType: parsedAnswers?.businessType || '',
+            businessType: mappedBusinessType as BusinessType,
             staffCount: parsedAnswers?.staffCount || (parsedAnswers?.hiresStaff ? '1-3' : '0'),
             clientCount: parsedAnswers?.clientCount || '0-20',
             usesPhotos: parsedAnswers?.usesPhotos || false,
             primaryConcern: parsedAnswers?.primaryConcern || '',
+            // Phase 7: Load new fields with smart mapping
+            hostsRetreats: mappedHostsRetreats,
+            offersOnlineCourses: mappedOffersOnlineCourses,
+            hasEmployees: parsedAnswers?.hasEmployees || false,
+            sellsProducts: parsedAnswers?.sellsProducts || false,
           }));
         } catch (e) {
           console.error("Failed to parse saved answers");
@@ -57,10 +102,10 @@ export const BusinessProfile = () => {
       if (supabase) {
         try {
           const { data: { user: authUser } } = await supabase.auth.getUser();
-          
+
           if (authUser) {
             console.log('🔍 Loading profile data from Supabase for user:', authUser.id);
-            
+
             // Load business profile data
             const { data: profileData, error: profileError } = await supabase
               .from('business_profiles')
@@ -81,7 +126,31 @@ export const BusinessProfile = () => {
                 clientCount: profileData.monthly_clients || prev.clientCount,
                 usesPhotos: profileData.uses_photos ?? prev.usesPhotos,
                 primaryConcern: profileData.primary_concern || prev.primaryConcern,
+                // Phase 7 fields
+                hostsRetreats: profileData.hosts_retreats ?? prev.hostsRetreats,
+                offersOnlineCourses: profileData.offers_online_courses ?? prev.offersOnlineCourses,
+                hasEmployees: profileData.has_w2_employees ?? prev.hasEmployees,
+                sellsProducts: profileData.sells_products ?? prev.sellsProducts,
+                // Legal Entity fields
+                legalEntityName: profileData.legal_entity_name || prev.legalEntityName,
+                entityType: profileData.entity_type || prev.entityType,
+                state: profileData.state || prev.state,
+                businessAddress: profileData.business_address || prev.businessAddress,
+                ownerName: profileData.owner_name || prev.ownerName,
+                phone: profileData.phone || prev.phone,
               }));
+
+              // Also update answers with onboarding data from database if available
+              if (profileData.services || profileData.has_physical_movement !== null) {
+                setAnswers(prev => prev ? ({
+                  ...prev,
+                  services: profileData.services || prev.services,
+                  hasPhysicalMovement: profileData.has_physical_movement ?? prev.hasPhysicalMovement,
+                  collectsOnline: profileData.collects_online ?? prev.collectsOnline,
+                  hiresStaff: profileData.hires_staff ?? prev.hiresStaff,
+                  isOffsiteOrInternational: profileData.is_offsite_or_international ?? prev.isOffsiteOrInternational,
+                }) : prev);
+              }
             } else if (profileError && profileError.code !== 'PGRST116') {
               console.error('Error loading profile:', profileError);
             }
@@ -129,28 +198,28 @@ export const BusinessProfile = () => {
       // Only use Supabase if it's configured
       if (supabase) {
         console.log('🔍 Checking for existing Supabase user...');
-        
+
         // Get current user
         const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
-        
+
         if (userError || !authUser) {
           console.log('ℹ️ No existing user found, creating new user...');
-          
+
           // User doesn't exist yet - create one if we have email
           const userEmail = answers.email;
-          
+
           if (!userEmail || !userEmail.includes('@')) {
             console.error('❌ No valid email found to create user');
             alert('Email is required to create your account. Please go back and enter your email.');
             setIsSaving(false);
             return;
           }
-          
+
           try {
             // Create user with temporary password (they'll set real one below)
             const tempPassword = Math.random().toString(36).slice(-12) + 'A1!@'; // Random password
             console.log('🔐 Creating Supabase user for:', userEmail);
-            
+
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
               email: userEmail,
               password: tempPassword,
@@ -163,13 +232,13 @@ export const BusinessProfile = () => {
 
             if (signUpError) {
               console.error('❌ Error creating user:', signUpError);
-              
+
               // User might already exist - try to sign in
-              if (signUpError.message?.includes('already registered') || 
-                  signUpError.message?.includes('already exists') ||
-                  signUpError.message?.includes('User already registered')) {
+              if (signUpError.message?.includes('already registered') ||
+                signUpError.message?.includes('already exists') ||
+                signUpError.message?.includes('User already registered')) {
                 console.log('ℹ️ User already exists, attempting to sign in...');
-                
+
                 // Try to sign in with magic link
                 const { error: otpError } = await supabase.auth.signInWithOtp({
                   email: userEmail,
@@ -177,7 +246,7 @@ export const BusinessProfile = () => {
                     emailRedirectTo: window.location.origin + '/wellness/dashboard'
                   }
                 });
-                
+
                 if (otpError) {
                   console.error('Error signing in existing user:', otpError);
                   alert('Account exists but could not sign in. Please use the login page.');
@@ -203,13 +272,13 @@ export const BusinessProfile = () => {
             } else if (signUpData.user) {
               user = signUpData.user;
               console.log('✅ User created successfully:', signUpData.user.id);
-              
+
               // Auto-sign in the newly created user
               const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
                 email: userEmail,
                 password: tempPassword
               });
-              
+
               if (signInError) {
                 console.error('Error signing in new user:', signInError);
                 console.log('ℹ️ User created but sign-in may require email confirmation');
@@ -255,7 +324,7 @@ export const BusinessProfile = () => {
               try {
                 const { error: contactError } = await supabase
                   .from('contacts')
-                  .update({ 
+                  .update({
                     user_id: user.id,
                     updated_at: new Date().toISOString()
                   })
@@ -289,7 +358,7 @@ export const BusinessProfile = () => {
         if (password.trim().length > 0) {
           const hasUrl = !!import.meta.env.VITE_SUPABASE_URL;
           const hasKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY;
-          
+
           let errorMsg = 'Supabase is not configured. ';
           if (!hasUrl && !hasKey) {
             errorMsg += 'Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.';
@@ -301,7 +370,7 @@ export const BusinessProfile = () => {
             errorMsg += 'Variables are set but Supabase client failed to initialize. Check the console for details.';
           }
           errorMsg += '\n\nNote: After adding variables, restart your dev server (npm run dev).';
-          
+
           alert(errorMsg);
           console.error('Supabase config check:', {
             hasUrl,
@@ -336,6 +405,24 @@ export const BusinessProfile = () => {
               monthly_clients: formData.clientCount,
               uses_photos: formData.usesPhotos,
               primary_concern: formData.primaryConcern,
+              // Phase 7 fields
+              hosts_retreats: formData.hostsRetreats,
+              offers_online_courses: formData.offersOnlineCourses,
+              has_w2_employees: formData.hasEmployees,
+              sells_products: formData.sellsProducts,
+              // Onboarding answer fields
+              services: answers.services || [],
+              has_physical_movement: answers.hasPhysicalMovement ?? false,
+              collects_online: answers.collectsOnline ?? false,
+              hires_staff: answers.hiresStaff ?? false,
+              is_offsite_or_international: answers.isOffsiteOrInternational ?? false,
+              // Legal Entity fields
+              legal_entity_name: formData.legalEntityName,
+              entity_type: formData.entityType,
+              state: formData.state,
+              business_address: formData.businessAddress,
+              owner_name: formData.ownerName,
+              phone: formData.phone,
               updated_at: new Date().toISOString()
             }, {
               onConflict: 'user_id'
@@ -344,6 +431,51 @@ export const BusinessProfile = () => {
           if (profileError) {
             console.error('Error saving profile to Supabase:', profileError);
             // Continue anyway - localStorage is the primary storage
+          } else {
+            // Profile saved successfully - tag in GoHighLevel
+            console.log('✅ Business profile saved, tagging in GoHighLevel...');
+
+            // Call backend to add "created business profile" tag in GoHighLevel AND sync all profile data
+            if (answers.email) {
+              try {
+                const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+
+                // Prepare complete profile data to send
+                const completeProfileData = {
+                  // Business profile form data
+                  ...formData,
+                  // Original onboarding answers
+                  services: answers.services,
+                  hasPhysicalMovement: answers.hasPhysicalMovement,
+                  collectsOnline: answers.collectsOnline,
+                  hiresStaff: answers.hiresStaff,
+                  isOffsiteOrInternational: answers.isOffsiteOrInternational,
+                };
+
+                const tagResponse = await fetch(`${serverUrl}/api/add-ghl-business-profile-tag`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    email: answers.email,
+                    profileData: completeProfileData,
+                  }),
+                });
+
+                if (tagResponse.ok) {
+                  const tagResult = await tagResponse.json();
+                  console.log('✅ Successfully tagged in GoHighLevel:', tagResult);
+                } else {
+                  const tagError = await tagResponse.json();
+                  console.error('❌ Error tagging in GoHighLevel:', tagError);
+                  // Continue anyway - profile save was successful
+                }
+              } catch (tagErr) {
+                console.error('❌ Error calling GHL tag endpoint:', tagErr);
+                // Continue anyway - profile save was successful
+              }
+            }
           }
         } catch (profileErr) {
           console.error('Error saving profile:', profileErr);
@@ -374,7 +506,7 @@ export const BusinessProfile = () => {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-          <button 
+          <button
             onClick={() => navigate('/wellness/dashboard')}
             className="text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium"
           >
@@ -385,7 +517,7 @@ export const BusinessProfile = () => {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        
+
         <div className="text-center space-y-2 mb-8">
           <h1 className="text-3xl font-bold text-slate-900">Let's Finalize Your Setup</h1>
           <p className="text-slate-500 text-lg">
@@ -437,7 +569,112 @@ export const BusinessProfile = () => {
           </CardContent>
         </Card>
 
-        {/* Section 2: Password (Optional) - Moved to top for better visibility */}
+        {/* Section 2: Legal Entity Information (for document auto-fill) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="text-brand-600" size={20} />
+              Legal Entity Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-600">
+              This information is used to auto-fill your legal documents. Fill this out to generate personalized agreements instantly.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Legal Entity Name <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Zen Yoga LLC"
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                  value={formData.legalEntityName}
+                  onChange={(e) => handleChange('legalEntityName', e.target.value)}
+                />
+                <p className="text-xs text-slate-500 mt-1">Official registered business name</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Entity Type <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <select
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-brand-500 outline-none"
+                  value={formData.entityType}
+                  onChange={(e) => handleChange('entityType', e.target.value)}
+                >
+                  <option value="">Select type...</option>
+                  <option value="LLC">LLC</option>
+                  <option value="Corporation">Corporation</option>
+                  <option value="Sole Proprietorship">Sole Proprietorship</option>
+                  <option value="Partnership">Partnership</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Owner/Representative Name <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Your full name"
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                  value={formData.ownerName}
+                  onChange={(e) => handleChange('ownerName', e.target.value)}
+                />
+                <p className="text-xs text-slate-500 mt-1">Legal signer on documents</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Phone Number <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="(555) 123-4567"
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                  value={formData.phone}
+                  onChange={(e) => handleChange('phone', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Business Address <span className="text-slate-400 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="123 Main St, San Francisco, CA 94102"
+                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                value={formData.businessAddress}
+                onChange={(e) => handleChange('businessAddress', e.target.value)}
+              />
+              <p className="text-xs text-slate-500 mt-1">Physical address for legal notices</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                State <span className="text-slate-400 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="California"
+                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                value={formData.state}
+                onChange={(e) => handleChange('state', e.target.value)}
+              />
+              <p className="text-xs text-slate-500 mt-1">State of formation/operation</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Section 3: Password (Optional) - Moved to top for better visibility */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -491,7 +728,7 @@ export const BusinessProfile = () => {
           <CardContent className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Primary Business Type</label>
-              <select 
+              <select
                 className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-brand-500 outline-none"
                 value={formData.businessType}
                 onChange={(e) => handleChange('businessType', e.target.value)}
@@ -511,40 +748,38 @@ export const BusinessProfile = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                 <label className="block text-sm font-medium text-slate-700 mb-2">Team Size</label>
-                 <div className="flex flex-wrap gap-2">
-                   {['0', '1-3', '4-10', '10+'].map(opt => (
-                     <button
-                       key={opt}
-                       onClick={() => handleChange('staffCount', opt)}
-                       className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                         formData.staffCount === opt 
-                           ? 'bg-brand-600 text-white border-brand-600' 
-                           : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
-                       }`}
-                     >
-                       {opt}
-                     </button>
-                   ))}
-                 </div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Team Size</label>
+                <div className="flex flex-wrap gap-2">
+                  {['0', '1-3', '4-10', '10+'].map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => handleChange('staffCount', opt)}
+                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${formData.staffCount === opt
+                        ? 'bg-brand-600 text-white border-brand-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
+                        }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
-                 <label className="block text-sm font-medium text-slate-700 mb-2">Monthly Clients</label>
-                 <div className="flex flex-wrap gap-2">
-                   {['0-20', '20-50', '50-200', '200+'].map(opt => (
-                     <button
-                       key={opt}
-                       onClick={() => handleChange('clientCount', opt)}
-                       className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                         formData.clientCount === opt 
-                           ? 'bg-brand-600 text-white border-brand-600' 
-                           : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
-                       }`}
-                     >
-                       {opt}
-                     </button>
-                   ))}
-                 </div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Monthly Clients</label>
+                <div className="flex flex-wrap gap-2">
+                  {['0-20', '20-50', '50-200', '200+'].map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => handleChange('clientCount', opt)}
+                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${formData.clientCount === opt
+                        ? 'bg-brand-600 text-white border-brand-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
+                        }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -559,26 +794,84 @@ export const BusinessProfile = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-             <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
-               <div>
-                 <p className="font-medium text-slate-900">Do you use client photos or videos?</p>
-                 <p className="text-xs text-slate-500">For social media, website, or marketing materials.</p>
-               </div>
-               <div className="flex gap-2">
-                 <button 
-                   onClick={() => handleChange('usesPhotos', true)}
-                   className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formData.usesPhotos ? 'bg-brand-600 text-white' : 'bg-white border text-slate-600'}`}
-                 >Yes</button>
-                 <button 
-                   onClick={() => handleChange('usesPhotos', false)}
-                   className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${!formData.usesPhotos ? 'bg-slate-800 text-white' : 'bg-white border text-slate-600'}`}
-                 >No</button>
-               </div>
-             </div>
+            <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
+              <div>
+                <p className="font-medium text-slate-900">Do you use client photos or videos?</p>
+                <p className="text-xs text-slate-500">For social media, website, or marketing materials.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleChange('usesPhotos', true)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formData.usesPhotos ? 'bg-brand-600 text-white' : 'bg-white border text-slate-600'}`}
+                >Yes</button>
+                <button
+                  onClick={() => handleChange('usesPhotos', false)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${!formData.usesPhotos ? 'bg-slate-800 text-white' : 'bg-white border text-slate-600'}`}
+                >No</button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Section 5: Goal */}
+        {/* Section 5: Deep Dive (New for Phase 7) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="text-brand-600" size={20} />
+              Risk Profile & Activities
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-500 mb-4">
+              These answers determine exactly which legal contracts you need.
+            </p>
+
+            {[
+              {
+                key: 'hostsRetreats',
+                label: 'Do you host retreats or travel events?',
+                sub: 'Includes local day-retreats or international trips.'
+              },
+              {
+                key: 'offersOnlineCourses',
+                label: 'Do you sell online courses or digital memberships?',
+                sub: 'Includes pre-recorded videos, PDFs, or subscription apps.'
+              },
+              {
+                key: 'hasEmployees',
+                label: 'Do you hire W-2 Employees?',
+                sub: 'Distinct from independent contractors (1099).'
+              },
+              {
+                key: 'sellsProducts',
+                label: 'Do you sell physical products?',
+                sub: 'Supplements, clothing, equipment, etc.'
+              },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-colors">
+                <div>
+                  <p className="font-medium text-slate-900">{item.label}</p>
+                  <p className="text-xs text-slate-500">{item.sub}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleChange(item.key, true)}
+                    // @ts-ignore
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formData[item.key] ? 'bg-brand-600 text-white' : 'bg-white border text-slate-600'}`}
+                  >Yes</button>
+                  <button
+                    onClick={() => handleChange(item.key, false)}
+                    // @ts-ignore
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${!formData[item.key] ? 'bg-slate-800 text-white' : 'bg-white border text-slate-600'}`}
+                  >No</button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+
+        {/* Section 6: Goal */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -603,8 +896,8 @@ export const BusinessProfile = () => {
                   onClick={() => handleChange('primaryConcern', opt)}
                   className={`
                     w-full text-left p-3 rounded-lg border transition-all text-sm
-                    ${formData.primaryConcern === opt 
-                      ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500' 
+                    ${formData.primaryConcern === opt
+                      ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500'
                       : 'border-slate-200 hover:bg-slate-50 text-slate-700'}
                   `}
                 >
@@ -616,12 +909,12 @@ export const BusinessProfile = () => {
         </Card>
 
         <div className="pt-4">
-          <Button 
-             fullWidth 
-             size="lg" 
-             onClick={handleSave}
-             disabled={!formData.businessName || isSaving}
-             className="text-lg h-14"
+          <Button
+            fullWidth
+            size="lg"
+            onClick={handleSave}
+            disabled={!formData.businessName || isSaving}
+            className="text-lg h-14"
           >
             {isSaving ? 'Saving...' : 'Save Profile & Update Dashboard'}
           </Button>

@@ -1,30 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Background circle -->
-  <circle cx="50" cy="50" r="48" fill="#ffffff" stroke="#1e40af" stroke-width="2"/>
+  <!-- Background circle with subtle gradient effect -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e40af;stop-opacity:1" />
+    </linearGradient>
+  </defs>
   
-  <!-- Scales of Justice (Emoji Style - Simplified) -->
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="url(#bgGradient)"/>
+  
+  <!-- Scales of Justice - Professional Design -->
   <g transform="translate(50, 50)">
     <!-- Base/Stand -->
-    <rect x="-2.5" y="28" width="5" height="22" fill="#1e40af" rx="1"/>
+    <rect x="-3" y="30" width="6" height="20" fill="#ffffff" rx="2"/>
     
     <!-- Central Column -->
-    <rect x="-2" y="12" width="4" height="20" fill="#1e40af" rx="1"/>
+    <rect x="-2.5" y="15" width="5" height="18" fill="#ffffff" rx="2"/>
     
-    <!-- Top Bar -->
-    <rect x="-20" y="12" width="40" height="3" fill="#1e40af" rx="1.5"/>
+    <!-- Top Horizontal Bar -->
+    <rect x="-22" y="15" width="44" height="4" fill="#ffffff" rx="2"/>
     
-    <!-- Left Scale (emoji style - rounded and simple) -->
-    <g transform="translate(-10, 12)">
-      <line x1="0" y1="0" x2="0" y2="10" stroke="#1e40af" stroke-width="2.5" stroke-linecap="round"/>
-      <circle cx="0" cy="16" r="6" fill="#3b82f6" opacity="0.2"/>
-      <circle cx="0" cy="16" r="5.5" fill="none" stroke="#1e40af" stroke-width="2"/>
+    <!-- Left Scale Pan -->
+    <g transform="translate(-12, 15)">
+      <!-- Chain/Connector -->
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- Scale Pan (rounded bowl) -->
+      <path d="M -7 8 Q -7 14 0 14 Q 7 14 7 8 L 7 12 Q 0 18 -7 12 Z" fill="#ffffff" opacity="0.9"/>
+      <ellipse cx="0" cy="11" rx="7" ry="3" fill="none" stroke="#1e40af" stroke-width="1.5"/>
     </g>
     
-    <!-- Right Scale (emoji style - rounded and simple) -->
-    <g transform="translate(10, 12)">
-      <line x1="0" y1="0" x2="0" y2="10" stroke="#1e40af" stroke-width="2.5" stroke-linecap="round"/>
-      <circle cx="0" cy="16" r="6" fill="#3b82f6" opacity="0.2"/>
-      <circle cx="0" cy="16" r="5.5" fill="none" stroke="#1e40af" stroke-width="2"/>
+    <!-- Right Scale Pan -->
+    <g transform="translate(12, 15)">
+      <!-- Chain/Connector -->
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- Scale Pan (rounded bowl) -->
+      <path d="M -7 8 Q -7 14 0 14 Q 7 14 7 8 L 7 12 Q 0 18 -7 12 Z" fill="#ffffff" opacity="0.9"/>
+      <ellipse cx="0" cy="11" rx="7" ry="3" fill="none" stroke="#1e40af" stroke-width="1.5"/>
     </g>
   </g>
 </svg>

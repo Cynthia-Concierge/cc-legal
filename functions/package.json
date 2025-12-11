@@ -5,7 +5,7 @@
   "main": "lib/index.js",
   "scripts": {
     "build": "npm run copy-server && tsc && npm run fix-output",
-    "copy-server": "mkdir -p lib/server/services && cp ../server/services/supabaseService.js ../server/services/workflowResultsService.js ../server/services/coldLeadsService.js ../server/services/emailGenerationWorkflow.js ../server/services/configService.js ../server/services/instantlyService.js lib/server/services/ 2>/dev/null || true",
+    "copy-server": "mkdir -p lib/server/services && cp ../server/services/supabaseService.js ../server/services/workflowResultsService.js ../server/services/coldLeadsService.js ../server/services/emailGenerationWorkflow.js ../server/services/configService.js ../server/services/instantlyService.js ../server/services/firecrawlService.js ../server/services/openaiService.js lib/server/services/ 2>/dev/null || true",
     "fix-output": "if [ -f lib/functions/src/index.js ]; then mv lib/functions/src/index.js lib/index.js && mv lib/functions/src/index.js.map lib/index.js.map 2>/dev/null; rm -rf lib/functions 2>/dev/null; fi",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
@@ -22,13 +22,14 @@
     "@langchain/langgraph": "^1.0.2",
     "@langchain/openai": "^1.1.3",
     "@supabase/supabase-js": "^2.86.0",
-    "express": "^4.18.2",
     "cors": "^2.8.5",
+    "csv-parse": "^6.1.0",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "firebase-admin": "^12.0.0",
     "firebase-functions": "^5.0.0",
     "playwright": "^1.48.0",
-    "csv-parse": "^6.1.0"
+    "resend": "^6.5.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -38,4 +39,3 @@
   },
   "private": true
 }
-

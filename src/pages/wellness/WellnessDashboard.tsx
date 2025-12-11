@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserAnswers, ScoreResult, RecommendationResult, DocumentItem } from '../../types/wellness';
+import { UserAnswers, ScoreResult, RecommendationResult, DocumentItem, DashboardState } from '../../types/wellness';
 import { calculateScore } from '../../lib/wellness/scoring';
 import { getRecommendedDocuments } from '../../lib/wellness/documentEngine';
+import { calculateLegalHealth, getNextBestAction, NextAction } from '../../lib/wellness/dashboardLogic';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../../components/wellness/ui/Card';
 import { Button } from '../../components/wellness/ui/Button';
 import { Lock, Unlock, Download, AlertTriangle, Shield, CheckCircle2, Phone, ArrowRight, FileText, Star, Wand2, Store, ExternalLink, LogOut, Search, Globe } from 'lucide-react';
@@ -11,6 +12,9 @@ import { CalendlyModal } from '../../components/wellness/CalendlyModal';
 import { ContractReviewModal } from '../../components/wellness/ContractReviewModal';
 import { OnboardingStepsTracker } from '../../components/wellness/OnboardingStepsTracker';
 import { WebsiteScanModal } from '../../components/wellness/WebsiteScanModal';
+import { LegalHealthProgress } from '../../components/wellness/dashboard/LegalHealthProgress';
+import { NextActionWidget } from '../../components/wellness/dashboard/NextActionWidget';
+import { DocumentVault } from '../../components/wellness/vault/DocumentVault';
 import { supabase } from '../../lib/supabase';
 
 export const WellnessDashboard: React.FC = () => {
@@ -18,24 +22,24 @@ export const WellnessDashboard: React.FC = () => {
   const [answers, setAnswers] = useState<UserAnswers | null>(null);
   const [scoreData, setScoreData] = useState<ScoreResult | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationResult | null>(null);
-  
+
   // Drafting Modal State
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   // Calendly Modal State
   const [isCalendlyModalOpen, setIsCalendlyModalOpen] = useState(false);
-  
+
   // Contract Review Modal State
   const [isContractReviewModalOpen, setIsContractReviewModalOpen] = useState(false);
-  
+
   // Website Scan Modal State
   const [isWebsiteScanModalOpen, setIsWebsiteScanModalOpen] = useState(false);
-  
+
   // Track onboarding progress
   const [hasScannedWebsite, setHasScannedWebsite] = useState(false);
   const [hasCompletedContractReview, setHasCompletedContractReview] = useState(false);
-  
+
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [user, setUser] = useState<any>(null);
 
@@ -87,14 +91,14 @@ export const WellnessDashboard: React.FC = () => {
     }
     const parsedAnswers = JSON.parse(saved);
     setAnswers(parsedAnswers);
-    
+
     // Calculate results
     const score = calculateScore(parsedAnswers);
     const recs = getRecommendedDocuments(parsedAnswers);
-    
+
     setScoreData(score);
     setRecommendations(recs);
-    
+
     // Load onboarding progress from localStorage
     const progress = localStorage.getItem('wellness_onboarding_progress');
     if (progress) {
@@ -107,6 +111,23 @@ export const WellnessDashboard: React.FC = () => {
       }
     }
   }, [navigate, isCheckingAuth]);
+
+  // Compute Dashboard State & Logic
+  const dashboardState: DashboardState | null = useMemo(() => {
+    if (!answers || !scoreData || !recommendations) return null;
+    return {
+      answers,
+      score: scoreData,
+      recommendations,
+      progress: {
+        hasScannedWebsite,
+        hasCompletedContractReview
+      }
+    };
+  }, [answers, scoreData, recommendations, hasScannedWebsite, hasCompletedContractReview]);
+
+  const legalHealthScore = dashboardState ? calculateLegalHealth(dashboardState) : 0;
+  const nextAction = dashboardState ? getNextBestAction(dashboardState) : null;
 
   const handleLogout = async () => {
     if (supabase) {
@@ -144,18 +165,40 @@ export const WellnessDashboard: React.FC = () => {
     localStorage.setItem('wellness_onboarding_progress', JSON.stringify(progress));
   };
 
+  const handleActionClick = (action: NextAction) => {
+    switch (action.actionType) {
+      case 'profile':
+        navigate('/wellness/profile');
+        break;
+      case 'scan':
+        setIsWebsiteScanModalOpen(true);
+        break;
+      case 'review':
+        setIsContractReviewModalOpen(true);
+        break;
+      case 'draft':
+        if (action.targetId) {
+          const doc = recommendations?.topPriorities.find(d => d.id === action.targetId);
+          if (doc) handleDraftClick(doc);
+        }
+        break;
+      case 'call':
+        setIsCalendlyModalOpen(true);
+        break;
+    }
+  };
+
   const handleDownloadPDF = (doc: DocumentItem) => {
     if (doc.pdfPath) {
       // Extract filename from path
       const pathParts = doc.pdfPath.split('/');
       const fileName = pathParts[pathParts.length - 1];
-      
+
       // Simple direct download - Vite serves /public at root
       const link = document.createElement('a');
       link.href = `/pdfs/${fileName}`;
       link.download = fileName;
       document.body.appendChild(link);
-      link.click();
       link.remove();
     }
   };
@@ -176,7 +219,7 @@ export const WellnessDashboard: React.FC = () => {
   }
 
   const getRiskColor = (level: string) => {
-    switch(level) {
+    switch (level) {
       case 'High': return 'text-red-600 bg-red-50 border-red-100';
       case 'Moderate': return 'text-orange-600 bg-orange-50 border-orange-100';
       default: return 'text-emerald-600 bg-emerald-50 border-emerald-100';
@@ -234,74 +277,76 @@ export const WellnessDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="text-brand-600" size={24} />
-            <span className="font-semibold text-slate-900">Wellness Legal Guard</span>
+            <span className="font-semibold text-slate-900">Conscious Counsel</span>
           </div>
           <div className="flex items-center gap-4">
-            {/* Setup Progress Indicator */}
-            <div className="hidden sm:flex items-center gap-3">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">SETUP PROGRESS</span>
-              <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-brand-600 transition-all duration-500"
-                  style={{ 
-                    width: `${((isProfileComplete ? 1 : 0) + (hasScannedWebsite ? 1 : 0) + (hasCompletedContractReview ? 1 : 0)) / 4 * 100}%` 
-                  }}
-                />
-              </div>
-            </div>
+            {/* Legal Health Progress */}
+            <LegalHealthProgress score={legalHealthScore} />
+
             {!isProfileComplete && (
-              <Button 
-                size="sm" 
-                variant="primary" 
+              <Button
+                size="sm"
+                variant="primary"
                 onClick={() => navigate('/wellness/profile')}
-                className="flex items-center gap-2"
+                className="hidden md:flex items-center gap-2"
               >
                 <Store size={16} />
                 Complete Profile
               </Button>
             )}
-            <Button size="sm" variant="secondary" onClick={() => setIsCalendlyModalOpen(true)}>
-              Book Consultation
+            <Button size="sm" variant="secondary" onClick={() => setIsCalendlyModalOpen(true)} className="hidden sm:enable">
+              Book Call
             </Button>
-            <Button 
-              size="sm" 
-              variant="outline" 
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={handleLogout}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 text-slate-500 hover:text-slate-900"
             >
               <LogOut size={16} />
-              Sign Out
             </Button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        
+
         {/* Welcome Section */}
         <section>
           <div className="mb-6">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome</h1>
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome{user?.email ? `, ${user.email.split('@')[0]}` : ''}</h1>
             <p className="text-lg text-slate-600">
               Here is your personalized legal roadmap to protect your business.
             </p>
           </div>
         </section>
 
+        {/* Next Best Action Widget */}
+        {nextAction && (
+          <section className="mb-8">
+            <NextActionWidget action={nextAction} onActionClick={handleActionClick} />
+          </section>
+        )}
+
         {/* Main Content Grid */}
         <section className="grid gap-6 lg:grid-cols-12">
-          
+
           {/* Left Column: Onboarding Steps Tracker */}
           <div className="lg:col-span-8 space-y-6">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 className="text-brand-600" size={20} />
+              <h2 className="text-xl font-bold text-slate-900">Your Action Plan</h2>
+            </div>
+
             <OnboardingStepsTracker
               answers={answers}
               onCompleteProfile={() => navigate('/wellness/profile')}
               onScanWebsite={() => setIsWebsiteScanModalOpen(true)}
               onReviewDocuments={() => setIsContractReviewModalOpen(true)}
               onDraftDocument={(docId) => {
-                const doc = recommendations.topPriorities.find(d => d.id === docId) || 
-                           recommendations.freeTemplates.find(d => d.id === docId) ||
-                           recommendations.advancedTemplates.find(d => d.id === docId);
+                const doc = recommendations.topPriorities.find(d => d.id === docId) ||
+                  recommendations.freeTemplates.find(d => d.id === docId) ||
+                  recommendations.advancedTemplates.find(d => d.id === docId);
                 if (doc) {
                   handleDraftClick(doc);
                 }
@@ -310,6 +355,9 @@ export const WellnessDashboard: React.FC = () => {
               hasScannedWebsite={hasScannedWebsite}
               priorityDocumentId={recommendations?.topPriorities[0]?.id}
             />
+
+            {/* Document Vault */}
+            <DocumentVault />
 
             {/* High Priority Documents - Hidden from UI for now */}
             {/* Section removed from UI but functionality preserved */}
@@ -367,7 +415,7 @@ export const WellnessDashboard: React.FC = () => {
                 <p className="text-sm text-slate-300 mb-4">
                   Get a certified wellness lawyer to review your final setup.
                 </p>
-                <Button 
+                <Button
                   onClick={() => setIsCalendlyModalOpen(true)}
                   className="w-full bg-brand-600 hover:bg-brand-700 text-white"
                 >
@@ -403,8 +451,8 @@ export const WellnessDashboard: React.FC = () => {
         {/* Free Templates */}
         <section>
           <div className="flex items-center gap-2 mb-4 px-1">
-             <Unlock className="text-brand-600" size={20} />
-             <h2 className="text-xl font-bold text-slate-900">Free Templates</h2>
+            <Unlock className="text-brand-600" size={20} />
+            <h2 className="text-xl font-bold text-slate-900">Free Templates</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {recommendations.freeTemplates.map((doc) => (
@@ -416,10 +464,10 @@ export const WellnessDashboard: React.FC = () => {
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">{doc.title}</h3>
                   <p className="text-sm text-slate-500 mb-4 h-10 line-clamp-2">{doc.description}</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    fullWidth 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    fullWidth
                     className="gap-2 group-hover:border-brand-200"
                     onClick={() => handleDownloadPDF(doc)}
                   >
@@ -435,67 +483,67 @@ export const WellnessDashboard: React.FC = () => {
         {recommendations.advancedTemplates.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-4 px-1">
-               <Lock className="text-slate-400" size={20} />
-               <h2 className="text-xl font-bold text-slate-900">Recommended: Advanced Protection</h2>
+              <Lock className="text-slate-400" size={20} />
+              <h2 className="text-xl font-bold text-slate-900">Recommended: Advanced Protection</h2>
             </div>
             <p className="text-slate-500 mb-6 px-1">These documents require real lawyers to review and customize for your specific business model.</p>
-            
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {recommendations.advancedTemplates.map((doc) => (
-              <Card key={doc.id} className="bg-slate-50 border-slate-200 opacity-75 relative group hover:opacity-100 hover:shadow-lg transition-all duration-300 cursor-pointer">
-                <CardContent className="p-5">
-                  <div className="flex justify-between items-start mb-2">
-                    <FileText className="text-slate-300 group-hover:text-slate-400 transition-colors" size={24} />
-                    <Lock className="text-slate-400" size={18} />
-                  </div>
-                  <h3 className="font-semibold text-slate-600 mb-1 group-hover:text-slate-700 transition-colors">{doc.title}</h3>
-                  <p className="text-sm text-slate-400 mb-4 group-hover:text-slate-500 transition-colors">{doc.description}</p>
-                  <div className="pt-2 border-t border-slate-200">
-                    <p className="text-xs text-slate-500 italic mb-3">
-                      Requires lawyer review
-                    </p>
-                    {/* Schedule a Call Button - appears on hover */}
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      fullWidth
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center gap-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsCalendlyModalOpen(true);
-                      }}
-                    >
-                      <Phone size={14} />
-                      Schedule a Call
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
+                <Card key={doc.id} className="bg-slate-50 border-slate-200 opacity-75 relative group hover:opacity-100 hover:shadow-lg transition-all duration-300 cursor-pointer">
+                  <CardContent className="p-5">
+                    <div className="flex justify-between items-start mb-2">
+                      <FileText className="text-slate-300 group-hover:text-slate-400 transition-colors" size={24} />
+                      <Lock className="text-slate-400" size={18} />
+                    </div>
+                    <h3 className="font-semibold text-slate-600 mb-1 group-hover:text-slate-700 transition-colors">{doc.title}</h3>
+                    <p className="text-sm text-slate-400 mb-4 group-hover:text-slate-500 transition-colors">{doc.description}</p>
+                    <div className="pt-2 border-t border-slate-200">
+                      <p className="text-xs text-slate-500 italic mb-3">
+                        Requires lawyer review
+                      </p>
+                      {/* Schedule a Call Button - appears on hover */}
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        fullWidth
+                        className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center gap-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsCalendlyModalOpen(true);
+                        }}
+                      >
+                        <Phone size={14} />
+                        Schedule a Call
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* Final CTA */}
         <section className="mt-12 bg-gradient-to-r from-brand-500 to-brand-700 rounded-2xl p-8 md:p-12 text-center text-white shadow-xl">
-           <div className="max-w-2xl mx-auto space-y-6">
-             <h2 className="text-3xl font-bold">Want a lawyer to review your setup?</h2>
-             <p className="text-brand-50 text-lg">
-               Don't leave your studio's safety to chance. Book a free 15-minute legal strategy call with our team to customize your protection plan.
-             </p>
-             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-                <Button 
-                  size="lg" 
-                  variant="outline"
-                  className="bg-white !text-black hover:bg-slate-100 border-none shadow-lg text-lg px-8 font-semibold"
-                  onClick={() => setIsCalendlyModalOpen(true)}
-                >
-                  <Phone className="mr-2 h-5 w-5 !text-black" />
-                  Book My Call
-                </Button>
-             </div>
-             <p className="text-sm text-brand-200 pt-2 opacity-80">No credit card required. 100% Free consultation.</p>
-           </div>
+          <div className="max-w-2xl mx-auto space-y-6">
+            <h2 className="text-3xl font-bold">Want a lawyer to review your setup?</h2>
+            <p className="text-brand-50 text-lg">
+              Don't leave your studio's safety to chance. Book a free 15-minute legal strategy call with our team to customize your protection plan.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+              <Button
+                size="lg"
+                variant="outline"
+                className="bg-white !text-black hover:bg-slate-100 border-none shadow-lg text-lg px-8 font-semibold"
+                onClick={() => setIsCalendlyModalOpen(true)}
+              >
+                <Phone className="mr-2 h-5 w-5 !text-black" />
+                Book My Call
+              </Button>
+            </div>
+            <p className="text-sm text-brand-200 pt-2 opacity-80">No credit card required. 100% Free consultation.</p>
+          </div>
         </section>
 
       </main>

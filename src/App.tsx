@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -11,7 +11,10 @@ import ThankYou from "./pages/ThankYou";
 import NotFound from "./pages/NotFound";
 import { Onboarding } from "./pages/wellness/Onboarding";
 import { BusinessProfile } from "./pages/wellness/BusinessProfile";
-import { WellnessDashboard } from "./pages/wellness/WellnessDashboard";
+import { DashboardLayout } from "./components/wellness/layout/DashboardLayout";
+import { DashboardHome } from "./pages/wellness/dashboard/DashboardHome";
+import { DashboardVault } from "./pages/wellness/dashboard/DashboardVault";
+import { ComplianceCalendar } from "./pages/wellness/dashboard/ComplianceCalendar";
 import { Login } from "./pages/wellness/Login";
 import { ResetPassword } from "./pages/wellness/ResetPassword";
 
@@ -31,11 +34,18 @@ const App = () => (
             <Route path="/lead-scraper" element={<Dashboard />} />
             <Route path="/business-widget" element={<BusinessWidget />} />
             {/* Wellness Dashboard Routes */}
+            {/* Wellness Dashboard Routes */}
             <Route path="/wellness/login" element={<Login />} />
             <Route path="/wellness/onboarding" element={<Onboarding />} />
-            <Route path="/wellness/profile" element={<BusinessProfile />} />
-            <Route path="/wellness/dashboard" element={<WellnessDashboard />} />
             <Route path="/wellness/reset-password" element={<ResetPassword />} />
+
+            {/* New Nested Dashboard Layout */}
+            <Route path="/wellness/dashboard" element={<DashboardLayout><Outlet /></DashboardLayout>}>
+              <Route index element={<DashboardHome />} />
+              <Route path="documents" element={<DashboardVault />} />
+              <Route path="compliance" element={<ComplianceCalendar />} />
+              <Route path="profile" element={<BusinessProfile />} />
+            </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

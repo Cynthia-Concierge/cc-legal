@@ -1,13 +1,13 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
-import { 
-  CheckCircle2, 
-  Circle, 
-  Store, 
-  Globe, 
-  Search, 
-  FileText, 
+import {
+  CheckCircle2,
+  Circle,
+  Store,
+  Globe,
+  Search,
+  FileText,
   ArrowRight,
   AlertCircle
 } from 'lucide-react';
@@ -21,6 +21,7 @@ interface OnboardingStepsTrackerProps {
   onDraftDocument: (docId: string) => void;
   hasCompletedContractReview?: boolean;
   hasScannedWebsite?: boolean;
+  hasScanResults?: boolean;
   priorityDocumentId?: string;
 }
 
@@ -32,11 +33,12 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
   onDraftDocument,
   hasCompletedContractReview = false,
   hasScannedWebsite = false,
+  hasScanResults = false,
   priorityDocumentId
 }) => {
   const isProfileComplete = answers.isProfileComplete;
-  const totalSteps = 4;
-  
+  const totalSteps = 3;
+
   // Calculate completed steps
   let completedSteps = 0;
   if (isProfileComplete) completedSteps++;
@@ -44,7 +46,7 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
   if (hasCompletedContractReview) completedSteps++;
   // Draft step is considered complete if they've drafted at least one priority document
   // For now, we'll track this separately if needed
-  
+
   const steps = [
     {
       id: 'profile',
@@ -55,15 +57,16 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
       action: onCompleteProfile,
       actionText: isProfileComplete ? 'Edit Profile' : 'Complete Profile',
       isOptional: false,
+      disabled: false,
     },
     {
       id: 'website',
       title: 'Scan Website Compliance',
-      description: 'Check if your website is missing mandatory legal pages.',
+      description: hasScanResults ? 'View your previous scan results.' : 'Check if your website is missing mandatory legal pages.',
       icon: Globe,
       completed: hasScannedWebsite,
       action: onScanWebsite,
-      actionText: hasScannedWebsite ? 'Rescan Website' : 'Scan Website',
+      actionText: hasScanResults ? 'View Results' : (hasScannedWebsite ? 'Rescan Website' : 'Scan Website'),
       isOptional: false,
     },
     {
@@ -76,17 +79,17 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
       actionText: hasCompletedContractReview ? 'Review Again' : 'Review Documents',
       isOptional: true,
     },
-    {
-      id: 'draft',
-      title: 'Draft Priority Protection',
-      description: 'Generate your first essential legal document.',
-      icon: FileText,
-      completed: false, // This will be tracked separately
-      action: () => priorityDocumentId && onDraftDocument(priorityDocumentId),
-      actionText: 'Draft Now',
-      isOptional: false,
-      disabled: !priorityDocumentId,
-    },
+    // {
+    //   id: 'draft',
+    //   title: 'Draft Priority Protection',
+    //   description: 'Generate your first essential legal document.',
+    //   icon: FileText,
+    //   completed: false, // This will be tracked separately
+    //   action: () => priorityDocumentId && onDraftDocument(priorityDocumentId),
+    //   actionText: 'Draft Now',
+    //   isOptional: false,
+    //   disabled: !priorityDocumentId,
+    // },
   ];
 
   return (
@@ -109,7 +112,7 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
         {steps.map((step, index) => {
           const Icon = step.icon;
           const isLast = index === steps.length - 1;
-          
+
           return (
             <div key={step.id} className="relative">
               {/* Step Content */}
@@ -118,8 +121,8 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
                 <div className="flex flex-col items-center">
                   <div className={`
                     w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0
-                    ${step.completed 
-                      ? 'bg-brand-600 text-white' 
+                    ${step.completed
+                      ? 'bg-brand-600 text-white'
                       : 'bg-slate-100 text-slate-400 border-2 border-slate-200'
                     }
                     transition-all duration-200
@@ -164,7 +167,7 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
                       {step.description}
                     </p>
                   </div>
-                  
+
                   <div className="flex-shrink-0">
                     <Button
                       onClick={step.action}
@@ -172,8 +175,8 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
                       variant={step.completed ? "outline" : "primary"}
                       size="sm"
                       className={`
-                        ${step.completed 
-                          ? 'border-slate-300 text-slate-700 hover:bg-slate-50' 
+                        ${step.completed
+                          ? 'border-slate-300 text-slate-700 hover:bg-slate-50'
                           : 'bg-brand-600 hover:bg-brand-700 text-white'
                         }
                         flex items-center gap-1.5
