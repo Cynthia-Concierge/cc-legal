@@ -221,8 +221,10 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
   // Sort: Core first, then others
   // (Optional sorting logic here)
 
-  // Pick top 3 priorities from free templates
-  const topPriorities = freeDocs.slice(0, 3);
+  // Pick top priorities - Core Legal Documents
+  // We prioritize the Waiver, Service Agreement, and Website Terms as the "Big 3"
+  const priorityIds = ['template-1', 'template-2', 'template-3'];
+  const topPriorities = advancedDocs.filter(doc => priorityIds.includes(doc.id));
 
   return {
     freeTemplates: freeDocs,

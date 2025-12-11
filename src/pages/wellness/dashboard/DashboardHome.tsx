@@ -5,6 +5,7 @@ import { UserAnswers, ScoreResult, RecommendationResult, DocumentItem, Dashboard
 import { calculateScore } from '../../../lib/wellness/scoring';
 import { getRecommendedDocuments } from '../../../lib/wellness/documentEngine';
 import { calculateLegalHealth, getNextBestAction, NextAction } from '../../../lib/wellness/dashboardLogic';
+import { vaultService } from '../../../lib/wellness/vaultService';
 import { Card, CardContent } from '../../../components/wellness/ui/Card';
 import { Button } from '../../../components/wellness/ui/Button';
 import { Lock, Unlock, Download, Shield, CheckCircle2, Phone, FileText, Search, Globe, Store } from 'lucide-react';
@@ -237,14 +238,32 @@ export const DashboardHome: React.FC = () => {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
+            const downloadFileName = `${pdfFileName}-personalized-${Date.now()}.pdf`;
             link.href = url;
-            link.download = `${pdfFileName}-personalized-${Date.now()}.pdf`;
+            link.download = downloadFileName;
             document.body.appendChild(link);
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
 
             console.log('[Generate] Document generated successfully');
+
+            // Save copy to Vault
+            try {
+                console.log('[Vault] Saving copy to vault...');
+                const file = new File([blob], downloadFileName, { type: 'application/pdf' });
+                await vaultService.uploadDocument(
+                    file,
+                    'contract',
+                    doc.title + ' (Personalized)',
+                    'Auto-generated personalized document'
+                );
+                console.log('[Vault] Document saved successfully');
+                alert('Document generated and saved to your Vault!');
+            } catch (vaultError) {
+                console.error('[Vault] Error saving to vault:', vaultError);
+                // Don't block the user flow if vault save fails, just log it
+            }
         } catch (error: any) {
             console.error('[Generate] Error generating document:', error);
             alert(`Failed to generate document: ${error.message}`);
@@ -280,6 +299,7 @@ export const DashboardHome: React.FC = () => {
                 isOpen={isWebsiteScanModalOpen}
                 onClose={() => setIsWebsiteScanModalOpen(false)}
                 onComplete={() => {
+                    setIsWebsiteScanModalOpen(false);
                     setHasScannedWebsite(true);
                     // Reload scan results after completion
                     const savedScan = localStorage.getItem('wellness_website_scan_result');
@@ -347,102 +367,105 @@ export const DashboardHome: React.FC = () => {
                         priorityDocumentId={recommendations?.topPriorities[0]?.id}
                     />
 
-                    {/* Documents Preview */}
-                    <section>
-                        <div className="flex items-center justify-between mb-2 px-1">
-                            <div className="flex items-center gap-2">
-                                <Unlock className="text-brand-600" size={20} />
-                                <h2 className="text-xl font-bold text-slate-900">Ready-to-Go Templates</h2>
+                    {/* Unified Document List */}
+                    <Card className="border-none shadow-md bg-white overflow-hidden">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                    <FileText className="text-brand-600" size={24} />
+                                    All the Legal Documents Your Business Needs
+                                </h2>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Based on your business profile, these are the exact agreements, waivers, and policies recommended for your protection.
+                                </p>
                             </div>
-                            {/* <Button variant="ghost" size="sm" onClick={() => navigate('/wellness/dashboard/documents')}>
-                                View All
-                            </Button> */}
                         </div>
-                        <p className="text-sm text-slate-500 mb-4 px-1">
-                            Documents you can use immediately—no customization needed.
-                        </p>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            {recommendations.freeTemplates.map((doc) => (
-                                <Card key={doc.id} className="cursor-pointer border-l-4 border-l-brand-500">
-                                    <CardContent className="p-4">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <h3 className="font-semibold text-slate-900">{doc.title}</h3>
-                                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded uppercase">Free</span>
-                                        </div>
-                                        <p className="text-xs text-slate-500 mb-3 line-clamp-2">{doc.description}</p>
-                                        {/* {doc.id === 'template-6' ? (
-                                            // Social Media Disclaimer - show both generate and download buttons
-                                            <div className="space-y-2">
-                                                <Button
-                                                    variant="default"
-                                                    size="sm"
-                                                    fullWidth
-                                                    onClick={() => handleGenerateDocument(doc)}
-                                                    className="bg-brand-600 hover:bg-brand-700 text-white"
-                                                >
-                                                    <FileText size={14} className="mr-2" /> Generate Personalized
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    fullWidth
-                                                    onClick={() => handleDownloadPDF(doc)}
-                                                >
-                                                    <Download size={14} className="mr-2" /> Download Template
-                                                </Button>
+
+                        <div className="divide-y divide-slate-100">
+                            {/* Combine lists: Free templates first, then Advanced */}
+                            {[...recommendations.freeTemplates, ...recommendations.advancedTemplates].map((doc) => {
+                                const isFree = doc.category === 'free'; // Assuming 'free' is the category for unlocked docs
+                                const isLocked = !isFree;
+
+                                return (
+                                    <div key={doc.id} className={`p-4 hover:bg-slate-50 transition-colors group ${isLocked ? 'opacity-90' : ''}`}>
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            {/* Left: Icon & Text */}
+                                            <div className="flex items-start gap-3 flex-1">
+                                                <div className={`
+                                                    w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-1
+                                                    ${isFree ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}
+                                                `}>
+                                                    {isFree ? <Unlock size={20} /> : <Lock size={20} />}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className={`font-semibold text-slate-900 ${isLocked ? 'text-slate-700' : ''}`}>
+                                                            {doc.title}
+                                                        </h3>
+                                                        {isFree && (
+                                                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded uppercase">
+                                                                Ready
+                                                            </span>
+                                                        )}
+                                                        {isLocked && (
+                                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase flex items-center gap-1">
+                                                                <Lock size={10} /> Lawyer Review
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-slate-500 mt-0.5 max-w-2xl">
+                                                        {doc.description}
+                                                    </p>
+                                                </div>
                                             </div>
-                                        ) : ( */}
-                                        <Button
-                                            variant="outline" size="sm" fullWidth
-                                            onClick={() => handleDownloadPDF(doc)}
-                                        >
-                                            <Download size={14} className="mr-2" /> Download PDF
-                                        </Button>
-                                        {/* )} */}
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </section>
 
-                    {/* Advanced Protection */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-4 px-1 mt-8">
-                            <Lock className="text-slate-400" size={20} />
-                            <h2 className="text-xl font-bold text-slate-900">Attorney-Tailored Agreements</h2>
-                        </div>
-                        <p className="text-sm text-slate-500 mb-4 px-1">
-                            Documents that require a legal professional to tailor precisely to your business.
-                        </p>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            {recommendations.advancedTemplates.map((doc) => (
-                                <Card key={doc.id} className="group relative transition-all hover:shadow-lg hover:border-brand-200">
-                                    <CardContent className="p-4 h-full flex flex-col justify-between">
-                                        <div>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h3 className="font-semibold text-slate-900 pr-4">{doc.title}</h3>
-                                                <Lock size={16} className="text-slate-300 flex-shrink-0" />
+                                            {/* Right: Actions */}
+                                            <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center w-full sm:w-auto mt-2 sm:mt-0">
+                                                {isFree ? (
+                                                    // Unlocked Actions
+                                                    <>
+                                                        <div className="flex gap-2 w-full sm:w-auto">
+                                                            {['template-6', 'template-4', 'template-intake'].includes(doc.id) && (
+                                                                <Button
+                                                                    variant="primary"
+                                                                    size="sm"
+                                                                    onClick={() => handleGenerateDocument(doc)}
+                                                                    className="bg-brand-600 hover:bg-brand-700 text-white flex-1 sm:flex-none whitespace-nowrap"
+                                                                >
+                                                                    Generate Personalized
+                                                                </Button>
+                                                            )}
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleDownloadPDF(doc)}
+                                                                className="flex-1 sm:flex-none whitespace-nowrap"
+                                                            >
+                                                                <Download size={14} className="mr-2" />
+                                                                Download
+                                                            </Button>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    // Locked Actions
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setIsCalendlyModalOpen(true)}
+                                                        className="text-slate-400 hover:text-brand-600 hover:bg-brand-50 w-full sm:w-auto"
+                                                    >
+                                                        <Phone size={14} className="mr-2" />
+                                                        Schedule Review
+                                                    </Button>
+                                                )}
                                             </div>
-                                            <p className="text-xs text-slate-500 mb-4 line-clamp-2">{doc.description}</p>
                                         </div>
-
-                                        <div className="pt-2">
-                                            {/* Default State: Info Text */}
-                                            <div className="text-xs text-slate-400 italic group-hover:hidden">Requires lawyer review</div>
-
-                                            {/* Hover State: Call Button */}
-                                            <Button
-                                                className="hidden group-hover:flex w-full bg-teal-600 hover:bg-teal-700 text-white transition-all duration-300"
-                                                onClick={() => setIsCalendlyModalOpen(true)}
-                                            >
-                                                <Phone size={14} className="mr-2" /> Schedule a Call
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
+                                    </div>
+                                );
+                            })}
                         </div>
-                    </section>
+                    </Card>
                 </div>
 
                 {/* Right Column */}

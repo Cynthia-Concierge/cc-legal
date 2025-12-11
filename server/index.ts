@@ -402,21 +402,30 @@ app.post("/api/scan-website-compliance", async (req, res) => {
     // Step 1: Scrape homepage footer to get legal links
     let html = "";
     let markdown = "";
+    let finalUrl = normalizedUrl;
 
     try {
       const pageData = await (firecrawlService as any).scrapePageWithHtml(normalizedUrl);
       html = pageData.html || "";
       markdown = pageData.markdown || "";
+
+      // Update normalizedUrl if we have a source URL from metadata (handles redirects)
+      if (pageData.metadata?.sourceURL) {
+        finalUrl = pageData.metadata.sourceURL;
+        console.log(`[Simple Scan] Redirect detected: ${normalizedUrl} -> ${finalUrl}`);
+      } else if (pageData.metadata?.url) {
+        finalUrl = pageData.metadata.url;
+      }
     } catch (error: any) {
       console.warn("[Simple Scan] Failed to scrape with HTML, trying markdown only:", error.message);
       markdown = await (firecrawlService as any).scrapePage(normalizedUrl);
       html = "";
     }
 
-    // Step 2: Extract legal links from footer
+    // Step 2: Extract legal links from footer - use finalUrl for relative link resolution
     const legalLinks = html
-      ? (firecrawlService as any).findLegalDocumentLinksFromHtml(html, normalizedUrl, markdown)
-      : (firecrawlService as any).findLegalDocumentLinks(markdown, normalizedUrl);
+      ? (firecrawlService as any).findLegalDocumentLinksFromHtml(html, finalUrl, markdown)
+      : (firecrawlService as any).findLegalDocumentLinks(markdown, finalUrl);
 
     // Step 3: Determine which documents are missing
     const requiredDocuments = {
@@ -438,7 +447,10 @@ app.post("/api/scan-website-compliance", async (req, res) => {
         missingDocuments.push(docName);
       } else {
         try {
-          const content = await (firecrawlService as any).scrapePage(docUrl);
+          console.log(`[Simple Scan] Scraping document: ${docName} at ${docUrl}`);
+          // Use onlyMainContent: false to ensure we get the full legal text (including headers/footers/nav if needed)
+          // valid legal documents might be in iframes or have complex structures that onlyMainContent: true misses
+          const content = await (firecrawlService as any).scrapePage(docUrl, { onlyMainContent: false });
           if (content && content.length > 100) {
             foundDocuments[docType] = { url: docUrl, content: content.substring(0, 5000) };
           } else {
@@ -517,7 +529,11 @@ Keep it brief and practical. Focus on the most important problems.`;
     res.json({
       success: true,
       analysis: {
-        foundDocuments: Object.keys(foundDocuments).map(key => requiredDocuments[key as keyof typeof requiredDocuments]),
+        foundDocuments: Object.keys(foundDocuments).map(key => ({
+          name: requiredDocuments[key as keyof typeof requiredDocuments],
+          url: foundDocuments[key].url,
+          content: foundDocuments[key].content
+        })),
         missingDocuments,
         issues,
         summary,

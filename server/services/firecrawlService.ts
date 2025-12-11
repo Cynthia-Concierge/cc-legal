@@ -113,7 +113,7 @@ export class FirecrawlService {
       // Scrape main page with HTML to get footer
       let markdown = "";
       let html = "";
-      
+
       try {
         const pageData = await this.scrapePageWithHtml(url);
         markdown = pageData.markdown || "";
@@ -143,14 +143,14 @@ export class FirecrawlService {
       // Extract social media and contact info from footer (even if HTML is empty, try markdown)
       const socialMedia = this.extractSocialMedia(html, markdown);
       const emails = this.extractEmails(html, markdown);
-      
+
       // Add emails to socialMedia object
       if (emails.length > 0) {
         socialMedia.emails = emails;
       }
 
       // Find links to legal documents (use HTML if available for better footer extraction)
-      const legalLinks = html 
+      const legalLinks = html
         ? this.findLegalDocumentLinksFromHtml(html, url, markdown)
         : this.findLegalDocumentLinks(markdown, url);
 
@@ -180,7 +180,7 @@ export class FirecrawlService {
   /**
    * Scrape a single page using Firecrawl
    */
-  private async scrapePage(url: string): Promise<string> {
+  private async scrapePage(url: string, options: { onlyMainContent?: boolean } = {}): Promise<string> {
     try {
       const response = await fetch(`${this.baseUrl}/scrape`, {
         method: "POST",
@@ -191,7 +191,7 @@ export class FirecrawlService {
         body: JSON.stringify({
           url: url,
           formats: ["markdown"],
-          onlyMainContent: true,
+          onlyMainContent: options.onlyMainContent !== undefined ? options.onlyMainContent : true,
         }),
       });
 
@@ -219,7 +219,7 @@ export class FirecrawlService {
    * Scrape a page with HTML to extract footer and social media
    * CRITICAL: Must use onlyMainContent: false + javascript: true to get footer/social links
    */
-  private async scrapePageWithHtml(url: string): Promise<{ markdown: string; html: string }> {
+  private async scrapePageWithHtml(url: string): Promise<{ markdown: string; html: string; metadata?: any }> {
     try {
       const response = await fetch(`${this.baseUrl}/scrape`, {
         method: "POST",
@@ -251,6 +251,7 @@ export class FirecrawlService {
       return {
         markdown: data.data.markdown || "",
         html: data.data.html || "",
+        metadata: data.data.metadata || {},
       };
     } catch (error) {
       console.error(`Error scraping page with HTML ${url}:`, error);
@@ -261,7 +262,7 @@ export class FirecrawlService {
   /**
    * Extract social media links from footer and throughout the page
    */
-  extractSocialMedia(html: string, markdown: string): { instagram?: string; socialLinks: Record<string, string> } {
+  extractSocialMedia(html: string, markdown: string): { instagram?: string; socialLinks: Record<string, string>; emails?: string[] } {
     const socialLinks: Record<string, string> = {};
     let instagram: string | undefined;
 
@@ -322,13 +323,13 @@ export class FirecrawlService {
       // First, try to find footer section (more likely to have social links)
       const footerMatch = html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i);
       const footerContent = footerMatch ? footerMatch[1] : "";
-      
+
       // Also look for common footer class/ID patterns
       const footerPatterns = [
         /<div[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
         /<section[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi,
       ];
-      
+
       let allFooterContent = footerContent;
       for (const pattern of footerPatterns) {
         let match;
@@ -489,7 +490,7 @@ export class FirecrawlService {
       while ((plainMatch = plainUrlRegex.exec(markdown)) !== null) {
         const url = plainMatch[0];
         const platform = plainMatch[1].toLowerCase();
-        
+
         // Map platform names
         const platformMap: Record<string, string> = {
           instagram: "instagram",
@@ -527,10 +528,10 @@ export class FirecrawlService {
    */
   extractEmails(html: string, markdown: string): string[] {
     const emails = new Set<string>();
-    
+
     // Common email regex pattern
     const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-    
+
     // Extract from HTML
     if (html) {
       // Look for emails in href="mailto:" links
@@ -539,11 +540,11 @@ export class FirecrawlService {
       while ((match = mailtoRegex.exec(html)) !== null) {
         emails.add(match[1].toLowerCase());
       }
-      
+
       // Also extract plain emails from HTML text content
       // Remove script and style tags first
       const cleanHtml = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-                            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
       while ((match = emailRegex.exec(cleanHtml)) !== null) {
         const email = match[0].toLowerCase();
         // Filter out common false positives
@@ -552,7 +553,7 @@ export class FirecrawlService {
         }
       }
     }
-    
+
     // Extract from markdown
     if (markdown) {
       // Extract from markdown links [text](mailto:email)
@@ -564,7 +565,7 @@ export class FirecrawlService {
           emails.add(email);
         }
       }
-      
+
       // Extract plain emails from markdown
       let emailMatch;
       while ((emailMatch = emailRegex.exec(markdown)) !== null) {
@@ -575,7 +576,7 @@ export class FirecrawlService {
         }
       }
     }
-    
+
     return Array.from(emails).slice(0, 10); // Limit to 10 emails
   }
 
@@ -627,13 +628,13 @@ export class FirecrawlService {
     // Extract footer section from HTML (where legal links are usually located)
     const footerMatch = html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i);
     const footerContent = footerMatch ? footerMatch[1] : "";
-    
+
     // Also look for common footer class/ID patterns
     const footerPatterns = [
       /<div[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
       /<section[^>]*(?:class|id)=["'][^"']*footer[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi,
     ];
-    
+
     let allFooterContent = footerContent;
     for (const pattern of footerPatterns) {
       let match;
@@ -650,13 +651,13 @@ export class FirecrawlService {
 
     // Extract all <a> tags with href attributes
     const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    
+
     for (const area of searchAreas) {
       let match;
       while ((match = linkRegex.exec(area.content)) !== null) {
         const href = match[1].trim();
         const linkText = match[2].replace(/<[^>]+>/g, "").trim(); // Remove HTML tags from link text
-        
+
         // Resolve relative URLs
         let fullUrl: string;
         try {
@@ -817,14 +818,14 @@ export class FirecrawlService {
   async scrapeFullWebsite(url: string): Promise<NormalizedWebsiteData> {
     try {
       console.log(`[Firecrawl] Starting website scrape for: ${url}`);
-      
+
       // Normalize URL
       const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
       const domain = new URL(normalizedUrl).origin;
 
       // STEP 1: Scrape homepage
       const homepageData = await this.scrapeHomepage(normalizedUrl);
-      
+
       // STEP 2: Extract true navigation
       const navigation = await this.extractNavigation(
         homepageData.markdown,
@@ -938,14 +939,14 @@ export class FirecrawlService {
       // Use regex to find all <a> tags with href attributes
       const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
       let linkMatch;
-      
+
       while ((linkMatch = linkRegex.exec(html)) !== null) {
         const href = linkMatch[1].trim();
         let label = linkMatch[2].trim();
-        
+
         // Clean label
         label = this.cleanNavLabel(label);
-        
+
         // Skip if it's a logo, icon, or invalid
         if (this.isLogoOrIcon(linkMatch[0], href, label)) {
           continue;
@@ -954,7 +955,7 @@ export class FirecrawlService {
         // Only process internal links
         if (this.isInternalLink(href, domain)) {
           const normalizedUrl = this.normalizeNavUrl(href, domain);
-          
+
           if (!seenUrls.has(normalizedUrl) && label.length > 0) {
             allInternalLinks.add(normalizedUrl);
             linkToLabel.set(normalizedUrl, label);
@@ -1052,17 +1053,17 @@ export class FirecrawlService {
     // First pass: Build parent-child relationships
     for (const link of links) {
       const pathParts = link.split("/").filter(p => p);
-      
+
       // Check if this link has a parent
       if (pathParts.length > 1) {
         // Try different parent path formats
         const parentPath1 = "/" + pathParts.slice(0, -1).join("/");
         const parentPath2 = parentPath1 + "/";
-        
+
         // Check if parent exists in our links
-        const parentPath = links.includes(parentPath1) ? parentPath1 : 
-                          links.includes(parentPath2) ? parentPath2 : null;
-        
+        const parentPath = links.includes(parentPath1) ? parentPath1 :
+          links.includes(parentPath2) ? parentPath2 : null;
+
         if (parentPath) {
           if (!childrenByParent.has(parentPath)) {
             childrenByParent.set(parentPath, []);
@@ -1099,7 +1100,7 @@ export class FirecrawlService {
             url: child,
           }))
           .slice(0, 20); // Limit subnav items
-        
+
         // Mark children as processed
         children.forEach(child => processed.add(child));
       }
@@ -1130,7 +1131,7 @@ export class FirecrawlService {
     // Try to find <nav> elements first
     const navRegex = /<nav[^>]*>([\s\S]*?)<\/nav>/gi;
     const navMatches = Array.from(html.matchAll(navRegex));
-    
+
     if (navMatches.length > 0) {
       // Prefer nav elements that are likely in the header/top of page
       // Look for navs that appear early in the HTML or have nav-related classes
@@ -1140,7 +1141,7 @@ export class FirecrawlService {
         const linkCount = (navHtml.match(/<a[^>]*href/gi) || []).length;
         const isFooter = /footer/i.test(navHtml) || /bottom/i.test(navHtml);
         const hasNavClasses = /nav|menu|header/i.test(navHtml);
-        
+
         if (linkCount >= 3 && !isFooter && hasNavClasses) {
           return match[1]; // Return the content inside nav
         }
@@ -1152,7 +1153,7 @@ export class FirecrawlService {
     // Fallback: Look for navigation in <header>
     const headerRegex = /<header[^>]*>([\s\S]*?)<\/header>/gi;
     const headerMatches = Array.from(html.matchAll(headerRegex));
-    
+
     if (headerMatches.length > 0) {
       // Return the first header (usually the main one)
       return headerMatches[0][1];
@@ -1172,7 +1173,7 @@ export class FirecrawlService {
     // Look for <ul> with class containing "nav", "menu", etc.
     const ulRegex = /<ul[^>]*(?:class|id)=["'][^"']*(?:nav|menu|navigation)[^"']*["'][^>]*>([\s\S]*?)<\/ul>/gi;
     const ulMatches = Array.from(html.matchAll(ulRegex));
-    
+
     // Also look for any <ul> that might be navigation
     if (ulMatches.length === 0) {
       const allUlRegex = /<ul[^>]*>([\s\S]*?)<\/ul>/gi;
@@ -1220,20 +1221,20 @@ export class FirecrawlService {
 
     for (const liMatch of liMatches) {
       if (items.length >= 15) break;
-      
+
       const liContent = liMatch[1];
-      
+
       // Find the main link in this <li>
       const mainLinkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i;
       const mainLinkMatch = liContent.match(mainLinkRegex);
-      
+
       if (mainLinkMatch) {
         const href = mainLinkMatch[1].trim();
         let label = mainLinkMatch[2].trim();
-        
+
         // Clean label - remove nested HTML tags, images, icons
         label = this.cleanNavLabel(label);
-        
+
         // Skip if it's a logo, icon, or image
         if (this.isLogoOrIcon(liContent, href, label)) {
           continue;
@@ -1241,20 +1242,20 @@ export class FirecrawlService {
 
         if (this.isValidNavLink(href, domain, label) && label.length > 0) {
           const fullUrl = href.startsWith("http") ? href : new URL(href, domain).href;
-          
+
           if (!seenUrls.has(fullUrl)) {
             // Check for submenu/dropdown in this <li>
             const children = this.extractSubnavigation(liContent, domain, seenUrls);
-            
+
             const navItem: NavigationItem = {
               label: label || this.inferLabelFromUrl(href),
               url: this.normalizeNavUrl(href, domain),
             };
-            
+
             if (children.length > 0) {
               navItem.children = children;
             }
-            
+
             items.push(navItem);
             seenUrls.add(fullUrl);
           }
@@ -1286,7 +1287,7 @@ export class FirecrawlService {
 
       for (const nestedLi of nestedLis) {
         if (children.length >= 20) break; // Limit subnav items
-        
+
         const liContentInner = nestedLi[1];
         const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i;
         const linkMatch = liContentInner.match(linkRegex);
@@ -1303,7 +1304,7 @@ export class FirecrawlService {
 
           if (this.isValidNavLink(href, domain, label) && label.length > 0) {
             const fullUrl = href.startsWith("http") ? href : new URL(href, domain).href;
-            
+
             if (!seenUrls.has(fullUrl)) {
               children.push({
                 label: label || this.inferLabelFromUrl(href),
@@ -1328,14 +1329,14 @@ export class FirecrawlService {
     seenUrls: Set<string>
   ): NavigationItem[] {
     const items: NavigationItem[] = [];
-    
+
     // Find all <a> tags
     const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
     const links = Array.from(html.matchAll(linkRegex));
 
     for (const link of links) {
       if (items.length >= 15) break;
-      
+
       const href = link[1].trim();
       let label = link[2].trim();
       label = this.cleanNavLabel(label);
@@ -1347,7 +1348,7 @@ export class FirecrawlService {
 
       if (this.isValidNavLink(href, domain, label) && label.length > 0) {
         const fullUrl = href.startsWith("http") ? href : new URL(href, domain).href;
-        
+
         if (!seenUrls.has(fullUrl)) {
           items.push({
             label: label || this.inferLabelFromUrl(href),
@@ -1367,20 +1368,20 @@ export class FirecrawlService {
   private cleanNavLabel(label: string): string {
     // Remove HTML tags
     let cleaned = label.replace(/<[^>]+>/g, "");
-    
+
     // Remove image tags and their alt text patterns
     cleaned = cleaned.replace(/!\[([^\]]*)\]\([^)]+\)/g, ""); // Markdown images
     cleaned = cleaned.replace(/<img[^>]*>/gi, ""); // HTML images
-    
+
     // Remove SVG icons (common pattern: <svg>...</svg>)
     cleaned = cleaned.replace(/<svg[\s\S]*?<\/svg>/gi, "");
-    
+
     // Remove common icon class patterns
     cleaned = cleaned.replace(/\bicon-[\w-]+\b/gi, "");
-    
+
     // Trim whitespace
     cleaned = cleaned.trim();
-    
+
     return cleaned;
   }
 
@@ -1398,8 +1399,8 @@ export class FirecrawlService {
     }
 
     // Check for logo in class/id/alt
-    if (/logo|brand|icon|img|image/i.test(lowerHtml) && 
-        (lowerHtml.includes('<img') || lowerHtml.includes('<svg') || lowerLabel.length === 0)) {
+    if (/logo|brand|icon|img|image/i.test(lowerHtml) &&
+      (lowerHtml.includes('<img') || lowerHtml.includes('<svg') || lowerLabel.length === 0)) {
       return true;
     }
 
@@ -1465,7 +1466,7 @@ export class FirecrawlService {
 
     // Validate children recursively
     if (item.children) {
-      item.children = item.children.filter(child => 
+      item.children = item.children.filter(child =>
         this.isValidNavigationItem(child, domain)
       );
     }
@@ -1545,7 +1546,7 @@ export class FirecrawlService {
     while ((match = linkRegex.exec(markdown)) !== null && links.length < 20) {
       const text = match[1].trim();
       const url = match[2].trim();
-      
+
       if (!url.startsWith("#") && !url.startsWith("mailto:") && !url.startsWith("tel:")) {
         links.push({ text, url });
       }
@@ -1652,18 +1653,18 @@ export class FirecrawlService {
       const level = match[1].length;
       const heading = match[2].trim();
       const contentStart = match.index + match[0].length;
-      
+
       // Get content before this header (for previous section)
       if (parts.length > 0) {
         parts[parts.length - 1].content = markdown.slice(lastIndex, match.index).trim();
       }
-      
+
       parts.push({
         level,
         heading,
         content: "",
       });
-      
+
       lastIndex = contentStart;
     }
 
@@ -1703,7 +1704,7 @@ export class FirecrawlService {
    */
   private extractImages(content: string): string[] {
     const images: string[] = [];
-    
+
     // Markdown images: ![alt](url)
     const markdownImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
     let match;
@@ -1743,10 +1744,10 @@ export class FirecrawlService {
     while ((match = linkRegex.exec(content)) !== null) {
       const label = match[1].trim();
       const url = match[2].trim();
-      
+
       // Check if label matches CTA pattern
       const isCTA = ctaPatterns.some(pattern => pattern.test(label));
-      
+
       if (isCTA && !url.startsWith("#") && !url.startsWith("mailto:") && !url.startsWith("tel:")) {
         ctas.push({ label, url });
       }
@@ -1757,9 +1758,9 @@ export class FirecrawlService {
     while ((match = buttonRegex.exec(content)) !== null) {
       const url = match[1].trim();
       const label = match[2].trim().replace(/<[^>]+>/g, "");
-      
+
       const isCTA = ctaPatterns.some(pattern => pattern.test(label));
-      
+
       if (isCTA && label.length > 0 && !url.startsWith("#") && !url.startsWith("mailto:") && !url.startsWith("tel:")) {
         ctas.push({ label, url });
       }
@@ -1776,20 +1777,20 @@ export class FirecrawlService {
 
     // Remove images
     cleaned = cleaned.replace(/!\[([^\]]*)\]\([^)]+\)/g, "");
-    
+
     // Convert links to just text: [text](url) -> text
     cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
-    
+
     // Remove HTML tags but keep text
     cleaned = cleaned.replace(/<[^>]+>/g, "");
-    
+
     // Remove markdown headers
     cleaned = cleaned.replace(/^#{1,6}\s+/gm, "");
-    
+
     // Remove excessive whitespace
     cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
     cleaned = cleaned.replace(/[ \t]+/g, " ");
-    
+
     return cleaned.trim();
   }
 

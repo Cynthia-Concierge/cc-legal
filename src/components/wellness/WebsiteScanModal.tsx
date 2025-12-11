@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Globe, Loader2, CheckCircle2, AlertTriangle, X } from 'lucide-react';
+import { vaultService } from '../../lib/wellness/vaultService';
 
 interface WebsiteScanModalProps {
   isOpen: boolean;
@@ -12,7 +13,11 @@ interface WebsiteScanModalProps {
 }
 
 interface ScanResult {
-  foundDocuments: string[];
+  foundDocuments: Array<{
+    name: string;
+    url: string;
+    content: string;
+  }>;
   missingDocuments: string[];
   issues: Array<{
     document: string;
@@ -79,7 +84,7 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
       // Extract analysis result from the response
       if (data.analysis) {
         const result: ScanResult = {
-          foundDocuments: data.analysis.foundDocuments || [],
+          foundDocuments: data.analysis.foundDocuments || [], // Now array of objects
           missingDocuments: data.analysis.missingDocuments || [],
           issues: data.analysis.issues || [],
           summary: data.analysis.summary || 'Website scan completed.',
@@ -93,6 +98,75 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
           websiteUrl: normalizedUrl,
           timestamp: new Date().toISOString()
         }));
+
+        // 1. Generate and save REPORT to vault
+        try {
+          console.log('[Scan] Saving report to vault...');
+          const reportContent = `WEBSITE COMPLIANCE REPORT
+Date: ${new Date().toLocaleDateString()}
+Website: ${normalizedUrl}
+
+SUMMARY
+${result.summary}
+
+FOUND DOCUMENTS
+${result.foundDocuments.length > 0 ? result.foundDocuments.map(d => d.name).join('\n') : 'None'}
+
+MISSING DOCUMENTS
+${result.missingDocuments.length > 0 ? result.missingDocuments.join('\n') : 'None'}
+
+ISSUES FOUND
+${result.issues.length > 0 ? result.issues.map(i =>
+            `- [${i.severity.toUpperCase()}] ${i.document}: ${i.issue}\n  Why it matters: ${i.whyItMatters}`
+          ).join('\n\n') : 'None'}
+            `;
+
+          const reportFile = new File([reportContent], `Compliance Report - ${normalizedUrl.replace(/^https?:\/\//, '')}.txt`, { type: 'text/plain' });
+
+          await vaultService.uploadDocument(
+            reportFile,
+            'other',
+            `Website Compliance Report`,
+            `AI Analysis for ${normalizedUrl}`,
+            reportContent
+          );
+          console.log('[Scan] Report saved successfully');
+
+          // 2. Save FOUND DOCUMENTS to vault
+          if (result.foundDocuments.length > 0) {
+            console.log(`[Scan] Saving ${result.foundDocuments.length} found documents to vault...`);
+            for (const doc of result.foundDocuments) {
+              try {
+                const docFile = new File([doc.content], `${doc.name}.txt`, { type: 'text/plain' });
+
+                // Construct analysis string for this specific document
+                const docIssues = result.issues.filter(i => i.document === doc.name);
+                let docAnalysis = '';
+                if (docIssues.length > 0) {
+                  docAnalysis = `ISSUES FOUND:\n\n` + docIssues.map(i =>
+                    `[${i.severity.toUpperCase()}] ${i.issue}\nWhy it matters: ${i.whyItMatters}`
+                  ).join('\n\n');
+                } else {
+                  docAnalysis = 'No specific issues found for this document.';
+                }
+
+                await vaultService.uploadDocument(
+                  docFile,
+                  'contract', // Categorize as contract
+                  `${doc.name} (Scanned)`,
+                  `Scanned from ${normalizedUrl} on ${new Date().toLocaleDateString()}`,
+                  docAnalysis
+                );
+                console.log(`[Scan] Saved ${doc.name} to vault`);
+              } catch (docSaveError) {
+                console.error(`[Scan] Error saving ${doc.name}:`, docSaveError);
+              }
+            }
+          }
+
+        } catch (vaultError) {
+          console.error('[Scan] Failed to save report/documents to vault:', vaultError);
+        }
       } else {
         // If no analysis, create a basic result
         const result: ScanResult = {
@@ -222,7 +296,8 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
                     {scanResult.foundDocuments.map((doc, idx) => (
                       <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-green-50/50 border border-green-100">
                         <CheckCircle2 className="text-green-600 h-4 w-4" />
-                        <span className="text-sm text-slate-700 font-medium">{doc}</span>
+                        <span className="text-sm text-slate-700 font-medium">{doc.name}</span>
+                        <span className="text-xs text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">Saved to Vault</span>
                       </div>
                     ))}
                   </div>

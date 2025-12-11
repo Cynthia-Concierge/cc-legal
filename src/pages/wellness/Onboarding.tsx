@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserAnswers } from '../../types/wellness';
 import { ProgressBar } from '../../components/wellness/ui/ProgressBar';
 import { QuestionCard } from '../../components/wellness/onboarding/QuestionCard';
-import { ShieldCheck, Mail, Globe, Upload, Download } from 'lucide-react';
+import { ShieldCheck, Mail, Globe, Upload, Download, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 const INITIAL_ANSWERS: UserAnswers = {
@@ -28,6 +28,56 @@ export const Onboarding: React.FC = () => {
   const [emailInput, setEmailInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingExistingUser, setIsCheckingExistingUser] = useState(true);
+  const [isTempPassword, setIsTempPassword] = useState(true); // Default to true (assume new user)
+
+  // Password step state
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false); // For users who already have a password but want to change it
+
+  const handlePasswordSubmit = async () => {
+    // If not updating and already has password, just continue
+    if (!isTempPassword && !isUpdatingPassword) {
+      navigate('/wellness/dashboard');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setPasswordError('');
+
+    if (supabase) {
+      try {
+        const { error } = await supabase.auth.updateUser({
+          password: password,
+          data: { temp_password: false } // Mark as no longer temp
+        });
+
+        if (error) throw error;
+
+        // Success
+        navigate('/wellness/dashboard');
+      } catch (err: any) {
+        console.error('Error setting password:', err);
+        setPasswordError(err.message || 'Failed to update password');
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      // Fallback if no supabase
+      navigate('/wellness/dashboard');
+    }
+  };
 
   const updateAnswer = (key: keyof UserAnswers, value: any) => {
     setAnswers(prev => ({ ...prev, [key]: value }));
@@ -90,11 +140,17 @@ export const Onboarding: React.FC = () => {
               const { data: { session } } = await supabase.auth.getSession();
               hasActiveSession = !!session;
               onboardingCompleteInMetadata = session?.user?.user_metadata?.onboarding_complete === true;
+
+              // Check if they have a temp password
+              const isTemp = session?.user?.user_metadata?.temp_password !== false; // Default to true if undefined or true
+              setIsTempPassword(isTemp);
+
               console.log('[Onboarding] Session check:', {
                 hasActiveSession,
                 userId: session?.user?.id,
                 onboardingCompleteInMetadata,
-                hasPassword: hasActiveSession // If they have a session, they have a password
+                hasPassword: hasActiveSession, // If they have a session, they have a password
+                isTempPassword: isTemp
               });
 
               // If user has a session (can log in), they have a password = onboarding is complete
@@ -303,7 +359,7 @@ export const Onboarding: React.FC = () => {
     if (step === 0) {
       // Move to email collection
       setStep(1);
-    } else if (step < 7) { // 1 is email, 2-7 are questions
+    } else if (step < 8) { // 1 is email, 2-7 are questions, 8 is password
       setStep(step + 1);
     } else {
       // Finished - go directly to dashboard (Business Profile is optional and can be accessed later)
@@ -423,7 +479,135 @@ export const Onboarding: React.FC = () => {
   }
 
   // Steps 2-9: Questions (8 questions)
-  const totalSteps = 9; // 1 email + 8 questions
+  // Step 8 (index 6): W-2 (Unused) -> we want to skip or ensure we reach renders
+  // Actually, let's redefine the flow:
+  // Step 2-7 are the 6 visible questions.
+  // Step 8 is the Password Step.
+
+  // We need to render the password step distinct from renderQuestion because it's not a QuestionCard
+
+  // Step 8: Password Creation
+  // Step 8: Password Creation
+  if (step === 8) {
+    const showPasswordForm = isTempPassword || isUpdatingPassword;
+
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white rounded-xl p-8 shadow-lg border border-slate-200">
+            <div className="text-center mb-8">
+              <div className={`w-12 h-12 ${!isTempPassword ? 'bg-emerald-100 text-emerald-600' : 'bg-brand-100 text-brand-600'} rounded-xl flex items-center justify-center mx-auto mb-4`}>
+                <ShieldCheck size={24} />
+              </div>
+              <h2 className="text-2xl font-semibold text-slate-900 mb-2">
+                {!isTempPassword ? 'Account Secured' : 'Secure Your Account'}
+              </h2>
+              <p className="text-slate-600">
+                {!isTempPassword
+                  ? 'Your account is already password protected. Your legal documents will save automatically.'
+                  : 'If you want your customized legal documents to save, create a password.'
+                }
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {!isTempPassword && !isUpdatingPassword && (
+                <div className="text-center pb-4">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-sm font-medium mb-4">
+                    <CheckCircle2 size={16} />
+                    Password Active
+                  </div>
+                  <button
+                    onClick={() => setIsUpdatingPassword(true)}
+                    className="block w-full text-sm text-brand-600 font-medium hover:underline mb-2"
+                  >
+                    Update Password (Optional)
+                  </button>
+                </div>
+              )}
+
+              {showPasswordForm && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      {isUpdatingPassword ? 'New Password' : 'Password'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none pr-10"
+                        placeholder="Create a password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none pr-10"
+                        placeholder="Confirm password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {passwordError && (
+                    <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-start gap-2">
+                      <div className="mt-0.5"><div className="w-1.5 h-1.5 rounded-full bg-red-600" /></div>
+                      {passwordError}
+                    </div>
+                  )}
+
+                  {isUpdatingPassword && (
+                    <button
+                      onClick={() => setIsUpdatingPassword(false)}
+                      className="text-sm text-slate-500 hover:text-slate-700 underline"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </>
+              )}
+
+              <button
+                onClick={handlePasswordSubmit}
+                disabled={isSubmitting || (showPasswordForm && (!password || !confirmPassword))}
+                className="w-full h-12 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              >
+                {isSubmitting ? 'Saving...' : (!isTempPassword && !isUpdatingPassword ? 'Continue to Dashboard' : 'Save & Continue')}
+              </button>
+
+              {isTempPassword && (
+                <button
+                  onClick={() => navigate('/wellness/dashboard')}
+                  className="w-full py-2 text-sm text-slate-500 hover:text-slate-700 font-medium"
+                >
+                  Skip for now
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Steps 2-9: Questions (8 questions)
+  // Step 8 is Password Creation (handled above)
   const currentQuestionIndex = step - 2; // Adjust for email step
 
   const renderQuestion = () => {
@@ -524,7 +708,7 @@ export const Onboarding: React.FC = () => {
             onAnswer={(val) => updateAnswer('sellsProducts', val)}
             onNext={nextStep}
             onBack={() => setStep(step - 1)}
-            isLast={true}
+            isLast={false}
           />
         );
       default:

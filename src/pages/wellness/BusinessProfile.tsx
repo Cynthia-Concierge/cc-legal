@@ -1,14 +1,33 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserAnswers, BusinessType, StaffCount, ClientCount, PrimaryConcern, EntityType } from '../../types/wellness';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/wellness/ui/Card';
 import { Button } from '../../components/wellness/ui/Button';
-import { ArrowLeft, Store, Users, Target, Building2, Lock, FileText } from 'lucide-react';
+import { ArrowLeft, Store, Users, Target, Building2, Lock, FileText, CheckCircle2, ChevronRight, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../hooks/use-toast';
+
+type SectionId = 'security' | 'identity' | 'legal' | 'structure' | 'risk' | 'goal';
+
+interface SectionConfig {
+  id: SectionId;
+  title: string;
+  icon: React.ElementType;
+  description: string;
+}
+
+const SECTIONS: SectionConfig[] = [
+  { id: 'security', title: 'Account Security', icon: Lock, description: 'Secure your account' },
+  { id: 'identity', title: 'Business Identity', icon: Store, description: 'Basic business details' },
+  { id: 'legal', title: 'Legal Entity', icon: FileText, description: 'Official entity info' },
+  { id: 'structure', title: 'Structure & Scale', icon: Building2, description: 'Size and type' },
+  { id: 'risk', title: 'Risk Profile', icon: Target, description: 'Activities & liability' },
+  { id: 'goal', title: 'Primary Goal', icon: CheckCircle2, description: 'What matters most' },
+];
 
 export const BusinessProfile = () => {
   const navigate = useNavigate();
   const [answers, setAnswers] = useState<UserAnswers | null>(null);
+  const [activeSection, setActiveSection] = useState<SectionId>('security');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -104,6 +123,14 @@ export const BusinessProfile = () => {
           const { data: { user: authUser } } = await supabase.auth.getUser();
 
           if (authUser) {
+
+            // Should we skip the password section if they already have an account?
+            // Maybe not, allowing them to change it is good. 
+            // But we might want to default activeSection to 'identity' if they are logged in.
+            if (authUser.email_confirmed_at || authUser.last_sign_in_at) {
+              setActiveSection('identity');
+            }
+
             console.log('🔍 Loading profile data from Supabase for user:', authUser.id);
 
             // Load business profile data
@@ -174,18 +201,28 @@ export const BusinessProfile = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const { toast } = useToast();
+
   const handleSave = async () => {
     if (!answers) return;
 
     // Validate password if provided
     if (password.trim().length > 0) {
       if (password !== confirmPassword) {
-        alert('Passwords do not match.');
+        toast({
+          variant: "destructive",
+          title: "Passwords do not match",
+          description: "Please ensure both password fields match.",
+        });
         return;
       }
 
       if (password.length < 8) {
-        alert('Password must be at least 8 characters.');
+        toast({
+          variant: "destructive",
+          title: "Password too short",
+          description: "Password must be at least 8 characters long.",
+        });
         return;
       }
     }
@@ -210,7 +247,11 @@ export const BusinessProfile = () => {
 
           if (!userEmail || !userEmail.includes('@')) {
             console.error('❌ No valid email found to create user');
-            alert('Email is required to create your account. Please go back and enter your email.');
+            toast({
+              variant: "destructive",
+              title: "Email missing",
+              description: "Email is required to create your account. Please go back and enter your email.",
+            });
             setIsSaving(false);
             return;
           }
@@ -249,7 +290,11 @@ export const BusinessProfile = () => {
 
                 if (otpError) {
                   console.error('Error signing in existing user:', otpError);
-                  alert('Account exists but could not sign in. Please use the login page.');
+                  toast({
+                    variant: "destructive",
+                    title: "Authentication Error",
+                    description: "Account exists but could not sign in. Please use the login page.",
+                  });
                   setIsSaving(false);
                   return;
                 } else {
@@ -265,7 +310,11 @@ export const BusinessProfile = () => {
                   message: signUpError.message,
                   status: signUpError.status
                 });
-                alert('Error creating account: ' + signUpError.message);
+                toast({
+                  variant: "destructive",
+                  title: "Account Creation Failed",
+                  description: signUpError.message,
+                });
                 setIsSaving(false);
                 return;
               }
@@ -288,13 +337,21 @@ export const BusinessProfile = () => {
               }
             } else {
               console.warn('⚠️ No user data returned from signUp');
-              alert('User account created but could not be verified. Please try logging in.');
+              toast({
+                variant: "destructive",
+                title: "Verification Required",
+                description: "User account created but could not be verified. Please try logging in.",
+              });
               setIsSaving(false);
               return;
             }
           } catch (createErr: any) {
             console.error('❌ Error in user creation flow:', createErr);
-            alert('Error creating account: ' + (createErr.message || 'Unknown error'));
+            toast({
+              variant: "destructive",
+              title: "Error",
+              description: createErr.message || 'Unknown error during account creation.',
+            });
             setIsSaving(false);
             return;
           }
@@ -313,7 +370,11 @@ export const BusinessProfile = () => {
 
             if (passError) {
               console.error('Error setting password:', passError);
-              alert('Error setting password. Please try again.');
+              toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Failed to set password. Please try again.",
+              });
               setIsSaving(false);
               return;
             }
@@ -369,9 +430,13 @@ export const BusinessProfile = () => {
           } else {
             errorMsg += 'Variables are set but Supabase client failed to initialize. Check the console for details.';
           }
-          errorMsg += '\n\nNote: After adding variables, restart your dev server (npm run dev).';
+          errorMsg += '\\n\\nNote: After adding variables, restart your dev server (npm run dev).';
 
-          alert(errorMsg);
+          toast({
+            variant: "destructive",
+            title: "Configuration Error",
+            description: "Supabase is not configured correctly. Check console for details.",
+          });
           console.error('Supabase config check:', {
             hasUrl,
             hasKey,
@@ -484,16 +549,48 @@ export const BusinessProfile = () => {
       }
 
       if (password.trim().length > 0) {
-        alert('Profile saved! Your password is now active.');
+        toast({
+          title: "Profile Saved & Password Set",
+          description: "Your business profile is updated and your password is now active.",
+          className: "bg-green-50 border-green-200 text-green-900",
+        });
       } else {
-        alert('Profile saved successfully!');
+        toast({
+          title: "Profile Saved Successfully",
+          description: "Your business details have been updated.",
+          className: "bg-green-50 border-green-200 text-green-900",
+        });
       }
 
-      navigate('/wellness/dashboard');
+      // Add a small delay so user can see the success toast before redirect
+      setTimeout(() => {
+        navigate('/wellness/dashboard');
+      }, 1500);
+
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('Error saving profile. Please try again.');
+      toast({
+        variant: "destructive",
+        title: "Save Failed",
+        description: "An unexpected error occurred. Please try again.",
+      });
       setIsSaving(false);
+    }
+  };
+
+  const nextSection = () => {
+    const currentIndex = SECTIONS.findIndex(s => s.id === activeSection);
+    if (currentIndex < SECTIONS.length - 1) {
+      setActiveSection(SECTIONS[currentIndex + 1].id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const prevSection = () => {
+    const currentIndex = SECTIONS.findIndex(s => s.id === activeSection);
+    if (currentIndex > 0) {
+      setActiveSection(SECTIONS[currentIndex - 1].id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -502,428 +599,460 @@ export const BusinessProfile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-          <button
-            onClick={() => navigate('/wellness/dashboard')}
-            className="text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium"
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/wellness/dashboard')}
+              className="text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium"
+            >
+              <ArrowLeft size={18} />
+              <span className="hidden md:inline">Dashboard</span>
+            </button>
+            <div className="h-6 w-px bg-slate-200 hidden md:block" />
+            <h1 className="text-xl font-semibold text-slate-900">Business Profile</h1>
+          </div>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2"
           >
-            <ArrowLeft size={18} /> Back to Dashboard
-          </button>
-          <span className="font-semibold text-slate-900">Business Profile</span>
+            <Save size={16} />
+            {isSaving ? 'Saving...' : 'Save & Exit'}
+          </Button>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 py-8 flex flex-col md:flex-row gap-8">
 
-        <div className="text-center space-y-2 mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Let's Finalize Your Setup</h1>
-          <p className="text-slate-500 text-lg">
-            Complete your profile to unlock personalized contracts and a more accurate risk score.
-          </p>
+        {/* Sidebar Nav */}
+        <div className="w-full md:w-64 flex-shrink-0">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden sticky top-24">
+            <div className="p-4 bg-slate-50 border-b border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Profile Sections</p>
+            </div>
+            <nav className="flex flex-col">
+              {SECTIONS.map((section, idx) => {
+                const Icon = section.icon;
+                const isActive = activeSection === section.id;
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    className={`
+                        w-full flex items-center gap-3 p-4 text-left transition-colors border-l-4
+                        ${isActive
+                        ? 'border-brand-600 bg-brand-50 text-brand-900'
+                        : 'border-transparent hover:bg-slate-50 text-slate-600 hover:text-slate-900'}
+                      `}
+                  >
+                    <Icon size={20} className={isActive ? 'text-brand-600' : 'text-slate-400'} />
+                    <div className="flex-1">
+                      <p className={`text-sm font-medium ${isActive ? 'font-semibold' : ''}`}>{section.title}</p>
+                      <p className="text-xs text-slate-500 line-clamp-1">{section.description}</p>
+                    </div>
+                    {isActive && <ChevronRight size={16} className="text-brand-400" />}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
         </div>
 
-        {/* Section 1: Identity */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Store className="text-brand-600" size={20} />
-              Business Identity
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Business Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Zen Yoga Studio"
-                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                value={formData.businessName}
-                onChange={(e) => handleChange('businessName', e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Website URL</label>
-                <input
-                  type="text"
-                  placeholder="yourbusiness.com"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={formData.website}
-                  onChange={(e) => handleChange('website', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Instagram Handle <span className="text-slate-400 font-normal">(Optional)</span></label>
-                <input
-                  type="text"
-                  placeholder="@yourhandle"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={formData.instagram}
-                  onChange={(e) => handleChange('instagram', e.target.value)}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Main Content Area */}
+        <div className="flex-1 min-w-0">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 md:p-8 min-h-[500px] animate-in fade-in zoom-in-95 duration-300">
 
-        {/* Section 2: Legal Entity Information (for document auto-fill) */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="text-brand-600" size={20} />
-              Legal Entity Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-slate-600">
-              This information is used to auto-fill your legal documents. Fill this out to generate personalized agreements instantly.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Legal Entity Name <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Zen Yoga LLC"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={formData.legalEntityName}
-                  onChange={(e) => handleChange('legalEntityName', e.target.value)}
-                />
-                <p className="text-xs text-slate-500 mt-1">Official registered business name</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Entity Type <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <select
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={formData.entityType}
-                  onChange={(e) => handleChange('entityType', e.target.value)}
-                >
-                  <option value="">Select type...</option>
-                  <option value="LLC">LLC</option>
-                  <option value="Corporation">Corporation</option>
-                  <option value="Sole Proprietorship">Sole Proprietorship</option>
-                  <option value="Partnership">Partnership</option>
-                </select>
-              </div>
+            {/* Section Header */}
+            <div className="mb-8 pb-4 border-b border-slate-100">
+              <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+                {(() => {
+                  const s = SECTIONS.find(x => x.id === activeSection);
+                  const Icon = s?.icon || Store;
+                  return (
+                    <>
+                      <div className="p-2 bg-brand-100 rounded-lg text-brand-600">
+                        <Icon size={24} />
+                      </div>
+                      {s?.title}
+                    </>
+                  );
+                })()}
+              </h2>
+              <p className="text-slate-500 mt-2 ml-14">
+                {SECTIONS.find(x => x.id === activeSection)?.description}
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Owner/Representative Name <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Your full name"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={formData.ownerName}
-                  onChange={(e) => handleChange('ownerName', e.target.value)}
-                />
-                <p className="text-xs text-slate-500 mt-1">Legal signer on documents</p>
-              </div>
+            {/* Section Content */}
+            <div className="space-y-6">
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Phone Number <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="tel"
-                  placeholder="(555) 123-4567"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={formData.phone}
-                  onChange={(e) => handleChange('phone', e.target.value)}
-                />
-              </div>
+              {activeSection === 'security' && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex gap-3">
+                    <Lock className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+                    <div>
+                      <p className="font-medium text-blue-900">Protect Your Documents</p>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Setting a strong password ensures only you can access your generated legal agreements.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
+                      <input
+                        type="password"
+                        placeholder="At least 8 characters"
+                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Confirm Password</label>
+                      <input
+                        type="password"
+                        placeholder="Re-enter your password"
+                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {password && confirmPassword && password !== confirmPassword && (
+                    <p className="text-sm text-red-500 flex items-center gap-2"><CheckCircle2 size={14} className="opacity-0" /> Passwords do not match.</p>
+                  )}
+                  {password && password.length > 0 && password.length < 8 && (
+                    <p className="text-sm text-red-500">Password must be at least 8 characters.</p>
+                  )}
+                </div>
+              )}
+
+              {activeSection === 'identity' && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Business Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Zen Yoga Studio"
+                      className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                      value={formData.businessName}
+                      onChange={(e) => handleChange('businessName', e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Website URL</label>
+                      <input
+                        type="text"
+                        placeholder="yourbusiness.com"
+                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                        value={formData.website}
+                        onChange={(e) => handleChange('website', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Instagram Handle <span className="text-slate-400 font-normal">(Optional)</span></label>
+                      <input
+                        type="text"
+                        placeholder="@yourhandle"
+                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                        value={formData.instagram}
+                        onChange={(e) => handleChange('instagram', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeSection === 'legal' && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                  <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    This information is used to <strong>auto-fill your legal documents</strong>. Fill this out once to generate personalized agreements instantly.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Legal Entity Name <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Zen Yoga LLC"
+                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                        value={formData.legalEntityName}
+                        onChange={(e) => handleChange('legalEntityName', e.target.value)}
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Official registered business name</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Entity Type <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <select
+                        className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-brand-500 outline-none"
+                        value={formData.entityType}
+                        onChange={(e) => handleChange('entityType', e.target.value)}
+                      >
+                        <option value="">Select type...</option>
+                        <option value="LLC">LLC</option>
+                        <option value="Corporation">Corporation</option>
+                        <option value="Sole Proprietorship">Sole Proprietorship</option>
+                        <option value="Partnership">Partnership</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Owner/Representative Name <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Your full name"
+                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                        value={formData.ownerName}
+                        onChange={(e) => handleChange('ownerName', e.target.value)}
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Legal signer on documents</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Phone Number <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="tel"
+                        placeholder="(555) 123-4567"
+                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                        value={formData.phone}
+                        onChange={(e) => handleChange('phone', e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Business Address <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="123 Main St, San Francisco, CA 94102"
+                      className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                      value={formData.businessAddress}
+                      onChange={(e) => handleChange('businessAddress', e.target.value)}
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Physical address for legal notices</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      State <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="California"
+                      className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                      value={formData.state}
+                      onChange={(e) => handleChange('state', e.target.value)}
+                    />
+                    <p className="text-xs text-slate-500 mt-1">State of formation/operation</p>
+                  </div>
+                </div>
+              )}
+
+              {activeSection === 'structure' && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Primary Business Type</label>
+                    <select
+                      className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-brand-500 outline-none"
+                      value={formData.businessType}
+                      onChange={(e) => handleChange('businessType', e.target.value)}
+                    >
+                      <option value="">Select a type...</option>
+                      <option value="Yoga Studio">Yoga Studio</option>
+                      <option value="Pilates Studio">Pilates Studio</option>
+                      <option value="Gym / Fitness Studio">Gym / Fitness Studio</option>
+                      <option value="Retreat Leader">Retreat Leader</option>
+                      <option value="Online Coach">Online Coach</option>
+                      <option value="Personal Trainer">Personal Trainer</option>
+                      <option value="Wellness Practitioner">Wellness Practitioner</option>
+                      <option value="Breathwork / Meditation">Breathwork / Meditation</option>
+                      <option value="Hybrid (Online + In-person)">Hybrid (Online + In-person)</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Team Size</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['0', '1-3', '4-10', '10+'].map(opt => (
+                          <button
+                            key={opt}
+                            onClick={() => handleChange('staffCount', opt)}
+                            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${formData.staffCount === opt
+                              ? 'bg-brand-600 text-white border-brand-600'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
+                              }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Monthly Clients</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['0-20', '20-50', '50-200', '200+'].map(opt => (
+                          <button
+                            key={opt}
+                            onClick={() => handleChange('clientCount', opt)}
+                            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${formData.clientCount === opt
+                              ? 'bg-brand-600 text-white border-brand-600'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
+                              }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeSection === 'risk' && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                  <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
+                    <div>
+                      <p className="font-medium text-slate-900">Do you use client photos or videos?</p>
+                      <p className="text-xs text-slate-500">For social media, website, or marketing materials.</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleChange('usesPhotos', true)}
+                        className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formData.usesPhotos ? 'bg-brand-600 text-white' : 'bg-white border text-slate-600'}`}
+                      >Yes</button>
+                      <button
+                        onClick={() => handleChange('usesPhotos', false)}
+                        className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${!formData.usesPhotos ? 'bg-slate-800 text-white' : 'bg-white border text-slate-600'}`}
+                      >No</button>
+                    </div>
+                  </div>
+
+                  {[
+                    {
+                      key: 'hostsRetreats',
+                      label: 'Do you host retreats or travel events?',
+                      sub: 'Includes local day-retreats or international trips.'
+                    },
+                    {
+                      key: 'offersOnlineCourses',
+                      label: 'Do you sell online courses or digital memberships?',
+                      sub: 'Includes pre-recorded videos, PDFs, or subscription apps.'
+                    },
+                    {
+                      key: 'hasEmployees',
+                      label: 'Do you hire W-2 Employees?',
+                      sub: 'Distinct from independent contractors (1099).'
+                    },
+                    {
+                      key: 'sellsProducts',
+                      label: 'Do you sell physical products?',
+                      sub: 'Supplements, clothing, equipment, etc.'
+                    },
+                  ].map((item) => (
+                    <div key={item.key} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-colors">
+                      <div>
+                        <p className="font-medium text-slate-900">{item.label}</p>
+                        <p className="text-xs text-slate-500">{item.sub}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleChange(item.key, true)}
+                          // @ts-ignore
+                          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formData[item.key] ? 'bg-brand-600 text-white' : 'bg-white border text-slate-600'}`}
+                        >Yes</button>
+                        <button
+                          onClick={() => handleChange(item.key, false)}
+                          // @ts-ignore
+                          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${!formData[item.key] ? 'bg-slate-800 text-white' : 'bg-white border text-slate-600'}`}
+                        >No</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeSection === 'goal' && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                  <label className="block text-sm font-medium text-slate-700 mb-3">Which of these feels most urgent right now?</label>
+                  <div className="grid gap-3">
+                    {[
+                      "I'm not sure what documents I need",
+                      'I want to protect myself from liability',
+                      'I want to protect my website + online content',
+                      'I want to legally protect my staff/contractors',
+                      'I run retreats and need to protect myself',
+                      'I want to protect my brand (IP/trademark)',
+                      'Everything feels overwhelming — I need guidance'
+                    ].map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => handleChange('primaryConcern', opt)}
+                        className={`
+                              w-full text-left p-4 rounded-xl border transition-all text-sm flex items-center gap-3
+                              ${formData.primaryConcern === opt
+                            ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500'
+                            : 'border-slate-200 hover:bg-slate-50 text-slate-700 hover:border-brand-200'}
+                            `}
+                      >
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${formData.primaryConcern === opt ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300'}`}>
+                          {formData.primaryConcern === opt && <CheckCircle2 size={12} />}
+                        </div>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Business Address <span className="text-slate-400 font-normal">(Optional)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="123 Main St, San Francisco, CA 94102"
-                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                value={formData.businessAddress}
-                onChange={(e) => handleChange('businessAddress', e.target.value)}
-              />
-              <p className="text-xs text-slate-500 mt-1">Physical address for legal notices</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                State <span className="text-slate-400 font-normal">(Optional)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="California"
-                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                value={formData.state}
-                onChange={(e) => handleChange('state', e.target.value)}
-              />
-              <p className="text-xs text-slate-500 mt-1">State of formation/operation</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Section 3: Password (Optional) - Moved to top for better visibility */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Lock className="text-brand-600" size={20} />
-              Optional: Create Your Account Password
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Your password lets you log in later and access your saved documents.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="At least 8 characters"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Confirm Password</label>
-                <input
-                  type="password"
-                  placeholder="Re-enter your password"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-            </div>
-            {password && confirmPassword && password !== confirmPassword && (
-              <p className="text-xs text-red-500">Passwords do not match.</p>
-            )}
-            {password && password.length > 0 && password.length < 8 && (
-              <p className="text-xs text-red-500">Password must be at least 8 characters.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Section 3: Scale & Type */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="text-brand-600" size={20} />
-              Structure & Scale
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Primary Business Type</label>
-              <select
-                className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                value={formData.businessType}
-                onChange={(e) => handleChange('businessType', e.target.value)}
+            {/* Footer Navigation */}
+            <div className="mt-12 pt-6 border-t border-slate-100 flex items-center justify-between">
+              <Button
+                variant="ghost"
+                onClick={prevSection}
+                disabled={activeSection === SECTIONS[0].id}
+                className={activeSection === SECTIONS[0].id ? 'invisible' : ''}
               >
-                <option value="">Select a type...</option>
-                <option value="Yoga Studio">Yoga Studio</option>
-                <option value="Pilates Studio">Pilates Studio</option>
-                <option value="Gym / Fitness Studio">Gym / Fitness Studio</option>
-                <option value="Retreat Leader">Retreat Leader</option>
-                <option value="Online Coach">Online Coach</option>
-                <option value="Personal Trainer">Personal Trainer</option>
-                <option value="Wellness Practitioner">Wellness Practitioner</option>
-                <option value="Breathwork / Meditation">Breathwork / Meditation</option>
-                <option value="Hybrid (Online + In-person)">Hybrid (Online + In-person)</option>
-              </select>
+                Back
+              </Button>
+
+              {activeSection !== SECTIONS[SECTIONS.length - 1].id ? (
+                <Button onClick={nextSection} className="flex items-center gap-2">
+                  Next Step <ChevronRight size={16} />
+                </Button>
+              ) : (
+                <Button onClick={handleSave} disabled={isSaving || !formData.businessName} className="flex items-center gap-2">
+                  <Save size={16} />
+                  {isSaving ? 'Saving...' : 'Complete Profile'}
+                </Button>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Team Size</label>
-                <div className="flex flex-wrap gap-2">
-                  {['0', '1-3', '4-10', '10+'].map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => handleChange('staffCount', opt)}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${formData.staffCount === opt
-                        ? 'bg-brand-600 text-white border-brand-600'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
-                        }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Monthly Clients</label>
-                <div className="flex flex-wrap gap-2">
-                  {['0-20', '20-50', '50-200', '200+'].map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => handleChange('clientCount', opt)}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${formData.clientCount === opt
-                        ? 'bg-brand-600 text-white border-brand-600'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
-                        }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Section 4: Operations */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="text-brand-600" size={20} />
-              Operations & Media
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
-              <div>
-                <p className="font-medium text-slate-900">Do you use client photos or videos?</p>
-                <p className="text-xs text-slate-500">For social media, website, or marketing materials.</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleChange('usesPhotos', true)}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formData.usesPhotos ? 'bg-brand-600 text-white' : 'bg-white border text-slate-600'}`}
-                >Yes</button>
-                <button
-                  onClick={() => handleChange('usesPhotos', false)}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${!formData.usesPhotos ? 'bg-slate-800 text-white' : 'bg-white border text-slate-600'}`}
-                >No</button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Section 5: Deep Dive (New for Phase 7) */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="text-brand-600" size={20} />
-              Risk Profile & Activities
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-slate-500 mb-4">
-              These answers determine exactly which legal contracts you need.
-            </p>
-
-            {[
-              {
-                key: 'hostsRetreats',
-                label: 'Do you host retreats or travel events?',
-                sub: 'Includes local day-retreats or international trips.'
-              },
-              {
-                key: 'offersOnlineCourses',
-                label: 'Do you sell online courses or digital memberships?',
-                sub: 'Includes pre-recorded videos, PDFs, or subscription apps.'
-              },
-              {
-                key: 'hasEmployees',
-                label: 'Do you hire W-2 Employees?',
-                sub: 'Distinct from independent contractors (1099).'
-              },
-              {
-                key: 'sellsProducts',
-                label: 'Do you sell physical products?',
-                sub: 'Supplements, clothing, equipment, etc.'
-              },
-            ].map((item) => (
-              <div key={item.key} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-colors">
-                <div>
-                  <p className="font-medium text-slate-900">{item.label}</p>
-                  <p className="text-xs text-slate-500">{item.sub}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleChange(item.key, true)}
-                    // @ts-ignore
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${formData[item.key] ? 'bg-brand-600 text-white' : 'bg-white border text-slate-600'}`}
-                  >Yes</button>
-                  <button
-                    onClick={() => handleChange(item.key, false)}
-                    // @ts-ignore
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${!formData[item.key] ? 'bg-slate-800 text-white' : 'bg-white border text-slate-600'}`}
-                  >No</button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-
-        {/* Section 6: Goal */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="text-brand-600" size={20} />
-              Primary Goal
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <label className="block text-sm font-medium text-slate-700 mb-3">Which of these feels most urgent right now?</label>
-            <div className="grid gap-3">
-              {[
-                "I'm not sure what documents I need",
-                'I want to protect myself from liability',
-                'I want to protect my website + online content',
-                'I want to legally protect my staff/contractors',
-                'I run retreats and need to protect myself',
-                'I want to protect my brand (IP/trademark)',
-                'Everything feels overwhelming — I need guidance'
-              ].map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => handleChange('primaryConcern', opt)}
-                  className={`
-                    w-full text-left p-3 rounded-lg border transition-all text-sm
-                    ${formData.primaryConcern === opt
-                      ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500'
-                      : 'border-slate-200 hover:bg-slate-50 text-slate-700'}
-                  `}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="pt-4">
-          <Button
-            fullWidth
-            size="lg"
-            onClick={handleSave}
-            disabled={!formData.businessName || isSaving}
-            className="text-lg h-14"
-          >
-            {isSaving ? 'Saving...' : 'Save Profile & Update Dashboard'}
-          </Button>
-          {!formData.businessName && (
-            <p className="text-center text-xs text-red-500 mt-2">Business Name is required to continue.</p>
-          )}
+          </div>
         </div>
-
-      </main>
+      </div>
     </div>
   );
 };

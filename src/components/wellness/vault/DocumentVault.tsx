@@ -5,12 +5,18 @@ import { vaultService } from '../../../lib/wellness/vaultService';
 import { Button } from '../../wellness/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../wellness/ui/Card';
 import { AnalysisModal } from './AnalysisModal';
+import { DocumentViewerModal } from './DocumentViewerModal';
 
 export const DocumentVault: React.FC = () => {
     const [documents, setDocuments] = useState<UserDocument[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
     const [viewAnalysisDoc, setViewAnalysisDoc] = useState<UserDocument | null>(null);
+
+    // Viewer State
+    const [viewerDoc, setViewerDoc] = useState<UserDocument | null>(null);
+    const [viewerContent, setViewerContent] = useState<string>('');
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Fetch documents on mount
@@ -61,12 +67,33 @@ export const DocumentVault: React.FC = () => {
     const handleViewDocument = async (doc: UserDocument) => {
         try {
             const url = await vaultService.getDownloadUrl(doc.file_path);
-            if (url) {
-                // Open in new tab (browser will display PDF/Image)
-                window.open(url, '_blank');
-            } else {
+            if (!url) {
                 alert('Could not generate secure link.');
+                return;
             }
+
+            // Check if it's a text file we can display in-app
+            const isTextFile = doc.file_type === 'txt' || doc.file_type === 'md' || doc.file_type === 'json' || doc.file_path.endsWith('.txt') || doc.file_path.endsWith('.md');
+
+            if (isTextFile) {
+                try {
+                    // Fetch the content
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        const text = await response.text();
+                        setViewerContent(text);
+                        setViewerDoc(doc);
+                        return;
+                    }
+                } catch (fetchErr) {
+                    console.error('Failed to fetch text content:', fetchErr);
+                    // Fall back to opening in new tab
+                }
+            }
+
+            // Default: Open in new tab (browser will display PDF/Image)
+            window.open(url, '_blank');
+
         } catch (error) {
             console.error('View failed', error);
         }
@@ -187,15 +214,17 @@ export const DocumentVault: React.FC = () => {
                                                 </button>
                                             )}
 
-                                            <button
-                                                onClick={() => handleViewDocument(doc)}
-                                                className="p-2 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-all"
-                                                title="View Original"
-                                            >
-                                                <Eye size={16} />
-                                            </button>
+                                            {!doc.title.endsWith('(Scanned)') && (
+                                                <button
+                                                    onClick={() => handleViewDocument(doc)}
+                                                    className="p-2 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-all"
+                                                    title="View Original"
+                                                >
+                                                    <Eye size={16} />
+                                                </button>
+                                            )}
 
-                                            <div className="w-[1px] bg-slate-200 my-1 mx-0.5"></div>
+                                            <div className={`w-[1px] bg-slate-200 my-1 mx-0.5 ${doc.title.endsWith('(Scanned)') ? 'sm:hidden' : ''}`}></div>
 
                                             <button
                                                 onClick={() => handleDelete(doc)}
@@ -218,6 +247,22 @@ export const DocumentVault: React.FC = () => {
                 onClose={() => setViewAnalysisDoc(null)}
                 title={viewAnalysisDoc?.title || ''}
                 analysis={viewAnalysisDoc?.analysis || ''}
+            />
+
+            <DocumentViewerModal
+                isOpen={!!viewerDoc}
+                onClose={() => {
+                    setViewerDoc(null);
+                    setViewerContent('');
+                }}
+                title={viewerDoc?.title || 'Document Viewer'}
+                content={viewerContent}
+                onDownload={async () => {
+                    if (viewerDoc) {
+                        const url = await vaultService.getDownloadUrl(viewerDoc.file_path);
+                        if (url) window.open(url, '_blank');
+                    }
+                }}
             />
         </>
     );

@@ -75,24 +75,6 @@ export const getNextBestAction = (state: DashboardState): NextAction => {
         };
     }
 
-    // Priority 4: Top Priority Document
-    if (recommendations?.topPriorities && recommendations.topPriorities.length > 0) {
-        const topDoc = recommendations.topPriorities[0];
-        const isDrafted = progress.documentsDrafted?.includes(topDoc.id);
-        const isDownloaded = progress.documentsDownloaded?.includes(topDoc.id);
-
-        if (!isDrafted && !isDownloaded) {
-            return {
-                title: `Create Your ${topDoc.title}`,
-                description: topDoc.description,
-                actionLabel: 'Start Draft',
-                actionType: 'draft',
-                targetId: topDoc.id,
-                priority: 'high'
-            };
-        }
-    }
-
     // Fallback: Book a Call
     return {
         title: 'Get a Professional Opinion',

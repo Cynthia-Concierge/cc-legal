@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,7 +14,7 @@
 
         body {
             font-family: 'Georgia', 'Times New Roman', serif;
-            font-size: 11pt;
+            font-size: 12px;
             line-height: 1.6;
             color: #000;
             padding: 60px 80px;
@@ -22,23 +23,23 @@
 
         .header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 30px;
             border-bottom: 3px solid #000;
             padding-bottom: 20px;
-        }
-
-        .company-name {
-            font-size: 18pt;
-            font-weight: bold;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .document-title {
             font-size: 24pt;
             font-weight: bold;
             margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        .date {
+            text-align: right;
+            font-style: italic;
+            margin-bottom: 20px;
+            color: #555;
         }
 
         .info-box {
@@ -49,21 +50,22 @@
             border-radius: 5px;
         }
 
-        .info-row {
-            display: flex;
-            margin-bottom: 12px;
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
             border-bottom: 1px solid #ddd;
-            padding-bottom: 8px;
+            padding-bottom: 5px;
         }
 
-        .info-row:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
         }
 
         .info-label {
             font-weight: bold;
-            width: 180px;
+            width: 200px;
             flex-shrink: 0;
         }
 
@@ -72,57 +74,39 @@
         }
 
         .section {
-            margin: 30px 0;
+            margin: 25px 0;
         }
 
         .section-title {
-            font-size: 14pt;
+            font-size: 13px;
             font-weight: bold;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             text-transform: uppercase;
-            border-bottom: 2px solid #000;
-            padding-bottom: 5px;
         }
 
         .section-content {
             text-align: justify;
-            margin-bottom: 15px;
-        }
-
-        .footer {
-            margin-top: 60px;
-            padding-top: 30px;
-            border-top: 2px solid #000;
-            text-align: center;
-            font-size: 9pt;
-            color: #666;
+            margin-bottom: 10px;
         }
 
         ul {
-            margin-left: 30px;
+            margin-left: 40px;
             margin-bottom: 15px;
         }
 
         li {
-            margin-bottom: 8px;
+            margin-bottom: 5px;
         }
 
         strong {
             font-weight: bold;
         }
-
-        .date {
-            text-align: right;
-            font-style: italic;
-            margin-bottom: 20px;
-            color: #555;
-        }
     </style>
 </head>
+
 <body>
     <!-- Header -->
     <div class="header">
-        <div class="company-name">{{legalEntityName}}</div>
         <div class="document-title">SOCIAL MEDIA DISCLAIMER</div>
     </div>
 
@@ -131,160 +115,181 @@
 
     <!-- Business Information Box -->
     <div class="info-box">
-        <h3 style="margin-bottom: 15px; font-size: 13pt;">Business Information</h3>
+        <h3>Business Information</h3>
 
         <div class="info-row">
             <div class="info-label">Business Name:</div>
-            <div class="info-value">{{businessName}}</div>
+            <div class="info-value">{{BusinessName}}</div>
         </div>
 
         <div class="info-row">
             <div class="info-label">Business Type:</div>
-            <div class="info-value">{{businessType}}</div>
+            <div class="info-value">{{BusinessType}}</div>
         </div>
 
         <div class="info-row">
             <div class="info-label">Address:</div>
-            <div class="info-value">{{businessAddress}}</div>
+            <div class="info-value">{{BusinessAddress}}</div>
         </div>
 
         <div class="info-row">
             <div class="info-label">Contact Email:</div>
-            <div class="info-value">{{email}}</div>
+            <div class="info-value">{{Email}}</div>
         </div>
 
         <div class="info-row">
             <div class="info-label">Website / Social Handles:</div>
-            <div class="info-value">{{website}}</div>
+            <div class="info-value">{{SocialLinks}}</div>
         </div>
     </div>
 
-    <!-- Section 1: Purpose -->
+    <!-- Section 1 -->
     <div class="section">
         <div class="section-title">1. PURPOSE</div>
         <div class="section-content">
-            This Social Media Disclaimer ("Disclaimer") governs the use of social media platforms and content posted by <strong>{{businessName}}</strong> ("Business," "we," "us," or "our"). By following, engaging with, or viewing our social media accounts, you ("User," "you," or "your") agree to the terms outlined in this Disclaimer.
+            This Social Media Disclaimer ("Disclaimer") governs the use of <strong>{{BusinessName}}</strong>’s online
+            content, including but not limited to its website, blog, email newsletters, and social media accounts
+            (collectively, the "Platforms").
+        </div>
+        <div class="section-content">
+            By viewing, commenting on, or interacting with any of our Platforms, you agree to the terms below.
         </div>
     </div>
 
-    <!-- Section 2: No Professional Advice -->
+    <!-- Section 2 -->
     <div class="section">
-        <div class="section-title">2. NO PROFESSIONAL ADVICE</div>
+        <div class="section-title">2. GENERAL INFORMATION ONLY</div>
         <div class="section-content">
-            The content shared on our social media platforms is for <strong>informational and entertainment purposes only</strong>. It does not constitute professional advice, including but not limited to:
+            All information shared on our Platforms is intended for informational and educational purposes only. Nothing
+            posted by <strong>{{BusinessName}}</strong> or its representatives should be construed as:
         </div>
         <ul>
-            <li>Medical, health, or fitness advice</li>
-            <li>Legal, financial, or tax advice</li>
-            <li>Therapeutic or counseling advice</li>
+            <li>Medical, legal, or financial advice;</li>
+            <li>A diagnosis or treatment recommendation; or</li>
+            <li>A guarantee of any outcome or result.</li>
         </ul>
         <div class="section-content">
-            <strong>Always consult a qualified professional</strong> before making decisions related to your health, fitness, or wellness. Individual results may vary, and we make no guarantees regarding outcomes.
+            You are encouraged to consult with qualified professionals before acting on any information shared by
+            <strong>{{BusinessName}}</strong>.
         </div>
     </div>
 
-    <!-- Section 3: User-Generated Content -->
+    <!-- Section 3 -->
     <div class="section">
-        <div class="section-title">3. USER-GENERATED CONTENT</div>
+        <div class="section-title">3. NO CLIENT OR PROFESSIONAL RELATIONSHIP</div>
         <div class="section-content">
-            We welcome interaction on our social media platforms. However:
+            Engaging with <strong>{{BusinessName}}</strong> through likes, comments, DMs, or other social media
+            interactions does not create a professional or client relationship.
+        </div>
+        <div class="section-content">
+            A professional relationship is only established after both parties have signed a written service agreement.
+        </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. THIRD-PARTY CONTENT</div>
+        <div class="section-content">
+            Our Platforms may share or link to content from third-party accounts, websites, or individuals.
+            <strong>{{BusinessName}}</strong> does not endorse, guarantee, or assume responsibility for the accuracy,
+            reliability, or appropriateness of any third-party content.
+        </div>
+        <div class="section-content">
+            All third-party opinions and statements are their own and do not reflect the views of
+            <strong>{{BusinessName}}</strong>.
+        </div>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. COMMENTS AND COMMUNITY INTERACTIONS</div>
+        <div class="section-content">
+            We welcome respectful dialogue and participation on our Platforms. However,
+            <strong>{{BusinessName}}</strong> reserves the right to:
         </div>
         <ul>
-            <li><strong>We do not endorse</strong> user comments, posts, or opinions shared on our pages.</li>
-            <li><strong>We reserve the right</strong> to remove, edit, or block content or users that violate our community guidelines or are deemed inappropriate.</li>
-            <li><strong>You are responsible</strong> for the accuracy and legality of any content you post.</li>
+            <li>Remove comments deemed inappropriate, offensive, defamatory, or spam;</li>
+            <li>Block users for violations of community guidelines; and</li>
+            <li>Report unlawful activity to the appropriate authorities.</li>
         </ul>
-    </div>
-
-    <!-- Section 4: Third-Party Links -->
-    <div class="section">
-        <div class="section-title">4. THIRD-PARTY LINKS</div>
         <div class="section-content">
-            Our social media posts may contain links to third-party websites, products, or services. <strong>We are not responsible</strong> for the content, accuracy, or practices of these third parties. Clicking on external links is done at your own risk.
+            Users are solely responsible for the content they post or share in public comment sections.
         </div>
     </div>
 
-    <!-- Section 5: Intellectual Property -->
+    <!-- Section 6 -->
     <div class="section">
-        <div class="section-title">5. INTELLECTUAL PROPERTY</div>
+        <div class="section-title">6. TESTIMONIALS AND RESULTS</div>
         <div class="section-content">
-            All content posted on our social media accounts, including but not limited to text, images, videos, logos, and graphics, is the property of <strong>{{businessName}}</strong> or its licensors and is protected by copyright and intellectual property laws.
-        </div>
-        <div class="section-content">
-            <strong>Unauthorized use, reproduction, or distribution</strong> of our content without written permission is strictly prohibited.
+            Testimonials, reviews, and client success stories shared on our Platforms reflect the experiences of
+            specific individuals. Results are not guaranteed and may vary based on personal effort, consistency, and
+            individual circumstances.
         </div>
     </div>
 
-    <!-- Section 6: Testimonials & Results -->
+    <!-- Section 7 -->
     <div class="section">
-        <div class="section-title">6. TESTIMONIALS & RESULTS</div>
+        <div class="section-title">7. AFFILIATE AND SPONSORED CONTENT</div>
         <div class="section-content">
-            Testimonials, reviews, or success stories shared on our social media platforms reflect individual experiences and are <strong>not guaranteed results</strong>. Actual results may vary based on individual circumstances, effort, and other factors.
+            From time to time, <strong>{{BusinessName}}</strong> may promote, share, or link to affiliate products,
+            services, or sponsored partnerships. We only promote items we genuinely believe provide value to our
+            audience.
+        </div>
+        <div class="section-content">
+            However, we may earn commissions or benefits from qualifying purchases made through affiliate links.
         </div>
     </div>
 
-    <!-- Section 7: Privacy -->
+    <!-- Section 8 -->
     <div class="section">
-        <div class="section-title">7. PRIVACY</div>
+        <div class="section-title">8. COPYRIGHT AND INTELLECTUAL PROPERTY</div>
         <div class="section-content">
-            By interacting with our social media accounts, you acknowledge that your activity may be visible to others and subject to the privacy policies of the respective social media platforms. We encourage you to review those policies.
+            All photos, videos, posts, and written materials published by <strong>{{BusinessName}}</strong> are
+            protected by copyright. No part of our content may be used to train, develop, or improve any artificial
+            intelligence model, algorithm, or dataset without our express written consent.
         </div>
         <div class="section-content">
-            We may collect publicly available information (such as profile names or comments) in accordance with our <strong>Privacy Policy</strong>, available at: {{website}}
+            Unauthorized use, reproduction, or distribution of our materials is prohibited.
         </div>
     </div>
 
-    <!-- Section 8: Limitation of Liability -->
+    <!-- Section 9 -->
     <div class="section">
-        <div class="section-title">8. LIMITATION OF LIABILITY</div>
+        <div class="section-title">9. LIMITATION OF LIABILITY</div>
         <div class="section-content">
-            To the fullest extent permitted by law, <strong>{{businessName}}</strong> and its owners, employees, and affiliates shall not be held liable for any damages, losses, or injuries arising from:
+            By using our Platforms, you agree that <strong>{{BusinessName}}</strong> and its representatives shall not
+            be held liable for any damages, injuries, losses, or legal claims resulting from:
         </div>
         <ul>
-            <li>Use of information shared on our social media platforms</li>
-            <li>Reliance on testimonials, advice, or content</li>
-            <li>Technical issues, errors, or omissions in posts</li>
-            <li>Actions of third-party users or linked websites</li>
+            <li>The use or misuse of our content;</li>
+            <li>Reliance on information provided online; or</li>
+            <li>Interactions with third parties linked or mentioned through our Platforms.</li>
         </ul>
-    </div>
-
-    <!-- Section 9: Platform Changes -->
-    <div class="section">
-        <div class="section-title">9. PLATFORM CHANGES</div>
         <div class="section-content">
-            Social media platforms are owned and operated by third parties (e.g., Instagram, Facebook, TikTok). We are not responsible for platform changes, outages, policy updates, or account restrictions imposed by these platforms.
+            All content is provided "AS IS" and "AS AVAILABLE," without warranties of any kind.
         </div>
     </div>
 
-    <!-- Section 10: Modifications -->
+    <!-- Section 10 -->
     <div class="section">
-        <div class="section-title">10. MODIFICATIONS</div>
+        <div class="section-title">10. GOVERNING LAW</div>
         <div class="section-content">
-            We reserve the right to update or modify this Disclaimer at any time without prior notice. Updates will be posted on our social media accounts and/or website. Continued use of our social media platforms constitutes acceptance of any changes.
+            This Disclaimer shall be governed by the laws of the <strong>{{Jurisdiction}}</strong>, without regard to
+            conflict-of-law principles. Disputes shall be resolved through binding arbitration or small claims court
+            within the <strong>{{Jurisdiction}}</strong>.
         </div>
     </div>
 
-    <!-- Section 11: Contact Information -->
+    <!-- Acknowledgement -->
     <div class="section">
-        <div class="section-title">11. CONTACT INFORMATION</div>
+        <div class="section-title">ACKNOWLEDGEMENT</div>
         <div class="section-content">
-            If you have questions or concerns about this Disclaimer, please contact us at:
-        </div>
-        <div class="section-content" style="margin-top: 15px; padding-left: 20px;">
-            <strong>{{businessName}}</strong><br>
-            {{businessAddress}}<br>
-            Email: {{email}}<br>
-            Website: {{website}}
+            By continuing to view, follow, or engage with <strong>{{BusinessName}}</strong>’s Platforms, you acknowledge
+            that you have read, understood, and agree to the terms of this Social Media Disclaimer.
         </div>
     </div>
 
-    <!-- Footer -->
-    <div class="footer">
-        <p><strong>{{legalEntityName}}</strong></p>
-        <p>This document was generated on {{date}}</p>
-        <p style="margin-top: 10px; font-size: 8pt;">
-            🤖 Generated with <a href="https://claude.com/claude-code" style="color: #666; text-decoration: none;">Claude Code</a>
-        </p>
-    </div>
+
 </body>
+
 </html>
