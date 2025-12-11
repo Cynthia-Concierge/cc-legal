@@ -57,6 +57,8 @@ export const BusinessProfile = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [hasExistingAccount, setHasExistingAccount] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   useEffect(() => {
     const loadProfileData = async () => {
@@ -123,6 +125,7 @@ export const BusinessProfile = () => {
           const { data: { user: authUser } } = await supabase.auth.getUser();
 
           if (authUser) {
+            setHasExistingAccount(true);
 
             // Should we skip the password section if they already have an account?
             // Maybe not, allowing them to change it is good. 
@@ -692,43 +695,93 @@ export const BusinessProfile = () => {
 
               {activeSection === 'security' && (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex gap-3">
-                    <Lock className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-                    <div>
-                      <p className="font-medium text-blue-900">Protect Your Documents</p>
-                      <p className="text-sm text-blue-700 mt-1">
-                        Setting a strong password ensures only you can access your generated legal agreements.
-                      </p>
+                  {/* For existing users who haven't clicked 'Change Password' yet, show a secured state */}
+                  {hasExistingAccount && !showChangePassword ? (
+                    <div className="bg-green-50 p-6 rounded-xl border border-green-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                      <div className="flex items-start gap-4">
+                        <div className="p-3 bg-white rounded-full border border-green-100 shadow-sm text-green-600">
+                          <CheckCircle2 size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-green-900">Account Secured</h3>
+                          <p className="text-green-700 mt-1 max-w-md">
+                            Your account is currently protected with a password. You don't need to do anything here unless you want to change it.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowChangePassword(true)}
+                        className="whitespace-nowrap bg-white hover:bg-green-100 hover:text-green-900 border-green-200"
+                      >
+                        Change Password
+                      </Button>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex gap-3">
+                        <Lock className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+                        <div>
+                          <p className="font-medium text-blue-900">
+                            {hasExistingAccount ? 'Change Your Password' : 'Protect Your Documents'}
+                          </p>
+                          <p className="text-sm text-blue-700 mt-1">
+                            {hasExistingAccount
+                              ? 'Enter a new password below to update your login credentials.'
+                              : 'Setting a strong password ensures only you can access your generated legal agreements.'}
+                          </p>
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
-                      <input
-                        type="password"
-                        placeholder="At least 8 characters"
-                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Confirm Password</label>
-                      <input
-                        type="password"
-                        placeholder="Re-enter your password"
-                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  {password && confirmPassword && password !== confirmPassword && (
-                    <p className="text-sm text-red-500 flex items-center gap-2"><CheckCircle2 size={14} className="opacity-0" /> Passwords do not match.</p>
-                  )}
-                  {password && password.length > 0 && password.length < 8 && (
-                    <p className="text-sm text-red-500">Password must be at least 8 characters.</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            {hasExistingAccount ? 'New Password' : 'Create Password'}
+                          </label>
+                          <input
+                            type="password"
+                            placeholder="At least 8 characters"
+                            className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Confirm Password</label>
+                          <input
+                            type="password"
+                            placeholder="Re-enter your password"
+                            className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Password validation messages */}
+                      {password && confirmPassword && password !== confirmPassword && (
+                        <p className="text-sm text-red-500 flex items-center gap-2"><CheckCircle2 size={14} className="opacity-0" /> Passwords do not match.</p>
+                      )}
+                      {password && password.length > 0 && password.length < 8 && (
+                        <p className="text-sm text-red-500">Password must be at least 8 characters.</p>
+                      )}
+
+                      {/* Cancel button for existing users */}
+                      {hasExistingAccount && (
+                        <div className="flex justify-start">
+                          <button
+                            onClick={() => {
+                              setShowChangePassword(false);
+                              setPassword('');
+                              setConfirmPassword('');
+                            }}
+                            className="text-sm text-slate-500 hover:text-slate-800 font-medium px-2 py-1"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

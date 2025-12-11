@@ -20,6 +20,12 @@ export class EmailService {
      * Send a welcome email to a new user
      */
     async sendWelcomeEmail(email: string, name?: string): Promise<any> {
+        // SAFETY GUARD: Only allow emails to rickibodner@gmail.com
+        if (email !== 'rickibodner@gmail.com') {
+            console.log(`[EmailService] SAFETY: Skipping welcome email to ${email} (Only allowed: rickibodner@gmail.com)`);
+            return Promise.resolve({ id: 'skipped_safety', message: 'Email skipped due to safety restriction' });
+        }
+
         try {
             console.log(`[EmailService] Sending welcome email to: ${email}`);
 
@@ -52,6 +58,12 @@ export class EmailService {
      * Send an admin alert when a new user signs up
      */
     async sendAdminAlert(userEmail: string, userName?: string): Promise<any> {
+        // SAFETY GUARD: Only allow emails to rickibodner@gmail.com
+        if (this.adminEmail !== 'rickibodner@gmail.com') {
+            console.log(`[EmailService] SAFETY: Skipping admin alert to ${this.adminEmail} (Only allowed: rickibodner@gmail.com)`);
+            return Promise.resolve({ id: 'skipped_safety', message: 'Email skipped due to safety restriction' });
+        }
+
         try {
             console.log(`[EmailService] Sending admin alert for: ${userEmail}`);
 
