@@ -484,6 +484,13 @@ async function initializeRoutes() {
             });
           }
 
+          // Initialize EmailService
+          const { EmailService } = require(path.join(servicesPath, "emailService.js"));
+          const emailServiceInstance = new EmailService(
+            process.env.RESEND_API_KEY,
+            process.env.EMAIL_FROM_ADDRESS
+          );
+
           // Create Supabase client with service role for admin queries
           const { createClient } = await import("@supabase/supabase-js");
           const supabaseAdmin = createClient(
@@ -569,7 +576,7 @@ async function initializeRoutes() {
                   continue;
                 }
 
-                const result = await emailService.sendWebsiteScanReminder(
+                const result = await emailServiceInstance.sendWebsiteScanReminder(
                   appUser.email,
                   appUser.name
                 );
@@ -589,7 +596,7 @@ async function initializeRoutes() {
                 console.log(`[Website Scan Reminders] Sent reminder to: ${appUser.email}`);
               } else {
                 // Use email from auth.users
-                const result = await emailService.sendWebsiteScanReminder(
+                const result = await emailServiceInstance.sendWebsiteScanReminder(
                   authUser.user.email,
                   authUser.user.user_metadata?.name || authUser.user.email.split('@')[0]
                 );
@@ -621,7 +628,7 @@ async function initializeRoutes() {
           const successCount = results.filter(r => r.success).length;
           const failureCount = results.filter(r => !r.success).length;
 
-          res.json({
+          return res.json({
             success: true,
             message: `Sent ${successCount} reminder emails${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
             sent: successCount,
@@ -631,7 +638,7 @@ async function initializeRoutes() {
           });
         } catch (error: any) {
           console.error("[Website Scan Reminders] Error:", error);
-          res.status(500).json({
+          return res.status(500).json({
             error: "Internal server error",
             message: error.message || "Failed to send website scan reminders",
           });
@@ -1464,7 +1471,7 @@ export const sendWebsiteScanReminders = scheduler.onSchedule(
 
       if (!eligibleProfiles || eligibleProfiles.length === 0) {
         console.log("[Scheduled] No eligible users found");
-        return { success: true, sent: 0 };
+        return;
       }
 
       // Filter out users who were sent a reminder less than 7 days ago
@@ -1479,7 +1486,7 @@ export const sendWebsiteScanReminders = scheduler.onSchedule(
 
       if (profilesToEmail.length === 0) {
         console.log("[Scheduled] No eligible users (all have been sent reminders recently)");
-        return { success: true, sent: 0, total: eligibleProfiles.length };
+        return;
       }
 
       console.log(`[Scheduled] Found ${profilesToEmail.length} eligible profiles`);
@@ -1535,12 +1542,7 @@ export const sendWebsiteScanReminders = scheduler.onSchedule(
       }
 
       console.log(`[Scheduled] Completed: ${successCount} sent, ${failureCount} failed`);
-      return {
-        success: true,
-        sent: successCount,
-        failed: failureCount,
-        total: profilesToEmail.length,
-      };
+      // Scheduled functions should return void
     } catch (error: any) {
       console.error("[Scheduled] Error in website scan reminder job:", error);
       throw error;
