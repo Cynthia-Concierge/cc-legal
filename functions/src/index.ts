@@ -13,8 +13,8 @@
  */
 
 import * as functions from "firebase-functions/v2";
-import * as scheduler from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
+import { CloudTasksClient } from "@google-cloud/tasks";
 import express from "express";
 import cors from "cors";
 
@@ -467,181 +467,149 @@ async function initializeRoutes() {
         }
       });
 
-      // Send Website Scan Reminder Emails
-      app.post("/api/emails/send-website-scan-reminders", async (req, res) => {
+      // Schedule Website Scan Reminder (Cloud Tasks)
+      app.post("/api/emails/schedule-website-scan-reminder", async (req, res) => {
         try {
-          if (!process.env.RESEND_API_KEY) {
-            return res.status(500).json({
-              error: "Configuration error",
-              message: "Email service is not configured.",
-            });
+          const { userId, email, name } = req.body;
+
+          if (!userId || !email) {
+            return res.status(400).json({ error: "userId and email are required" });
           }
 
-          if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-            return res.status(500).json({
-              error: "Configuration error",
-              message: "Supabase is not configured.",
-            });
+          const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+          const location = "us-central1"; // Default location
+          const queue = "email-reminders"; // Your queue name
+
+          if (!project) {
+            console.error("[Schedule] Project ID not found");
+            return res.status(500).json({ error: "Server configuration error: Project ID missing" });
           }
 
-          // Initialize EmailService
-          const { EmailService } = require(path.join(servicesPath, "emailService.js"));
-          const emailServiceInstance = new EmailService(
-            process.env.RESEND_API_KEY,
-            process.env.EMAIL_FROM_ADDRESS
-          );
+          const tasksClient = new CloudTasksClient();
+          const queuePath = tasksClient.queuePath(project, location, queue);
 
-          // Create Supabase client with service role for admin queries
-          const { createClient } = await import("@supabase/supabase-js");
-          const supabaseAdmin = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
+          // Construct the full URL for the worker
+          // In production, this is your function URL. In emulator, it's localhost.
+          // We'll trust the request host header or fallback to a configured base URL
+          const functionUrl = req.get("host")?.includes("localhost")
+            ? `http://${req.get("host")}/api/workers/send-website-scan-reminder` // standardized standard local URL
+            : `https://${location}-${project}.cloudfunctions.net/api/api/workers/send-website-scan-reminder`; // typical firebase function URL structure
 
-          // Query for eligible users:
-          // - Have completed business profile (has business_name)
-          // - Have website URL
-          // - Haven't scanned website yet
-          // - Profile was created at least 24 hours ago
-          // - Haven't been sent a reminder email yet (or reminder was sent more than 7 days ago)
-          const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-          
-          let query = supabaseAdmin
-            .from('business_profiles')
-            .select('user_id, business_name, website_url, created_at, website_scan_reminder_sent_at')
-            .not('business_name', 'is', null)
-            .neq('business_name', '')
-            .not('website_url', 'is', null)
-            .neq('website_url', '')
-            .or('has_scanned_website.is.null,has_scanned_website.eq.false')
-            .lt('created_at', twentyFourHoursAgo);
-          
-          const { data: eligibleProfiles, error: queryError } = await query;
+          const payload = { userId };
+          const scheduleTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
 
-          if (queryError) {
-            console.error('[Website Scan Reminders] Error querying profiles:', queryError);
-            return res.status(500).json({
-              error: "Database error",
-              message: queryError.message,
-            });
+          const task = {
+            httpRequest: {
+              httpMethod: "POST" as const,
+              url: functionUrl,
+              body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+              headers: {
+                "Content-Type": "application/json",
+              },
+            },
+            scheduleTime: {
+              seconds: Math.floor(scheduleTime.getTime() / 1000),
+            },
+          };
+
+          try {
+            // @ts-ignore - types can be tricky with google cloud libs sometimes
+            const [response] = await tasksClient.createTask({ parent: queuePath, task });
+            console.log(`[Schedule] Created task ${response.name} for user ${userId} at ${scheduleTime.toISOString()}`);
+            return res.json({ success: true, message: "Reminder scheduled", taskName: response.name });
+          } catch (error: any) {
+            console.error("[Schedule] Error creating task:", error);
+            // Fallback: Just log it, or you could implement a fallback strategy
+            return res.status(500).json({ error: "Failed to schedule task", details: error.message });
           }
 
-          if (!eligibleProfiles || eligibleProfiles.length === 0) {
-            return res.json({
-              success: true,
-              message: "No eligible users found",
-              sent: 0,
-            });
-          }
-
-          // Filter out users who were sent a reminder less than 7 days ago
-          const profilesToEmail = eligibleProfiles.filter((profile: any) => {
-            if (!profile.website_scan_reminder_sent_at) {
-              return true; // Never sent reminder
-            }
-            const reminderSentAt = new Date(profile.website_scan_reminder_sent_at);
-            const sevenDaysAgoDate = new Date(sevenDaysAgo);
-            return reminderSentAt < sevenDaysAgoDate; // Sent more than 7 days ago
-          });
-
-          if (profilesToEmail.length === 0) {
-            return res.json({
-              success: true,
-              message: "No eligible users found (all have been sent reminders recently)",
-              sent: 0,
-              total: eligibleProfiles.length,
-            });
-          }
-
-          console.log(`[Website Scan Reminders] Found ${profilesToEmail.length} eligible profiles (out of ${eligibleProfiles.length} total)`);
-
-          // Get user emails from auth.users or users table
-          const results = [];
-          for (const profile of profilesToEmail) {
-            try {
-              // Get user email from auth.users
-              const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(profile.user_id);
-              
-              if (authError || !authUser?.user?.email) {
-                // Fallback: try users table
-                const { data: appUser } = await supabaseAdmin
-                  .from('users')
-                  .select('email, name')
-                  .eq('user_id', profile.user_id)
-                  .single();
-
-                if (!appUser || !appUser.email) {
-                  console.warn(`[Website Scan Reminders] Skipping user ${profile.user_id} - no email found`);
-                  continue;
-                }
-
-                const result = await emailServiceInstance.sendWebsiteScanReminder(
-                  appUser.email,
-                  appUser.name
-                );
-
-                // Mark that reminder was sent to prevent duplicate emails
-                await supabaseAdmin
-                  .from('business_profiles')
-                  .update({ website_scan_reminder_sent_at: new Date().toISOString() })
-                  .eq('user_id', profile.user_id);
-
-                results.push({
-                  email: appUser.email,
-                  success: true,
-                  result: result,
-                });
-
-                console.log(`[Website Scan Reminders] Sent reminder to: ${appUser.email}`);
-              } else {
-                // Use email from auth.users
-                const result = await emailServiceInstance.sendWebsiteScanReminder(
-                  authUser.user.email,
-                  authUser.user.user_metadata?.name || authUser.user.email.split('@')[0]
-                );
-
-                // Mark that reminder was sent to prevent duplicate emails
-                await supabaseAdmin
-                  .from('business_profiles')
-                  .update({ website_scan_reminder_sent_at: new Date().toISOString() })
-                  .eq('user_id', profile.user_id);
-
-                results.push({
-                  email: authUser.user.email,
-                  success: true,
-                  result: result,
-                });
-
-                console.log(`[Website Scan Reminders] Sent reminder to: ${authUser.user.email}`);
-              }
-            } catch (emailError: any) {
-              console.error(`[Website Scan Reminders] Error sending to user ${profile.user_id}:`, emailError);
-              results.push({
-                email: 'unknown',
-                success: false,
-                error: emailError.message,
-              });
-            }
-          }
-
-          const successCount = results.filter(r => r.success).length;
-          const failureCount = results.filter(r => !r.success).length;
-
-          return res.json({
-            success: true,
-            message: `Sent ${successCount} reminder emails${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
-            sent: successCount,
-            failed: failureCount,
-            total: profilesToEmail.length,
-            results: results,
-          });
         } catch (error: any) {
-          console.error("[Website Scan Reminders] Error:", error);
-          return res.status(500).json({
-            error: "Internal server error",
-            message: error.message || "Failed to send website scan reminders",
-          });
+          console.error("[Schedule] Error:", error);
+          return res.status(500).json({ error: "Internal server error" });
+        }
+      });
+
+      // Worker: Send Website Scan Reminder
+      app.post("/api/workers/send-website-scan-reminder", async (req, res) => {
+        try {
+          const { userId } = req.body;
+
+          if (!userId) {
+            return res.status(400).json({ error: "userId required" });
+          }
+
+          console.log(`[Worker] Processing scan reminder for user ${userId}`);
+
+          if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            console.error("[Worker] Missing configuration");
+            return res.status(500).json({ error: "Configuration missing" });
+          }
+
+          // Client setup
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+          const { EmailService } = require(path.join(servicesPath, "emailService.js"));
+          const emailServiceInstance = new EmailService(process.env.RESEND_API_KEY, process.env.EMAIL_FROM_ADDRESS);
+
+          // Check if user still needs reminder
+          const { data: profile, error } = await supabaseAdmin
+            .from('business_profiles')
+            .select('business_name, website_url, has_scanned_website, website_scan_reminder_sent_at')
+            .eq('user_id', userId)
+            .single();
+
+          if (error || !profile) {
+            console.log(`[Worker] Profile not found for ${userId}, aborting.`);
+            return res.json({ status: "skipped", reason: "profile_not_found" });
+          }
+
+          if (profile.has_scanned_website) {
+            console.log(`[Worker] User ${userId} already scanned website, aborting.`);
+            return res.json({ status: "skipped", reason: "already_scanned" });
+          }
+
+          if (profile.website_scan_reminder_sent_at) {
+            console.log(`[Worker] User ${userId} already sent reminder at ${profile.website_scan_reminder_sent_at}, aborting.`);
+            return res.json({ status: "skipped", reason: "already_sent" });
+          }
+
+          // Get Email
+          const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+          let email, name;
+
+          if (authUser?.user?.email) {
+            email = authUser.user.email;
+            name = authUser.user.user_metadata?.name || email.split('@')[0];
+          } else {
+            // Fallback
+            const { data: appUser } = await supabaseAdmin.from('users').select('email, name').eq('user_id', userId).single();
+            if (appUser) {
+              email = appUser.email;
+              name = appUser.name;
+            }
+          }
+
+          if (!email) {
+            console.log(`[Worker] No email found for user ${userId}, aborting.`);
+            return res.json({ status: "skipped", reason: "no_email" });
+          }
+
+          // Send Email
+          await emailServiceInstance.sendWebsiteScanReminder(email, name);
+
+          // Update DB
+          await supabaseAdmin
+            .from('business_profiles')
+            .update({ website_scan_reminder_sent_at: new Date().toISOString() })
+            .eq('user_id', userId);
+
+          console.log(`[Worker] Sent reminder to ${email}`);
+          return res.json({ success: true, email });
+
+        } catch (error: any) {
+          console.error("[Worker] Error:", error);
+          return res.status(500).json({ error: error.message });
         }
       });
 
@@ -1406,146 +1374,4 @@ export const api = functions.https.onRequest(
   app
 );
 
-// Scheduled function to send website scan reminder emails daily
-// Runs every day at 10:00 AM UTC (configurable via Cloud Scheduler)
-export const sendWebsiteScanReminders = scheduler.onSchedule(
-  {
-    schedule: "0 10 * * *", // Every day at 10:00 AM UTC
-    timeZone: "UTC",
-    secrets: [
-      "SUPABASE_URL",
-      "SUPABASE_SERVICE_ROLE_KEY",
-      "RESEND_API_KEY",
-    ],
-    region: "us-central1",
-    timeoutSeconds: 540,
-    memory: "512MiB",
-  },
-  async (event) => {
-    console.log("[Scheduled] Starting website scan reminder job...");
-    
-    try {
-      if (!process.env.RESEND_API_KEY) {
-        throw new Error("RESEND_API_KEY is not configured");
-      }
 
-      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        throw new Error("Supabase credentials are not configured");
-      }
-
-      // Create Supabase client
-      const { createClient } = await import("@supabase/supabase-js");
-      const supabaseAdmin = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
-
-      // Initialize EmailService
-      const path = require("path");
-      const servicesPath = path.join(__dirname, "server", "services");
-      const { EmailService } = require(path.join(servicesPath, "emailService.js"));
-      const emailService = new EmailService(
-        process.env.RESEND_API_KEY,
-        process.env.EMAIL_FROM_ADDRESS
-      );
-
-      // Query for eligible users
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      
-      let query = supabaseAdmin
-        .from('business_profiles')
-        .select('user_id, business_name, website_url, created_at, website_scan_reminder_sent_at')
-        .not('business_name', 'is', null)
-        .neq('business_name', '')
-        .not('website_url', 'is', null)
-        .neq('website_url', '')
-        .or('has_scanned_website.is.null,has_scanned_website.eq.false')
-        .lt('created_at', twentyFourHoursAgo);
-      
-      const { data: eligibleProfiles, error: queryError } = await query;
-
-      if (queryError) {
-        throw new Error(`Database query error: ${queryError.message}`);
-      }
-
-      if (!eligibleProfiles || eligibleProfiles.length === 0) {
-        console.log("[Scheduled] No eligible users found");
-        return;
-      }
-
-      // Filter out users who were sent a reminder less than 7 days ago
-      const profilesToEmail = eligibleProfiles.filter((profile: any) => {
-        if (!profile.website_scan_reminder_sent_at) {
-          return true;
-        }
-        const reminderSentAt = new Date(profile.website_scan_reminder_sent_at);
-        const sevenDaysAgoDate = new Date(sevenDaysAgo);
-        return reminderSentAt < sevenDaysAgoDate;
-      });
-
-      if (profilesToEmail.length === 0) {
-        console.log("[Scheduled] No eligible users (all have been sent reminders recently)");
-        return;
-      }
-
-      console.log(`[Scheduled] Found ${profilesToEmail.length} eligible profiles`);
-
-      // Send emails
-      let successCount = 0;
-      let failureCount = 0;
-
-      for (const profile of profilesToEmail) {
-        try {
-          // Get user email from auth.users
-          const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(profile.user_id);
-          
-          let email: string;
-          let name: string | undefined;
-
-          if (authError || !authUser?.user?.email) {
-            // Fallback: try users table
-            const { data: appUser } = await supabaseAdmin
-              .from('users')
-              .select('email, name')
-              .eq('user_id', profile.user_id)
-              .single();
-
-            if (!appUser || !appUser.email) {
-              console.warn(`[Scheduled] Skipping user ${profile.user_id} - no email found`);
-              failureCount++;
-              continue;
-            }
-
-            email = appUser.email;
-            name = appUser.name;
-          } else {
-            email = authUser.user.email;
-            name = authUser.user.user_metadata?.name || authUser.user.email.split('@')[0];
-          }
-
-          // Send email
-          await emailService.sendWebsiteScanReminder(email, name);
-
-          // Mark that reminder was sent
-          await supabaseAdmin
-            .from('business_profiles')
-            .update({ website_scan_reminder_sent_at: new Date().toISOString() })
-            .eq('user_id', profile.user_id);
-
-          successCount++;
-          console.log(`[Scheduled] Sent reminder to: ${email}`);
-        } catch (emailError: any) {
-          console.error(`[Scheduled] Error sending to user ${profile.user_id}:`, emailError);
-          failureCount++;
-        }
-      }
-
-      console.log(`[Scheduled] Completed: ${successCount} sent, ${failureCount} failed`);
-      // Scheduled functions should return void
-    } catch (error: any) {
-      console.error("[Scheduled] Error in website scan reminder job:", error);
-      throw error;
-    }
-  }
-);

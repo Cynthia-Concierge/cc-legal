@@ -32,7 +32,8 @@
     "firebase-functions": "^5.0.0",
     "node-fetch": "^3.3.2",
     "playwright": "^1.48.0",
-    "resend": "^6.5.2"
+    "resend": "^6.5.2",
+    "@google-cloud/tasks": "^5.5.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   last_name TEXT,
   phone TEXT,
   website TEXT,
+  source TEXT DEFAULT 'wellness', -- 'wellness', 'gym', etc.
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

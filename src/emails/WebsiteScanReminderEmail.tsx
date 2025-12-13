@@ -21,7 +21,7 @@ interface WebsiteScanReminderEmailProps {
 
 export const WebsiteScanReminderEmail = ({
     name,
-    scanLink = "https://cynthiaconcierge.com/wellness/dashboard",
+    scanLink = "https://free.consciouscounsel.ca/wellness/dashboard",
 }: WebsiteScanReminderEmailProps) => {
     return (
         <Html>
@@ -56,7 +56,7 @@ export const WebsiteScanReminderEmail = ({
                         <Text className="text-black text-[14px] leading-[24px]">
                             Hi {name || 'there'},
                         </Text>
-                        
+
                         <Text className="text-black text-[14px] leading-[24px]">
                             Great news—your business profile is complete! Now it's time for the next step: scanning your website to identify any legal gaps or compliance issues.
                         </Text>

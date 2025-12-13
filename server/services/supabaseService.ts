@@ -12,6 +12,7 @@ export interface ContactData {
   website: string;
   first_name?: string;
   last_name?: string;
+  source?: string;
 }
 
 export class SupabaseService {
@@ -46,6 +47,7 @@ export class SupabaseService {
             last_name: last_name,
             phone: contactData.phone?.trim() || "",
             website: contactData.website?.trim() || "",
+            source: contactData.source || "wellness", // Default to 'wellness' if not provided
             created_at: new Date().toISOString(),
           },
         ])
@@ -61,7 +63,7 @@ export class SupabaseService {
             .select()
             .eq("email", contactData.email.trim().toLowerCase())
             .limit(1);
-          
+
           if (existingData && existingData.length > 0) {
             return existingData;
           }

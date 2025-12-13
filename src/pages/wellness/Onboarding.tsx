@@ -436,55 +436,12 @@ export const Onboarding: React.FC = () => {
               }
             }
 
-            // 3. Create Business Profile entry
-            // This ensures they are added to the table immediately upon account creation
-            if (data.user) {
-              try {
-                console.log('🏗️ Creating initial business profile...');
+            // NOTE: Business profiles are NOT created here during onboarding
+            // They are only created when the user actually saves their business profile
+            // with a business name on the Business Profile page (BusinessProfile.tsx)
+            // This prevents incomplete profiles from being created prematurely and
+            // showing up in GoHighLevel with generic/default names
 
-                // Map Primary Business Type (logic matched from BusinessProfile.tsx)
-                let mappedBusinessType = '';
-                if (answers.primaryBusinessType) {
-                  switch (answers.primaryBusinessType) {
-                    case 'Yoga': mappedBusinessType = 'Yoga Studio'; break;
-                    case 'Pilates': mappedBusinessType = 'Pilates Studio'; break;
-                    case 'Gym': mappedBusinessType = 'Gym / Fitness Studio'; break;
-                    case 'Retreats': mappedBusinessType = 'Retreat Leader'; break;
-                    case 'Coaching': mappedBusinessType = 'Online Coach'; break;
-                    case 'Breathwork': mappedBusinessType = 'Breathwork / Meditation'; break;
-                    default: mappedBusinessType = answers.primaryBusinessType;
-                  }
-                }
-
-                const { error: profileError } = await supabase
-                  .from('business_profiles')
-                  .upsert({
-                    user_id: data.user.id,
-                    // We don't have business name yet, will be filled in BusinessProfile
-                    business_type: mappedBusinessType,
-                    // Onboarding answer fields
-                    services: answers.services || [],
-                    has_physical_movement: answers.hasPhysicalMovement ?? false,
-                    collects_online: answers.collectsOnline ?? false,
-                    hires_staff: answers.hiresStaff ?? false,
-                    is_offsite_or_international: answers.isOffsiteOrInternational ?? false,
-                    has_w2_employees: answers.hasEmployees ?? false,
-                    sells_products: answers.sellsProducts ?? false,
-                    updated_at: new Date().toISOString()
-                  }, {
-                    onConflict: 'user_id'
-                  });
-
-                if (profileError) {
-                  console.error('❌ Error creating initial business profile:', profileError);
-                  // Non-blocking error
-                } else {
-                  console.log('✅ Initial business profile created successfully');
-                }
-              } catch (profileErr) {
-                console.error('❌ Error in business profile creation:', profileErr);
-              }
-            }
             // Other error - log it but continue
             console.error('Error details:', {
               message: error.message,

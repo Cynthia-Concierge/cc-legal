@@ -21,7 +21,7 @@ interface ProfileCompletionReminderEmailProps {
 
 export const ProfileCompletionReminderEmail = ({
     name,
-    profileLink = "https://cynthiaconcierge.com/wellness/dashboard/profile",
+    profileLink = "https://free.consciouscounsel.ca/wellness/dashboard/profile",
 }: ProfileCompletionReminderEmailProps) => {
     return (
         <Html>
@@ -56,7 +56,7 @@ export const ProfileCompletionReminderEmail = ({
                         <Text className="text-black text-[14px] leading-[24px]">
                             Hi {name || 'there'},
                         </Text>
-                        
+
                         <Text className="text-black text-[14px] leading-[24px]">
                             We noticed you haven't finished setting up your business profile yet. Don't worry—completing it only takes about 2 minutes, and it unlocks personalized legal documents tailored specifically to your business.
                         </Text>

@@ -145,7 +145,7 @@ export class EmailService {
                         <tr>
                           <td>
                             <a
-                              href="https://cynthiaconcierge.com/dashboard"
+                              href="https://free.consciouscounsel.ca/wellness/dashboard"
                               style="background-color:rgb(20,184,166);border-radius:0.25rem;color:rgb(255,255,255);font-size:12px;font-weight:600;text-decoration-line:none;text-align:center;padding-left:20px;padding-right:20px;padding-top:12px;padding-bottom:12px;line-height:100%;text-decoration:none;display:inline-block;max-width:100%;mso-padding-alt:0px"
                               target="_blank"
                               ><span
@@ -261,13 +261,13 @@ export class EmailService {
       const { render } = await import('@react-email/render');
       const { ProfileCompletionReminderEmail } = await import('../../src/emails/ProfileCompletionReminderEmail.js');
 
-      const profileLink = process.env.DASHBOARD_URL || 
-        (process.env.NODE_ENV === 'production' 
-          ? 'https://cynthiaconcierge.com/wellness/dashboard/profile'
+      const profileLink = process.env.DASHBOARD_URL ||
+        (process.env.NODE_ENV === 'production'
+          ? 'https://free.consciouscounsel.ca/wellness/dashboard/profile'
           : 'http://localhost:5173/wellness/dashboard/profile');
 
       const emailHtml = await render(
-        ProfileCompletionReminderEmail({ 
+        ProfileCompletionReminderEmail({
           name: name, // Template will use 'there' as fallback if name is undefined
           profileLink: profileLink
         })
@@ -299,13 +299,13 @@ export class EmailService {
       const { render } = await import('@react-email/render');
       const { WebsiteScanReminderEmail } = await import('../../src/emails/WebsiteScanReminderEmail.js');
 
-      const scanLink = process.env.DASHBOARD_URL || 
-        (process.env.NODE_ENV === 'production' 
-          ? 'https://cynthiaconcierge.com/wellness/dashboard'
+      const scanLink = process.env.DASHBOARD_URL ||
+        (process.env.NODE_ENV === 'production'
+          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
           : 'http://localhost:5173/wellness/dashboard');
 
       const emailHtml = await render(
-        WebsiteScanReminderEmail({ 
+        WebsiteScanReminderEmail({
           name: name, // Template will use 'there' as fallback if name is undefined
           scanLink: scanLink
         })

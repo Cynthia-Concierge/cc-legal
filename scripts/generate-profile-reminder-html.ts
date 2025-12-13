@@ -9,9 +9,9 @@ if (!fs.existsSync(distDir)) {
     fs.mkdirSync(distDir);
 }
 
-const html = await render(ProfileCompletionReminderEmail({ 
+const html = await render(ProfileCompletionReminderEmail({
     name: 'Ricki',
-    profileLink: 'https://cynthiaconcierge.com/wellness/dashboard/profile'
+    profileLink: 'https://free.consciouscounsel.ca/wellness/dashboard/profile'
 }), {
     pretty: true,
 });

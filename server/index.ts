@@ -816,7 +816,7 @@ app.post("/api/emails/send-website-scan-reminders", async (req, res) => {
     // - Haven't been sent a reminder email yet (or reminder was sent more than 7 days ago - allow re-engagement)
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    
+
     // First, get all profiles that meet basic criteria
     let query = supabaseAdmin
       .from('business_profiles')
@@ -827,7 +827,7 @@ app.post("/api/emails/send-website-scan-reminders", async (req, res) => {
       .neq('website_url', '')
       .or('has_scanned_website.is.null,has_scanned_website.eq.false')
       .lt('created_at', twentyFourHoursAgo); // Profile created more than 24 hours ago
-    
+
     const { data: eligibleProfiles, error: queryError } = await query;
 
     if (queryError) {
@@ -873,7 +873,7 @@ app.post("/api/emails/send-website-scan-reminders", async (req, res) => {
       try {
         // Get user email from auth.users
         const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(profile.user_id);
-        
+
         if (authError || !authUser?.user?.email) {
           // Fallback: try users table
           const { data: appUser } = await supabaseAdmin
@@ -1286,7 +1286,7 @@ app.post("/api/save-contact", async (req, res) => {
     console.log("[Save Contact] Request received:", req.body);
     console.log("[Save Contact] Using Supabase key type:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "service_role" : "anon");
 
-    const { name, email, phone, website } = req.body;
+    const { name, email, phone, website, source } = req.body;
 
     if (!email || !name) {
       return res.status(400).json({
@@ -1305,6 +1305,7 @@ app.post("/api/save-contact", async (req, res) => {
       email,
       phone: phone || "",
       website: normalizedWebsite,
+      source: source || "wellness", // Default if not provided
     };
 
     console.log("[Save Contact] Attempting to save:", contactData);

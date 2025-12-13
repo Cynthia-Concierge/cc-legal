@@ -1,8 +1,12 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { CheckCircle, Download } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import DynamicBackground from "@/components/DynamicBackground"; // Assuming this exists or I'll create a dummy one if it fails, or search for it first.
 import { supabase } from "@/lib/supabase";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
+import DashboardShowcase from "@/components/DashboardShowcase";
 import ValueStack from "@/components/ValueStack";
 import Testimonials from "@/components/Testimonials";
 import Footer from "@/components/Footer";
@@ -160,6 +164,7 @@ const Index = () => {
             email: formData.email,
             phone: formData.phone,
             website: normalizedWebsite,
+            source: 'wellness'
           }),
         });
 
@@ -346,6 +351,7 @@ const Index = () => {
     <div className="min-h-screen bg-white">
       <Hero onFormSubmit={handleFormSubmit} />
       <Features />
+      <DashboardShowcase />
       <ValueStack onGetDocumentsClick={handleScrollToForm} />
       <Testimonials />
       <Footer />

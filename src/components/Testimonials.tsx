@@ -319,7 +319,7 @@ const Testimonials: React.FC = () => {
       <div className="container mx-auto px-4 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-12">
           <h2 className="text-3xl md:text-5xl font-bold text-slate-900 mb-4 whitespace-nowrap">
-            OVER 500 GYM OWNERS LOVE US
+            OVER 500 WELLNESS BUSINESSES' LOVE US
           </h2>
           <div className="flex items-center justify-center gap-2 mb-4">
              <div className="flex text-amber-400">

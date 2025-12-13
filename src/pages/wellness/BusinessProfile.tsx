@@ -385,11 +385,11 @@ export const BusinessProfile = () => {
             // 2. Add user to users table (track authenticated users with passwords)
             try {
               console.log('👤 Adding user to users table...');
-              const userName = user.user_metadata?.name || 
-                               user.user_metadata?.full_name || 
-                               answers.email?.split('@')[0] || 
-                               user.email?.split('@')[0] || 
-                               'User';
+              const userName = user.user_metadata?.name ||
+                user.user_metadata?.full_name ||
+                answers.email?.split('@')[0] ||
+                user.email?.split('@')[0] ||
+                'User';
 
               const { error: userTableError } = await supabase
                 .from('users')
@@ -410,7 +410,7 @@ export const BusinessProfile = () => {
                 // Continue anyway - not critical
               } else {
                 console.log('✅ User added to users table successfully');
-                
+
                 // Send welcome email when user is added to users table (becomes authenticated user)
                 if (user.email) {
                   console.log('📧 Triggering welcome email after password creation...');
@@ -637,6 +637,31 @@ export const BusinessProfile = () => {
               } catch (tagErr) {
                 console.error('❌ Error calling GHL tag endpoint:', tagErr);
                 // Continue anyway - profile save was successful
+              }
+            }
+
+            // Schedule Website Scan Reminder Email (24h later)
+            if (user && answers.email) {
+              try {
+                const userName = formData.ownerName ||
+                  user.user_metadata?.name ||
+                  user.user_metadata?.full_name ||
+                  answers.email.split('@')[0];
+
+                console.log('📧 Scheduling website scan reminder email...');
+                fetch('/api/emails/schedule-website-scan-reminder', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId: user.id,
+                    email: answers.email,
+                    name: userName
+                  })
+                }).then(res => res.json())
+                  .then(data => console.log('✅ Scheduled reminder:', data))
+                  .catch(err => console.error('❌ Error scheduling reminder:', err));
+              } catch (scheduleErr) {
+                console.error('❌ Error in scheduling flow:', scheduleErr);
               }
             }
           }

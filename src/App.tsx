@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import BusinessWidget from "./pages/BusinessWidget";
 import ThankYou from "./pages/ThankYou";
 import NotFound from "./pages/NotFound";
+import GymLandingPage from "./pages/GymLandingPage";
 import { Onboarding } from "./pages/wellness/Onboarding";
 import { BusinessProfile } from "./pages/wellness/BusinessProfile";
 import { DashboardLayout } from "./components/wellness/layout/DashboardLayout";
@@ -29,6 +30,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/gyms" element={<GymLandingPage />} />
             <Route path="/thank-you" element={<ThankYou />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/lead-scraper" element={<Dashboard />} />

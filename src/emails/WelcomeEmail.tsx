@@ -22,7 +22,7 @@ interface WelcomeEmailProps {
 
 export const WelcomeEmail = ({
     name,
-    dashboardLink = "https://cynthiaconcierge.com/dashboard",
+    dashboardLink = "https://free.consciouscounsel.ca/dashboard",
 }: WelcomeEmailProps) => {
     return (
         <Html>
