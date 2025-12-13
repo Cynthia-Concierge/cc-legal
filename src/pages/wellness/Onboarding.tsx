@@ -67,18 +67,34 @@ export const Onboarding: React.FC = () => {
 
         // Post-password operations: Email, Users Table, & Business Profile
         try {
+          // Get fresh session after password update
+          const { data: { session } } = await supabase.auth.getSession();
           const { data: { user } } = await supabase.auth.getUser();
+
+          console.log('🔐 Session check:', {
+            hasSession: !!session,
+            hasUser: !!user,
+            userId: user?.id,
+            userEmail: user?.email,
+            tempPassword: user?.user_metadata?.temp_password
+          });
 
           if (user) {
             // 1. Add user to users table (track authenticated users with passwords)
             try {
               console.log('👤 Adding user to users table...');
-              const userName = user.user_metadata?.name || 
-                               user.user_metadata?.full_name || 
-                               user.email?.split('@')[0] || 
+              const userName = user.user_metadata?.name ||
+                               user.user_metadata?.full_name ||
+                               user.email?.split('@')[0] ||
                                'User';
 
-              const { error: userTableError } = await supabase
+              console.log('📝 Attempting upsert with data:', {
+                user_id: user.id,
+                email: user.email,
+                name: userName
+              });
+
+              const { data: insertData, error: userTableError } = await supabase
                 .from('users')
                 .upsert({
                   user_id: user.id,
@@ -90,30 +106,62 @@ export const Onboarding: React.FC = () => {
                   updated_at: new Date().toISOString()
                 }, {
                   onConflict: 'user_id'
-                });
+                })
+                .select();
 
               if (userTableError) {
-                console.error('❌ Error adding user to users table:', userTableError);
-                // Continue anyway - not critical
+                console.error('❌ CRITICAL: Error adding user to users table:', {
+                  error: userTableError,
+                  message: userTableError.message,
+                  details: userTableError.details,
+                  hint: userTableError.hint,
+                  code: userTableError.code
+                });
+                console.log('⚠️ Note: Database trigger should still add user to users table as fallback');
+                // Show error to user via toast
+                alert(`Warning: User account created but profile setup incomplete. Error: ${userTableError.message}. Please contact support if issues persist.`);
               } else {
-                console.log('✅ User added to users table successfully');
-                
-                // Send welcome email when user is added to users table (becomes authenticated user)
-                if (user.email) {
-                  console.log('📧 Triggering welcome email after password creation...');
-                  fetch('/api/emails/welcome', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      email: user.email,
-                      name: userName || user.email.split('@')[0] // Use the name we determined above
-                    })
-                  }).catch(err => console.error('❌ Welcome email error:', err));
-                }
+                console.log('✅ User added to users table successfully', insertData);
+              }
+
+              // Send welcome email when user sets password (regardless of application-level insert success)
+              // The database trigger ensures the user is added to the table even if app-level insert fails
+              if (user.email) {
+                console.log('📧 Triggering welcome email after password creation...');
+                fetch('/api/emails/welcome', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: user.email,
+                    name: userName || user.email.split('@')[0]
+                  })
+                }).catch(err => console.error('❌ Welcome email error:', err));
               }
             } catch (userTableErr) {
-              console.error('❌ Error in users table insertion:', userTableErr);
-              // Continue anyway
+              console.error('❌ CRITICAL: Exception in users table insertion:', {
+                error: userTableErr,
+                message: userTableErr instanceof Error ? userTableErr.message : String(userTableErr),
+                stack: userTableErr instanceof Error ? userTableErr.stack : undefined
+              });
+              console.log('⚠️ Note: Database trigger should still add user to users table as fallback');
+              alert(`Warning: An error occurred while setting up your profile. Please contact support. Error: ${userTableErr instanceof Error ? userTableErr.message : String(userTableErr)}`);
+
+              // Still send welcome email - the database trigger should have added the user
+              const userName = user.user_metadata?.name ||
+                               user.user_metadata?.full_name ||
+                               user.email?.split('@')[0] ||
+                               'User';
+              if (user.email) {
+                console.log('📧 Triggering welcome email after password creation (despite error)...');
+                fetch('/api/emails/welcome', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: user.email,
+                    name: userName
+                  })
+                }).catch(err => console.error('❌ Welcome email error:', err));
+              }
             }
 
             // 2. Link contact record to user when password is created
