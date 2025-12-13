@@ -776,6 +776,186 @@ app.post("/api/emails/welcome", async (req, res) => {
   }
 });
 
+// Send Website Scan Reminder Emails
+// This endpoint should be called daily via cron job to automatically send reminders
+// 
+// Logic: 24 hours after a user creates their business profile, if they haven't scanned
+// their website yet, send them a reminder email.
+//
+// To set up automation:
+// 1. Set up a daily cron job (e.g., using GitHub Actions, Vercel Cron, or a server cron)
+// 2. Call: POST /api/emails/send-website-scan-reminders
+// 3. Runs daily and checks all users who completed profile >24 hours ago but haven't scanned
+app.post("/api/emails/send-website-scan-reminders", async (req, res) => {
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Email service is not configured.",
+      });
+    }
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Supabase is not configured.",
+      });
+    }
+
+    // Create Supabase client with service role for admin queries
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // Query for eligible users:
+    // - Have completed business profile (has business_name)
+    // - Have website URL
+    // - Haven't scanned website yet
+    // - Profile was created at least 24 hours ago (24 hours after they first saved their profile)
+    // - Haven't been sent a reminder email yet (or reminder was sent more than 7 days ago - allow re-engagement)
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    // First, get all profiles that meet basic criteria
+    let query = supabaseAdmin
+      .from('business_profiles')
+      .select('user_id, business_name, website_url, created_at, website_scan_reminder_sent_at')
+      .not('business_name', 'is', null)
+      .neq('business_name', '')
+      .not('website_url', 'is', null)
+      .neq('website_url', '')
+      .or('has_scanned_website.is.null,has_scanned_website.eq.false')
+      .lt('created_at', twentyFourHoursAgo); // Profile created more than 24 hours ago
+    
+    const { data: eligibleProfiles, error: queryError } = await query;
+
+    if (queryError) {
+      console.error('[Website Scan Reminders] Error querying profiles:', queryError);
+      return res.status(500).json({
+        error: "Database error",
+        message: queryError.message,
+      });
+    }
+
+    if (!eligibleProfiles || eligibleProfiles.length === 0) {
+      return res.json({
+        success: true,
+        message: "No eligible users found",
+        sent: 0,
+      });
+    }
+
+    // Filter out users who were sent a reminder less than 7 days ago
+    const profilesToEmail = eligibleProfiles.filter((profile: any) => {
+      if (!profile.website_scan_reminder_sent_at) {
+        return true; // Never sent reminder
+      }
+      const reminderSentAt = new Date(profile.website_scan_reminder_sent_at);
+      const sevenDaysAgoDate = new Date(sevenDaysAgo);
+      return reminderSentAt < sevenDaysAgoDate; // Sent more than 7 days ago
+    });
+
+    if (profilesToEmail.length === 0) {
+      return res.json({
+        success: true,
+        message: "No eligible users found (all have been sent reminders recently)",
+        sent: 0,
+        total: eligibleProfiles.length,
+      });
+    }
+
+    console.log(`[Website Scan Reminders] Found ${profilesToEmail.length} eligible profiles (out of ${eligibleProfiles.length} total)`);
+
+    // Get user emails from auth.users or users table
+    const results = [];
+    for (const profile of profilesToEmail) {
+      try {
+        // Get user email from auth.users
+        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(profile.user_id);
+        
+        if (authError || !authUser?.user?.email) {
+          // Fallback: try users table
+          const { data: appUser } = await supabaseAdmin
+            .from('users')
+            .select('email, name')
+            .eq('user_id', profile.user_id)
+            .single();
+
+          if (!appUser || !appUser.email) {
+            console.warn(`[Website Scan Reminders] Skipping user ${profile.user_id} - no email found`);
+            continue;
+          }
+
+          const result = await emailService.sendWebsiteScanReminder(
+            appUser.email,
+            appUser.name
+          );
+
+          // Mark that reminder was sent to prevent duplicate emails
+          await supabaseAdmin
+            .from('business_profiles')
+            .update({ website_scan_reminder_sent_at: new Date().toISOString() })
+            .eq('user_id', profile.user_id);
+
+          results.push({
+            email: appUser.email,
+            success: true,
+            result: result,
+          });
+
+          console.log(`[Website Scan Reminders] Sent reminder to: ${appUser.email}`);
+        } else {
+          // Use email from auth.users
+          const result = await emailService.sendWebsiteScanReminder(
+            authUser.user.email,
+            authUser.user.user_metadata?.name || authUser.user.email.split('@')[0]
+          );
+
+          // Mark that reminder was sent to prevent duplicate emails
+          await supabaseAdmin
+            .from('business_profiles')
+            .update({ website_scan_reminder_sent_at: new Date().toISOString() })
+            .eq('user_id', profile.user_id);
+
+          results.push({
+            email: authUser.user.email,
+            success: true,
+            result: result,
+          });
+
+          console.log(`[Website Scan Reminders] Sent reminder to: ${authUser.user.email}`);
+        }
+      } catch (emailError: any) {
+        console.error(`[Website Scan Reminders] Error sending to user ${profile.user_id}:`, emailError);
+        results.push({
+          email: 'unknown',
+          success: false,
+          error: emailError.message,
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+
+    res.json({
+      success: true,
+      message: `Sent ${successCount} reminder emails${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
+      sent: successCount,
+      failed: failureCount,
+      total: profilesToEmail.length,
+      results: results,
+    });
+  } catch (error: any) {
+    console.error("[Website Scan Reminders] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to send website scan reminders",
+    });
+  }
+});
+
 // Get workflow prompts and autogen configs (before execution)
 app.get("/api/workflow-config", async (req, res) => {
   try {

@@ -382,7 +382,54 @@ export const BusinessProfile = () => {
               return;
             }
 
-            // 2. Link contact record to user when password is created
+            // 2. Add user to users table (track authenticated users with passwords)
+            try {
+              console.log('👤 Adding user to users table...');
+              const userName = user.user_metadata?.name || 
+                               user.user_metadata?.full_name || 
+                               answers.email?.split('@')[0] || 
+                               user.email?.split('@')[0] || 
+                               'User';
+
+              const { error: userTableError } = await supabase
+                .from('users')
+                .upsert({
+                  user_id: user.id,
+                  email: user.email || answers.email || '',
+                  name: userName,
+                  password_created_at: new Date().toISOString(),
+                  onboarding_completed: false,
+                  profile_completed: false,
+                  updated_at: new Date().toISOString()
+                }, {
+                  onConflict: 'user_id'
+                });
+
+              if (userTableError) {
+                console.error('❌ Error adding user to users table:', userTableError);
+                // Continue anyway - not critical
+              } else {
+                console.log('✅ User added to users table successfully');
+                
+                // Send welcome email when user is added to users table (becomes authenticated user)
+                if (user.email) {
+                  console.log('📧 Triggering welcome email after password creation...');
+                  fetch('/api/emails/welcome', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      email: user.email,
+                      name: userName || user.email.split('@')[0] // Use the name we determined above
+                    })
+                  }).catch(err => console.error('❌ Welcome email error:', err));
+                }
+              }
+            } catch (userTableErr) {
+              console.error('❌ Error in users table insertion:', userTableErr);
+              // Continue anyway
+            }
+
+            // 3. Link contact record to user when password is created
             // This connects the initial form submission to the user account
             if (answers.email) {
               try {
@@ -407,7 +454,7 @@ export const BusinessProfile = () => {
             }
           }
 
-          // 3. Mark onboarding complete
+          // 4. Mark onboarding complete
           const { error: updateError } = await supabase.auth.updateUser({
             data: { onboarding_complete: true }
           });
@@ -415,6 +462,29 @@ export const BusinessProfile = () => {
           if (updateError) {
             console.error('Error updating user data:', updateError);
             // Continue anyway - this is not critical
+          }
+
+          // Also update users table
+          if (user) {
+            try {
+              const { error: userOnboardingError } = await supabase
+                .from('users')
+                .update({
+                  onboarding_completed: true,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('user_id', user.id);
+
+              if (userOnboardingError) {
+                console.error('Error updating users table onboarding status:', userOnboardingError);
+                // Continue anyway
+              } else {
+                console.log('✅ Updated users table: onboarding_completed = true');
+              }
+            } catch (userOnboardingErr) {
+              console.error('Error updating users table:', userOnboardingErr);
+              // Continue anyway
+            }
           }
         }
       } else {
@@ -458,14 +528,16 @@ export const BusinessProfile = () => {
 
       localStorage.setItem('wellness_onboarding_answers', JSON.stringify(updatedAnswers));
 
-      // 4. Save to Supabase business_profiles table if it exists and Supabase is configured
-      if (user && supabase) {
+      // 4. Save to Supabase business_profiles table ONLY if business name is provided
+      // This ensures we only create business profiles when user has actually filled out their business info
+      // Users are added to 'users' table when they create password, but business_profiles only when they save profile
+      if (user && supabase && formData.businessName && formData.businessName.trim().length > 0) {
         try {
           const { error: profileError } = await supabase
             .from('business_profiles')
             .upsert({
               user_id: user.id,
-              business_name: formData.businessName,
+              business_name: formData.businessName.trim(),
               website_url: formData.website,
               instagram: formData.instagram,
               business_type: formData.businessType,
@@ -500,6 +572,29 @@ export const BusinessProfile = () => {
             console.error('Error saving profile to Supabase:', profileError);
             // Continue anyway - localStorage is the primary storage
           } else {
+            // Update users table to mark profile as completed
+            if (user) {
+              try {
+                const { error: userUpdateError } = await supabase
+                  .from('users')
+                  .update({
+                    profile_completed: true,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('user_id', user.id);
+
+                if (userUpdateError) {
+                  console.error('Error updating users table:', userUpdateError);
+                  // Continue anyway - not critical
+                } else {
+                  console.log('✅ Updated users table: profile_completed = true');
+                }
+              } catch (userUpdateErr) {
+                console.error('Error updating users table:', userUpdateErr);
+                // Continue anyway
+              }
+            }
+
             // Profile saved successfully - tag in GoHighLevel
             console.log('✅ Business profile saved, tagging in GoHighLevel...');
 

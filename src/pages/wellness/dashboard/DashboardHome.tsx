@@ -207,6 +207,14 @@ export const DashboardHome: React.FC = () => {
                 return;
             }
 
+            // Check if profile is complete
+            if (!answers?.isProfileComplete) {
+                if (window.confirm('To generate personalized documents, we need a bit more information about your business. Would you like to complete your profile now?')) {
+                    navigate('/wellness/dashboard/profile');
+                }
+                return;
+            }
+
             // Get template name from PDF path (e.g., "social_media_disclaimer" from "/pdfs/social_media_disclaimer.pdf")
             const pdfFileName = doc.pdfPath?.split('/').pop()?.replace('.pdf', '');
 

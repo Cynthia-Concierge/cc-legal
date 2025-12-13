@@ -65,6 +65,87 @@ export const Onboarding: React.FC = () => {
 
         if (error) throw error;
 
+        // Post-password operations: Email, Users Table, & Business Profile
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+
+          if (user) {
+            // 1. Add user to users table (track authenticated users with passwords)
+            try {
+              console.log('👤 Adding user to users table...');
+              const userName = user.user_metadata?.name || 
+                               user.user_metadata?.full_name || 
+                               user.email?.split('@')[0] || 
+                               'User';
+
+              const { error: userTableError } = await supabase
+                .from('users')
+                .upsert({
+                  user_id: user.id,
+                  email: user.email || '',
+                  name: userName,
+                  password_created_at: new Date().toISOString(),
+                  onboarding_completed: false,
+                  profile_completed: false,
+                  updated_at: new Date().toISOString()
+                }, {
+                  onConflict: 'user_id'
+                });
+
+              if (userTableError) {
+                console.error('❌ Error adding user to users table:', userTableError);
+                // Continue anyway - not critical
+              } else {
+                console.log('✅ User added to users table successfully');
+                
+                // Send welcome email when user is added to users table (becomes authenticated user)
+                if (user.email) {
+                  console.log('📧 Triggering welcome email after password creation...');
+                  fetch('/api/emails/welcome', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      email: user.email,
+                      name: userName || user.email.split('@')[0] // Use the name we determined above
+                    })
+                  }).catch(err => console.error('❌ Welcome email error:', err));
+                }
+              }
+            } catch (userTableErr) {
+              console.error('❌ Error in users table insertion:', userTableErr);
+              // Continue anyway
+            }
+
+            // 2. Link contact record to user when password is created
+            if (user.email) {
+              try {
+                const { error: contactError } = await supabase
+                  .from('contacts')
+                  .update({
+                    user_id: user.id,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('email', user.email.trim().toLowerCase());
+
+                if (contactError) {
+                  console.error('Error linking contact to user:', contactError);
+                  // Continue anyway - not critical if contact doesn't exist
+                } else {
+                  console.log('✅ Linked contact record to user:', user.id);
+                }
+              } catch (contactErr) {
+                console.error('Error updating contact:', contactErr);
+                // Continue anyway
+              }
+            }
+
+            // 4. Business profile will be created when user saves their business profile
+            // (No longer creating empty business profile here - only when they actually fill it out)
+          }
+        } catch (postUpdateErr) {
+          console.error('❌ Error in post-password operations:', postUpdateErr);
+        }
+
         // Success
         navigate('/wellness/dashboard');
       } catch (err: any) {
@@ -285,6 +366,77 @@ export const Onboarding: React.FC = () => {
               console.log('✅ Signed in existing user:', signInData.user.id);
             }
           } else {
+            // 2. Link contact record to user when password is created
+            // This connects the initial form submission to the user account
+            if (data.user && answers.email) {
+              try {
+                const { error: contactError } = await supabase
+                  .from('contacts')
+                  .update({
+                    user_id: data.user.id,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('email', answers.email.trim().toLowerCase());
+
+                if (contactError) {
+                  console.error('Error linking contact to user:', contactError);
+                } else {
+                  console.log('✅ Linked contact record to user:', data.user.id);
+                }
+              } catch (contactErr) {
+                console.error('Error updating contact:', contactErr);
+              }
+            }
+
+            // 3. Create Business Profile entry
+            // This ensures they are added to the table immediately upon account creation
+            if (data.user) {
+              try {
+                console.log('🏗️ Creating initial business profile...');
+
+                // Map Primary Business Type (logic matched from BusinessProfile.tsx)
+                let mappedBusinessType = '';
+                if (answers.primaryBusinessType) {
+                  switch (answers.primaryBusinessType) {
+                    case 'Yoga': mappedBusinessType = 'Yoga Studio'; break;
+                    case 'Pilates': mappedBusinessType = 'Pilates Studio'; break;
+                    case 'Gym': mappedBusinessType = 'Gym / Fitness Studio'; break;
+                    case 'Retreats': mappedBusinessType = 'Retreat Leader'; break;
+                    case 'Coaching': mappedBusinessType = 'Online Coach'; break;
+                    case 'Breathwork': mappedBusinessType = 'Breathwork / Meditation'; break;
+                    default: mappedBusinessType = answers.primaryBusinessType;
+                  }
+                }
+
+                const { error: profileError } = await supabase
+                  .from('business_profiles')
+                  .upsert({
+                    user_id: data.user.id,
+                    // We don't have business name yet, will be filled in BusinessProfile
+                    business_type: mappedBusinessType,
+                    // Onboarding answer fields
+                    services: answers.services || [],
+                    has_physical_movement: answers.hasPhysicalMovement ?? false,
+                    collects_online: answers.collectsOnline ?? false,
+                    hires_staff: answers.hiresStaff ?? false,
+                    is_offsite_or_international: answers.isOffsiteOrInternational ?? false,
+                    has_w2_employees: answers.hasEmployees ?? false,
+                    sells_products: answers.sellsProducts ?? false,
+                    updated_at: new Date().toISOString()
+                  }, {
+                    onConflict: 'user_id'
+                  });
+
+                if (profileError) {
+                  console.error('❌ Error creating initial business profile:', profileError);
+                  // Non-blocking error
+                } else {
+                  console.log('✅ Initial business profile created successfully');
+                }
+              } catch (profileErr) {
+                console.error('❌ Error in business profile creation:', profileErr);
+              }
+            }
             // Other error - log it but continue
             console.error('Error details:', {
               message: error.message,
@@ -296,25 +448,8 @@ export const Onboarding: React.FC = () => {
           console.log('✅ User created successfully:', data.user.id);
           console.log('📧 Email confirmation required:', data.user.email_confirmed_at ? 'No' : 'Yes');
 
-          // Send welcome email
-          try {
-            console.log('📧 Triggering welcome email...');
-            // Fetch handles relative URLs by using current origin
-            // In dev: Vite proxies /api -> localhost:3001
-            // In prod: Firebase rewrites /api -> Functions
-            fetch('/api/emails/welcome', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email: trimmedEmail,
-                name: trimmedEmail.split('@')[0] // Fallback name until we have real name
-              })
-            }).then(res => res.json())
-              .then(data => console.log('📧 Welcome email result:', data))
-              .catch(err => console.error('❌ Welcome email error:', err));
-          } catch (emailErr) {
-            console.error('❌ Error triggering welcome email:', emailErr);
-          }
+          // Email sending moved to Password Creation step (handlePasswordSubmit)
+          // to ensure user has actually set a password before we welcome them.
 
           // User created - try to auto-sign in (may require email confirmation depending on Supabase settings)
           try {

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Globe, Loader2, CheckCircle2, AlertTriangle, X } from 'lucide-react';
 import { vaultService } from '../../lib/wellness/vaultService';
+import { supabase } from '../../lib/supabase';
 
 interface WebsiteScanModalProps {
   isOpen: boolean;
@@ -98,6 +99,33 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
           websiteUrl: normalizedUrl,
           timestamp: new Date().toISOString()
         }));
+
+        // Update business_profiles table to mark website as scanned
+        if (supabase) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              const { error: updateError } = await supabase
+                .from('business_profiles')
+                .update({
+                  has_scanned_website: true,
+                  website_scan_completed_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq('user_id', user.id);
+
+              if (updateError) {
+                console.error('Error updating business profile scan status:', updateError);
+                // Continue anyway - not critical
+              } else {
+                console.log('✅ Updated business profile: has_scanned_website = true');
+              }
+            }
+          } catch (dbErr) {
+            console.error('Error updating database:', dbErr);
+            // Continue anyway - not critical
+          }
+        }
 
         // 1. Generate and save REPORT to vault
         try {

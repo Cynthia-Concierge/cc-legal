@@ -5,7 +5,7 @@
   "main": "lib/index.js",
   "scripts": {
     "build": "npm run copy-server && tsc && npm run fix-output",
-    "copy-server": "mkdir -p lib/server/services && cp ../server/services/supabaseService.js ../server/services/workflowResultsService.js ../server/services/coldLeadsService.js ../server/services/emailGenerationWorkflow.js ../server/services/configService.js ../server/services/instantlyService.js ../server/services/firecrawlService.js ../server/services/openaiService.js lib/server/services/ 2>/dev/null || true",
+    "copy-server": "mkdir -p lib/server/services && cp ../server/services/supabaseService.js ../server/services/workflowResultsService.js ../server/services/coldLeadsService.js ../server/services/emailGenerationWorkflow.js ../server/services/configService.js ../server/services/instantlyService.js ../server/services/firecrawlService.js ../server/services/openaiService.js ../server/services/emailService.js lib/server/services/ 2>/dev/null || true",
     "fix-output": "if [ -f lib/functions/src/index.js ]; then mv lib/functions/src/index.js lib/index.js && mv lib/functions/src/index.js.map lib/index.js.map 2>/dev/null; rm -rf lib/functions 2>/dev/null; fi",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
@@ -28,6 +28,7 @@
     "express": "^4.18.2",
     "firebase-admin": "^12.0.0",
     "firebase-functions": "^5.0.0",
+    "node-fetch": "^3.3.2",
     "playwright": "^1.48.0",
     "resend": "^6.5.2"
   },
