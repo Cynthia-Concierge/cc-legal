@@ -339,7 +339,10 @@ const DatabaseTables = () => {
       }
 
       // Show success message
-      alert(`Successfully processed ${leadsToProcess.length} lead(s). Refreshing table...`);
+      toast({
+        title: "Leads processed",
+        description: `Successfully processed ${leadsToProcess.length} lead(s). Refreshing table...`,
+      });
       
       // Clear selection and refresh table data
       setSelectedLeads(new Set());
@@ -350,7 +353,11 @@ const DatabaseTables = () => {
       }
     } catch (error) {
       console.error("Error running legal analyzer:", error);
-      alert("Error processing leads. Check console for details.");
+      toast({
+        variant: "destructive",
+        title: "Error processing leads",
+        description: "Something went wrong while running the legal analyzer. Check the console for details.",
+      });
     } finally {
       setProcessingLeads(new Set());
     }

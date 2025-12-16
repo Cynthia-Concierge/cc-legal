@@ -141,6 +141,22 @@ const ALL_TEMPLATES: DocumentItem[] = [
     category: 'advanced',
     pdfPath: '/pdfs/refund_cancellation_policy.pdf'
   },
+  {
+    id: 'template-disclaimer',
+    title: 'Website Disclaimer',
+    description: 'Protect your business from content liability.',
+    isLocked: true,
+    category: 'advanced',
+    pdfPath: '/pdfs/website_disclaimer.pdf'
+  },
+  {
+    id: 'template-cookie',
+    title: 'Cookie Policy',
+    description: 'Inform users about data collection cookies.',
+    isLocked: true,
+    category: 'advanced',
+    pdfPath: '/pdfs/cookie_policy.pdf'
+  },
   // RETREAT SPECIALS
   {
     id: 'template-retreat-waiver',
@@ -167,8 +183,11 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
   // 1. Core Documents (Recommended for EVERYONE)
   const coreIds = [
     'template-1', // Waiver
-    'template-3', // Website Terms (Terms & Privacy)
+    'template-website', // Website Terms
     'template-privacy', // Privacy Policy (Separate if needed, but template-3 seems to cover it)
+    'template-disclaimer', // Disclaimer
+    'template-cookie', // Cookie Policy
+    'template-refund', // Refund Policy
     'template-10', // IP Protection (Good general advice)
   ];
   advancedDocs.push(...ALL_TEMPLATES.filter(t => coreIds.includes(t.id)));
@@ -179,27 +198,38 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
   if (answers.hasEmployees) {
     const doc = ALL_TEMPLATES.find(t => t.id === 'template-8'); // Employment Agreement
     if (doc) advancedDocs.push(doc);
-  } else {
-    // If no employees, maybe Contractor Agreement?
+  } else if (answers.hiresStaff) {
+    // If they hire staff but not employees, they need Contractor Agreement
     const doc = ALL_TEMPLATES.find(t => t.id === 'template-7'); // Contractor Agreement
     if (doc) advancedDocs.push(doc);
   }
 
   // IF Studio Owner (has physical location implies studio policies)
-  const isStudio = answers.businessType?.includes('Studio') || answers.businessType?.includes('Gym');
+  // Check both profile businessType and onboarding primaryBusinessType
+  const isStudio = (answers.businessType && (answers.businessType.includes('Studio') || answers.businessType.includes('Gym'))) ||
+    ['Yoga', 'Pilates', 'Gym'].includes(answers.primaryBusinessType || '');
+
   if (isStudio) {
     const studioDocs = ALL_TEMPLATES.filter(t => ['template-studio', 'template-class', 'template-membership', 'template-2'].includes(t.id));
     advancedDocs.push(...studioDocs);
   }
 
   // IF Hosts Retreats -> Recommend specific retreat docs
-  if (answers.hostsRetreats) {
+  const hostsRetreats = answers.hostsRetreats ||
+    answers.primaryBusinessType === 'Retreats' ||
+    (answers.services && answers.services.includes('Retreats or workshops'));
+
+  if (hostsRetreats) {
     const retreatDocs = ALL_TEMPLATES.filter(t => ['template-retreat-waiver', 'template-travel'].includes(t.id));
     advancedDocs.push(...retreatDocs);
   }
 
   // IF Online Courses -> Website Terms (already added), but maybe explicit Digital Product terms?
-  if (answers.offersOnlineCourses) {
+  const offersOnline = answers.offersOnlineCourses ||
+    answers.primaryBusinessType === 'Coaching' ||
+    (answers.services && answers.services.includes('Online coaching / digital programs'));
+
+  if (offersOnline) {
     const doc = ALL_TEMPLATES.find(t => t.id === 'template-refund'); // Refund Policy (good for digital)
     if (doc) advancedDocs.push(doc);
   }
@@ -223,7 +253,7 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
 
   // Pick top priorities - Core Legal Documents
   // We prioritize the Waiver, Service Agreement, and Website Terms as the "Big 3"
-  const priorityIds = ['template-1', 'template-2', 'template-3'];
+  const priorityIds = ['template-1', 'template-2', 'template-website'];
   const topPriorities = advancedDocs.filter(doc => priorityIds.includes(doc.id));
 
   return {

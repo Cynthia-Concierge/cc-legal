@@ -38,10 +38,15 @@ const GymLandingPage = () => {
             normalizedWebsite = `https://${normalizedWebsite}`;
         }
 
+        // Generate a unique event_id for deduplication
+        const eventId = `lead_${crypto.randomUUID()}`;
+
         try {
             const API_BASE_URL =
                 import.meta.env.VITE_API_URL ||
                 (import.meta.env.DEV ? "" : "");
+
+
 
             // Save to Supabase contacts table
             try {
@@ -75,8 +80,6 @@ const GymLandingPage = () => {
                 console.error("Error saving contact to Supabase:", supabaseError);
             }
 
-            // Generate a unique event_id for deduplication
-            const eventId = `lead_${crypto.randomUUID()}`;
 
             // Track Lead event via Meta Conversions API (server-side)
             try {
@@ -116,8 +119,13 @@ const GymLandingPage = () => {
             console.error("Error submitting form:", error);
         }
 
-        // Redirect to thank you page (Same flow as original)
-        navigate('/thank-you');
+        // Redirect to onboarding (Skip Thank You page)
+        const params = new URLSearchParams({
+            skipWelcome: 'true',
+            email: formData.email,
+            eventId: eventId
+        });
+        navigate(`/wellness/onboarding?${params.toString()}`);
     };
 
     const handleScrollToForm = () => {

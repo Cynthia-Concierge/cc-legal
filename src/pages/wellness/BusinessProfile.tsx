@@ -136,12 +136,44 @@ export const BusinessProfile = () => {
 
             console.log('🔍 Loading profile data from Supabase for user:', authUser.id);
 
-            // Load business profile data
-            const { data: profileData, error: profileError } = await supabase
+            // Load business profile data from DB
+            let { data: dbData, error: profileError } = await supabase
               .from('business_profiles')
               .select('*')
               .eq('user_id', authUser.id)
-              .single();
+              .maybeSingle();
+
+            // RECOVERY: Check if we have pending onboarding data in localStorage
+            // This fixes race conditions where the DB write might have failed or been too slow
+            let profileData = dbData;
+            try {
+              const pendingJson = localStorage.getItem('pending_business_profile');
+              if (pendingJson) {
+                const pendingData = JSON.parse(pendingJson);
+
+                // If DB is missing data, use pending data
+                if (!profileData || !profileData.business_type) {
+                  console.log('🔄 Missing DB data detected. Recovering from local backup...');
+                  profileData = { ...pendingData, ...profileData }; // Use pending as base
+
+                  // Trigger background sync to fix the DB
+                  supabase.from('business_profiles').upsert({
+                    ...pendingData,
+                    user_id: authUser.id,
+                    updated_at: new Date().toISOString()
+                  }).then(({ error }) => {
+                    if (!error) {
+                      console.log('✅ Background recovery sync successful');
+                      localStorage.removeItem('pending_business_profile');
+                    } else {
+                      console.error('❌ Background recovery sync failed:', error);
+                    }
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn('⚠️ Error checking local backup:', err);
+            }
 
             if (!profileError && profileData) {
               console.log('✅ Loaded business profile from Supabase:', profileData);
@@ -601,7 +633,8 @@ export const BusinessProfile = () => {
             // Call backend to add "created business profile" tag in GoHighLevel AND sync all profile data
             if (answers.email) {
               try {
-                const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+                // Use relative URL by default so it works in both dev (Vite proxy) and prod (Firebase Hosting rewrites)
+                const serverUrl = import.meta.env.VITE_SERVER_URL || '';
 
                 // Prepare complete profile data to send
                 const completeProfileData = {
@@ -751,13 +784,13 @@ export const BusinessProfile = () => {
 
       <div className="flex-1 max-w-7xl mx-auto w-full px-4 py-8 flex flex-col md:flex-row gap-8">
 
-        {/* Sidebar Nav */}
-        <div className="w-full md:w-64 flex-shrink-0">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden sticky top-24">
-            <div className="p-4 bg-slate-50 border-b border-slate-100">
+        {/* Sidebar Nav - Mobile: Horizontal Scroll, Desktop: Vertical Sidebar */}
+        <div className="w-full md:w-64 flex-shrink-0 z-10 sticky top-[65px] md:top-24 bg-slate-50 md:bg-transparent -mt-4 md:mt-0 pt-4 md:pt-0">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="hidden md:block p-4 bg-slate-50 border-b border-slate-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Profile Sections</p>
             </div>
-            <nav className="flex flex-col">
+            <nav className="flex md:flex-col overflow-x-auto md:overflow-visible pb-1 md:pb-0 scrollbar-hide">
               {SECTIONS.map((section, idx) => {
                 const Icon = section.icon;
                 const isActive = activeSection === section.id;
@@ -766,18 +799,19 @@ export const BusinessProfile = () => {
                     key={section.id}
                     onClick={() => setActiveSection(section.id)}
                     className={`
-                        w-full flex items-center gap-3 p-4 text-left transition-colors border-l-4
+                        flex-shrink-0 md:flex-shrink md:w-full flex items-center gap-3 p-4 text-left transition-colors
+                        border-b-2 md:border-b-0 md:border-l-4
                         ${isActive
                         ? 'border-brand-600 bg-brand-50 text-brand-900'
                         : 'border-transparent hover:bg-slate-50 text-slate-600 hover:text-slate-900'}
                       `}
                   >
                     <Icon size={20} className={isActive ? 'text-brand-600' : 'text-slate-400'} />
-                    <div className="flex-1">
+                    <div className="flex-1 whitespace-nowrap md:whitespace-normal">
                       <p className={`text-sm font-medium ${isActive ? 'font-semibold' : ''}`}>{section.title}</p>
-                      <p className="text-xs text-slate-500 line-clamp-1">{section.description}</p>
+                      <p className="hidden md:block text-xs text-slate-500 line-clamp-1">{section.description}</p>
                     </div>
-                    {isActive && <ChevronRight size={16} className="text-brand-400" />}
+                    {isActive && <ChevronRight size={16} className="hidden md:block text-brand-400" />}
                   </button>
                 );
               })}

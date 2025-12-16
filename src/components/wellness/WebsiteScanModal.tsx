@@ -40,6 +40,7 @@ export const WebsiteScanModal: React.FC<WebsiteScanModalProps> = ({
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(initialResults);
   const [error, setError] = useState<string | null>(null);
+  const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
 
   // Update state when initialResults changes (e.g. if loaded after mount)
   useEffect(() => {
@@ -352,35 +353,102 @@ ${result.issues.length > 0 ? result.issues.map(i =>
               {scanResult.issues.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 mb-3">Issues Found</h3>
-                  <div className="space-y-3">
-                    {scanResult.issues.map((issue, idx) => (
+                  {/* Group issues by document for clearer organization */}
+                  {Object.entries(
+                    scanResult.issues.reduce<Record<string, ScanResult['issues']>>((acc, issue) => {
+                      if (!acc[issue.document]) acc[issue.document] = [];
+                      acc[issue.document].push(issue);
+                      return acc;
+                    }, {})
+                  ).map(([documentName, issues]) => {
+                    const highCount = issues.filter(i => i.severity === 'high').length;
+                    const mediumCount = issues.filter(i => i.severity === 'medium').length;
+                    const lowCount = issues.filter(i => i.severity === 'low').length;
+                    const isOpen = expandedDoc === documentName;
+
+                    return (
                       <div
-                        key={idx}
-                        className={`p-3 rounded-lg border ${issue.severity === 'high'
-                          ? 'bg-red-50 border-red-200'
-                          : issue.severity === 'medium'
-                            ? 'bg-orange-50 border-orange-200'
-                            : 'bg-yellow-50 border-yellow-200'
-                          }`}
+                        key={documentName}
+                        className="mb-3 rounded-lg border border-slate-200 overflow-hidden bg-white"
                       >
-                        <div className="flex items-start justify-between mb-1">
-                          <p className="text-sm font-medium text-slate-900">{issue.document}</p>
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded ${issue.severity === 'high'
-                              ? 'bg-red-100 text-red-700'
-                              : issue.severity === 'medium'
-                                ? 'bg-orange-100 text-orange-700'
-                                : 'bg-yellow-100 text-yellow-700'
-                              }`}
-                          >
-                            {issue.severity.toUpperCase()}
+                        {/* Accordion header */}
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
+                          onClick={() =>
+                            setExpandedDoc(prev => (prev === documentName ? null : documentName))
+                          }
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{documentName}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {issues.length} issue{issues.length > 1 ? 's' : ''} found •{' '}
+                              {highCount > 0 && (
+                                <span className="text-red-600 font-semibold">
+                                  {highCount} high
+                                </span>
+                              )}
+                              {mediumCount > 0 && (
+                                <>
+                                  {highCount > 0 && ' • '}
+                                  <span className="text-orange-600 font-semibold">
+                                    {mediumCount} medium
+                                  </span>
+                                </>
+                              )}
+                              {lowCount > 0 && (
+                                <>
+                                  {(highCount > 0 || mediumCount > 0) && ' • '}
+                                  <span className="text-amber-600 font-semibold">
+                                    {lowCount} low
+                                  </span>
+                                </>
+                              )}
+                            </p>
+                          </div>
+                          <span className="text-xs text-slate-400">
+                            {isOpen ? 'Hide details' : 'View details'}
                           </span>
-                        </div>
-                        <p className="text-xs text-slate-700 mt-1">{issue.issue}</p>
-                        <p className="text-xs text-slate-600 mt-2 italic">{issue.whyItMatters}</p>
+                        </button>
+
+                        {/* Accordion body */}
+                        {isOpen && (
+                          <div className="border-t border-slate-100 p-3 space-y-2 bg-slate-50">
+                            {issues.map((issue, idx) => (
+                              <div
+                                key={idx}
+                                className={`p-3 rounded-lg border text-xs ${
+                                  issue.severity === 'high'
+                                    ? 'bg-red-50 border-red-200'
+                                    : issue.severity === 'medium'
+                                    ? 'bg-orange-50 border-orange-200'
+                                    : 'bg-yellow-50 border-yellow-200'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-semibold text-slate-900">
+                                    {issue.issue}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                                      issue.severity === 'high'
+                                        ? 'bg-red-100 text-red-700'
+                                        : issue.severity === 'medium'
+                                        ? 'bg-orange-100 text-orange-700'
+                                        : 'bg-yellow-100 text-yellow-700'
+                                    }`}
+                                  >
+                                    {issue.severity.toUpperCase()}
+                                  </span>
+                                </div>
+                                <p className="text-slate-700 mt-1">{issue.whyItMatters}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               )}
 

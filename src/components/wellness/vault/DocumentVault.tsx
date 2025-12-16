@@ -1,28 +1,59 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Upload, FileText, Trash2, Download, Eye, FileSearch, Loader2 } from 'lucide-react';
-import { UserDocument } from '../../../types/wellness';
+import { UserDocument, UserAnswers } from '../../../types/wellness';
 import { vaultService } from '../../../lib/wellness/vaultService';
 import { Button } from '../../wellness/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../wellness/ui/Card';
 import { AnalysisModal } from './AnalysisModal';
 import { DocumentViewerModal } from './DocumentViewerModal';
+import { LegalInventoryChecklist } from './LegalInventoryChecklist';
+import { classifyDocument } from './documentClassifier';
+import { DocumentTypeSelectorModal } from './DocumentTypeSelectorModal';
+import { ContractReviewModal } from '../../wellness/ContractReviewModal';
+import { toast } from '../../../hooks/use-toast';
 
 export const DocumentVault: React.FC = () => {
     const [documents, setDocuments] = useState<UserDocument[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
     const [viewAnalysisDoc, setViewAnalysisDoc] = useState<UserDocument | null>(null);
+    const [userAnswers, setUserAnswers] = useState<UserAnswers | null>(null);
 
     // Viewer State
     const [viewerDoc, setViewerDoc] = useState<UserDocument | null>(null);
     const [viewerContent, setViewerContent] = useState<string>('');
 
+    // Delete confirmation state
+    const [docToDelete, setDocToDelete] = useState<UserDocument | null>(null);
+
+    // Document type selection state
+    const [pendingFile, setPendingFile] = useState<File | null>(null);
+    const [showTypeSelector, setShowTypeSelector] = useState(false);
+    
+    // Contract Review Modal state (for "Missing" clicks)
+    const [showContractReview, setShowContractReview] = useState(false);
+    const [preSelectedDocType, setPreSelectedDocType] = useState<string | undefined>();
+    const [preSelectedDocLabel, setPreSelectedDocLabel] = useState<string | undefined>();
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Fetch documents on mount
+    // Fetch documents and user answers on mount
     useEffect(() => {
         fetchDocuments();
+        loadUserAnswers();
     }, []);
+
+    const loadUserAnswers = () => {
+        try {
+            const saved = localStorage.getItem('wellness_onboarding_answers');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                setUserAnswers(parsed);
+            }
+        } catch (error) {
+            console.error('Failed to load user answers', error);
+        }
+    };
 
     const fetchDocuments = async () => {
         try {
@@ -41,22 +72,58 @@ export const DocumentVault: React.FC = () => {
 
         // Simple validation
         if (file.size > 10 * 1024 * 1024) { // 10MB limit
-            alert('File size must be less than 10MB');
+            toast({
+                variant: "destructive",
+                title: "File too large",
+                description: "Please upload a file smaller than 10MB.",
+            });
             return;
         }
 
+        // Try to auto-classify
+        const classification = classifyDocument(file.name);
+        
+        // If confidence is low or we couldn't identify the document type, ask user
+        if (classification.confidence === 'low' || !classification.documentType) {
+            setPendingFile(file);
+            setShowTypeSelector(true);
+            // Reset input so they can select the same file again if needed
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        // High/medium confidence - proceed with upload
+        await uploadDocumentWithType(file, classification.category, classification.documentType);
+    };
+
+    const uploadDocumentWithType = async (
+        file: File,
+        category: UserDocument['category'],
+        documentType?: string
+    ) => {
         setIsUploading(true);
         try {
-            // Default category 'other' for now, can be expanded
-            const newDoc = await vaultService.uploadDocument(file, 'other');
+            const newDoc = await vaultService.uploadDocument(file, category, undefined, undefined, undefined, documentType);
             if (newDoc) {
                 setDocuments(prev => [newDoc, ...prev]);
+                toast({
+                    title: "Document uploaded",
+                    description: `"${newDoc.title}" has been added. We'll analyze it for gaps and risks.`,
+                });
             } else {
-                alert('Failed to upload document. Please try again.');
+                toast({
+                    variant: "destructive",
+                    title: "Upload failed",
+                    description: "We couldn't upload that document. Please try again.",
+                });
             }
         } catch (error) {
             console.error('Upload failed', error);
-            alert('Upload failed. Please try again.');
+            toast({
+                variant: "destructive",
+                title: "Upload failed",
+                description: "Something went wrong while uploading. Please try again.",
+            });
         } finally {
             setIsUploading(false);
             // Reset input
@@ -64,11 +131,106 @@ export const DocumentVault: React.FC = () => {
         }
     };
 
+    const handleDocumentTypeSelected = async (documentType: string | null) => {
+        setShowTypeSelector(false);
+        
+        if (!pendingFile) return;
+
+        // Determine category from document type
+        let category: UserDocument['category'] = 'other';
+        if (documentType === 'insurance') {
+            category = 'insurance';
+        } else if (documentType?.startsWith('template-')) {
+            category = 'contract'; // Most templates are contracts
+        }
+
+        await uploadDocumentWithType(pendingFile, category, documentType || undefined);
+        setPendingFile(null);
+    };
+
+    const handleDocumentTypeCancel = () => {
+        setShowTypeSelector(false);
+        setPendingFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    // Handle upload with pre-selected document type (from checklist click)
+    const handleUploadWithType = (documentType: string, documentLabel: string) => {
+        // Show Contract Review Modal instead of file picker
+        setPreSelectedDocType(documentType);
+        setPreSelectedDocLabel(documentLabel);
+        setShowContractReview(true);
+    };
+
+    // Handle when contract review completes - refresh documents
+    const handleContractReviewComplete = () => {
+        fetchDocuments(); // Refresh the document list
+    };
+
+    // Updated file upload handler to check for pre-selected type
+    const handleFileUploadWithPreSelectedType = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        // Check if we have a pre-selected document type
+        const preSelectedType = (event.target as any).dataset.preSelectedType;
+        const preSelectedLabel = (event.target as any).dataset.preSelectedLabel;
+
+        // Clear the dataset
+        delete (event.target as any).dataset.preSelectedType;
+        delete (event.target as any).dataset.preSelectedLabel;
+
+        // Simple validation
+        if (file.size > 10 * 1024 * 1024) {
+            toast({
+                variant: "destructive",
+                title: "File too large",
+                description: "Please upload a file smaller than 10MB.",
+            });
+            return;
+        }
+
+        if (preSelectedType) {
+            // We have a pre-selected type - upload directly with that type
+            let category: UserDocument['category'] = 'other';
+            if (preSelectedType === 'insurance') {
+                category = 'insurance';
+            } else if (preSelectedType.startsWith('template-')) {
+                category = 'contract';
+            }
+
+            await uploadDocumentWithType(file, category, preSelectedType);
+            toast({
+                title: "Document uploaded",
+                description: `"${file.name}" has been added as ${preSelectedLabel || 'your document'}.`,
+            });
+        } else {
+            // No pre-selected type - use normal classification flow
+            const classification = classifyDocument(file.name);
+            
+            // If confidence is low or we couldn't identify the document type, ask user
+            if (classification.confidence === 'low' || !classification.documentType) {
+                setPendingFile(file);
+                setShowTypeSelector(true);
+                // Reset input so they can select the same file again if needed
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                return;
+            }
+
+            // High/medium confidence - proceed with upload
+            await uploadDocumentWithType(file, classification.category, classification.documentType);
+        }
+    };
+
     const handleViewDocument = async (doc: UserDocument) => {
         try {
             const url = await vaultService.getDownloadUrl(doc.file_path);
             if (!url) {
-                alert('Could not generate secure link.');
+                toast({
+                    variant: "destructive",
+                    title: "Could not open document",
+                    description: "We couldn’t generate a secure link for this file. Please try again.",
+                });
                 return;
             }
 
@@ -99,15 +261,30 @@ export const DocumentVault: React.FC = () => {
         }
     };
 
-    const handleDelete = async (doc: UserDocument) => {
-        if (!confirm(`Are you sure you want to delete "${doc.title}"?`)) return;
+    const handleDelete = (doc: UserDocument) => {
+        setDocToDelete(doc);
+    };
 
+    const confirmDelete = async () => {
+        if (!docToDelete) return;
+
+        const doc = docToDelete;
         const success = await vaultService.deleteDocument(doc.id, doc.file_path);
         if (success) {
             setDocuments(prev => prev.filter(d => d.id !== doc.id));
+            toast({
+                title: "Document deleted",
+                description: `"${doc.title}" has been removed from your Vault.`,
+            });
         } else {
-            alert('Failed to delete document.');
+            toast({
+                variant: "destructive",
+                title: "Delete failed",
+                description: "We couldn’t delete that document. Please try again.",
+            });
         }
+
+        setDocToDelete(null);
     };
 
     const formatDate = (dateString: string) => {
@@ -118,129 +295,28 @@ export const DocumentVault: React.FC = () => {
         });
     };
 
+
     return (
         <>
-            <Card className="border-none shadow-md">
-                <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-slate-100">
-                    <div>
-                        <CardTitle className="text-xl flex items-center gap-2">
-                            <span className="bg-brand-100 p-1.5 rounded-lg text-brand-600">
-                                <FileText size={20} />
-                            </span>
-                            Document Vault
-                        </CardTitle>
-                        <p className="text-sm text-slate-500 mt-1">
-                            Securely store your signed contracts, insurance, and licenses.
-                        </p>
-                    </div>
-                    <div>
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleFileUpload}
-                            accept=".pdf,.doc,.docx,.jpg,.png"
-                        />
-                        <Button
-                            size="sm"
-                            variant="primary"
-                            disabled={isUploading}
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            {isUploading ? (
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                                <Upload className="w-4 h-4 mr-2" />
-                            )}
-                            Upload Document
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {isLoading ? (
-                        <div className="p-8 text-center text-slate-400">Loading documents...</div>
-                    ) : documents.length === 0 ? (
-                        <div className="p-12 text-center text-slate-400 bg-slate-50/50">
-                            <Upload className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                            <p className="text-sm">No documents uploaded yet.</p>
-                            <p className="text-xs mt-1 opacity-70">Upload your signed waivers here to keep them safe.</p>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-slate-100">
-                            {documents.map(doc => (
-                                <div key={doc.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-slate-50 transition-colors group gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                                            <FileText size={20} />
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <h4 className="font-medium text-slate-900 group-hover:text-brand-700 transition-colors">
-                                                    {doc.title}
-                                                </h4>
-                                                {doc.analysis && (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
-                                                        Analyzed
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p className="text-xs text-slate-500">
-                                                Added {formatDate(doc.created_at)} • {doc.file_type?.toUpperCase() || 'File'}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2 self-end sm:self-auto">
-                                        {doc.analysis && (
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => setViewAnalysisDoc(doc)}
-                                                className="hidden sm:flex"
-                                            >
-                                                <FileSearch className="w-3.5 h-3.5 mr-1.5" />
-                                                View Analysis
-                                            </Button>
-                                        )}
-
-                                        <div className="flex bg-white rounded-lg border border-slate-200 p-0.5">
-                                            {doc.analysis && (
-                                                <button
-                                                    onClick={() => setViewAnalysisDoc(doc)}
-                                                    className="sm:hidden p-2 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-all"
-                                                    title="View Analysis"
-                                                >
-                                                    <FileSearch size={16} />
-                                                </button>
-                                            )}
-
-                                            {!doc.title.endsWith('(Scanned)') && (
-                                                <button
-                                                    onClick={() => handleViewDocument(doc)}
-                                                    className="p-2 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-md transition-all"
-                                                    title="View Original"
-                                                >
-                                                    <Eye size={16} />
-                                                </button>
-                                            )}
-
-                                            <div className={`w-[1px] bg-slate-200 my-1 mx-0.5 ${doc.title.endsWith('(Scanned)') ? 'sm:hidden' : ''}`}></div>
-
-                                            <button
-                                                onClick={() => handleDelete(doc)}
-                                                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-all"
-                                                title="Delete"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+            <div className="space-y-6">
+                {/* Legal Inventory Checklist */}
+                {!isLoading && (
+                    <LegalInventoryChecklist 
+                        documents={documents}
+                        userAnswers={userAnswers}
+                        onUploadClick={() => fileInputRef.current?.click()}
+                        onUploadWithType={handleUploadWithType}
+                        onViewDocument={handleViewDocument}
+                        onViewAnalysis={(doc) => setViewAnalysisDoc(doc)}
+                        onDeleteDocument={handleDelete}
+                        onDownloadDocument={async (doc) => {
+                            const url = await vaultService.getDownloadUrl(doc.file_path);
+                            if (url) window.open(url, '_blank');
+                        }}
+                        formatDate={formatDate}
+                    />
+                )}
+            </div>
 
             <AnalysisModal
                 isOpen={!!viewAnalysisDoc}
@@ -263,6 +339,64 @@ export const DocumentVault: React.FC = () => {
                         if (url) window.open(url, '_blank');
                     }
                 }}
+            />
+
+            {/* Delete Confirmation Modal */}
+            {docToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md animate-in zoom-in-95">
+                        <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+                            <div className="bg-red-50 text-red-600 rounded-lg p-2">
+                                <Trash2 size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-semibold text-slate-900">Delete document?</h2>
+                                <p className="text-sm text-slate-500">
+                                    This will permanently remove <span className="font-medium text-slate-800">"{docToDelete.title}"</span> from your Vault.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-50/60 border-t border-slate-100 flex justify-end gap-3 rounded-b-xl">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setDocToDelete(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="primary"
+                                size="sm"
+                                className="bg-red-600 hover:bg-red-700 border-red-600"
+                                onClick={confirmDelete}
+                            >
+                                Delete
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Document Type Selector Modal */}
+            <DocumentTypeSelectorModal
+                isOpen={showTypeSelector}
+                fileName={pendingFile?.name || ''}
+                userAnswers={userAnswers}
+                onSelect={handleDocumentTypeSelected}
+                onCancel={handleDocumentTypeCancel}
+            />
+
+            {/* Contract Review Modal (for "Missing" document clicks) */}
+            <ContractReviewModal
+                isOpen={showContractReview}
+                onClose={() => {
+                    setShowContractReview(false);
+                    setPreSelectedDocType(undefined);
+                    setPreSelectedDocLabel(undefined);
+                }}
+                onComplete={handleContractReviewComplete}
+                preSelectedDocumentType={preSelectedDocType}
+                preSelectedDocumentLabel={preSelectedDocLabel}
             />
         </>
     );

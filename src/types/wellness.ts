@@ -107,6 +107,7 @@ export interface UserDocument {
   file_path: string;
   file_type?: string;
   category: 'contract' | 'insurance' | 'license' | 'formation' | 'other';
+  document_type?: string; // Template ID (e.g., 'template-1', 'template-intake') for accurate matching
   analysis?: string;
   created_at: string;
 }

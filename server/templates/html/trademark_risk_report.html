@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trademark Risk Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            font-size: 10px;
+            line-height: 1.5;
+            color: #1a1a1a;
+            padding: 30px 50px;
+            background: white;
+        }
+
+        .page {
+            /* Keep each logical page as a flex column, but let content height dictate breaks */
+            page-break-after: always;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .page:last-child {
+            page-break-after: avoid;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #14b8a6;
+        }
+
+        .logo {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #14b8a6;
+            margin-bottom: 8px;
+        }
+
+        .document-title {
+            font-size: 18pt;
+            font-weight: bold;
+            margin-top: 8px;
+            color: #1a1a1a;
+        }
+
+        .subtitle {
+            font-size: 9pt;
+            color: #666;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .summary-box {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .summary-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .summary-label {
+            font-weight: bold;
+            color: #555;
+            font-size: 10pt;
+        }
+
+        .summary-value {
+            color: #1a1a1a;
+            font-size: 10pt;
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 11pt;
+            text-transform: uppercase;
+        }
+
+        .risk-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .risk-moderate {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .risk-low {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .score-display {
+            font-size: 28pt;
+            font-weight: bold;
+            color: #14b8a6;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .verdict-box {
+            background: #f0f9ff;
+            border-left: 4px solid #14b8a6;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+        }
+
+        .verdict-title {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .verdict-text {
+            font-size: 10pt;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .brand-status-box {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .brand-status-title {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+        }
+
+        .brand-status-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 9pt;
+        }
+
+        .brand-status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-icon {
+            margin-right: 10px;
+            font-size: 14pt;
+        }
+
+        .disclaimer {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 15px 0;
+            font-size: 8pt;
+            color: #856404;
+            line-height: 1.4;
+        }
+
+        .disclaimer strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .section-title {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin: 20px 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #14b8a6;
+        }
+
+        .answers-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .answer-item {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .answer-label {
+            font-size: 8pt;
+            color: #666;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .answer-value {
+            font-size: 9pt;
+            color: #1a1a1a;
+            font-weight: 500;
+            line-height: 1.3;
+        }
+
+        .factor-list {
+            list-style: none;
+            margin: 20px 0;
+        }
+
+        .factor-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: start;
+        }
+
+        .factor-item:last-child {
+            border-bottom: none;
+        }
+
+        .factor-bullet {
+            color: #14b8a6;
+            font-size: 16pt;
+            margin-right: 10px;
+            line-height: 1;
+        }
+
+        .factor-text {
+            flex: 1;
+            font-size: 9pt;
+            line-height: 1.5;
+        }
+
+        .translation-box {
+            background: #f0f9ff;
+            border-left: 4px solid #14b8a6;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 6px;
+            font-size: 9pt;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .priority-ladder {
+            margin: 25px 0;
+        }
+
+        .priority-item {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 12px;
+        }
+
+        .priority-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .priority-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .priority-number {
+            background: #14b8a6;
+            color: white;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 11pt;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .priority-title {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #1a1a1a;
+        }
+
+        .priority-timing {
+            font-size: 8pt;
+            color: #666;
+            font-style: italic;
+            margin-bottom: 6px;
+        }
+
+        .priority-description {
+            font-size: 9pt;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .cta-box {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .cta-title {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #1a1a1a;
+        }
+
+        .cta-text {
+            font-size: 9pt;
+            color: #555;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .footer {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            font-size: 8pt;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 20px;
+            right: 60px;
+            font-size: 9pt;
+            color: #999;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Page 1: Executive Summary -->
+    <div class="page">
+        <div class="header">
+            <div class="logo">Conscious Counsel</div>
+            <div class="document-title">Preliminary Trademark Risk Report</div>
+            <div class="subtitle">Based on your responses. Not a legal opinion.</div>
+        </div>
+
+        <div class="summary-box">
+            <div class="summary-row">
+                <span class="summary-label">Brand Name:</span>
+                <span class="summary-value">{{businessName}}</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Industry:</span>
+                <span class="summary-value">{{businessType}}</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Risk Level:</span>
+                <span class="summary-value">
+                    <span class="risk-badge risk-{{riskLevelClass}}">{{riskLevel}}</span>
+                </span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Risk Score:</span>
+                <div class="score-display">{{score}}/40</div>
+            </div>
+        </div>
+
+        <!-- Verdict Box -->
+        <div class="verdict-box">
+            <div class="verdict-title">Verdict:</div>
+            <div class="verdict-text">{{verdict}}</div>
+        </div>
+
+        <!-- Brand Status Box -->
+        <div class="brand-status-box">
+            <div class="brand-status-title">Your Current Brand Status</div>
+            <div class="brand-status-item">
+                <span class="status-icon">{{trademarkRegisteredIcon}}</span>
+                <span>Trademark registered: <strong>{{trademarkRegistered}}</strong></span>
+            </div>
+            <div class="brand-status-item">
+                <span class="status-icon">{{expansionPlannedIcon}}</span>
+                <span>Expansion planned: <strong>{{expansionPlanned}}</strong></span>
+            </div>
+            <div class="brand-status-item">
+                <span class="status-icon">{{similarNameSearchIcon}}</span>
+                <span>Similar name search completed: <strong>{{similarNameSearch}}</strong></span>
+            </div>
+        </div>
+
+        <div class="disclaimer">
+            <strong>Important Disclaimer:</strong>
+            This is a preliminary screening based on business and branding factors. It is not a legal opinion, 
+            does not constitute legal advice, and does not include a comprehensive search of USPTO, WIPO, or state 
+            trademark databases. This assessment is based solely on the information you provided in the quiz.
+        </div>
+
+        <div class="footer">
+            <p>Confidential Report - Generated for {{businessName}} on {{date}}</p>
+            <p>© Conscious Counsel. All rights reserved.</p>
+        </div>
+        <div class="page-number">Page 1 of 5</div>
+    </div>
+
+    <!-- Page 2: Your Answers at a Glance -->
+    <div class="page">
+        <div class="header">
+            <div class="logo">Conscious Counsel</div>
+            <div class="document-title">Your Answers at a Glance</div>
+        </div>
+
+        <div class="section-title">Trademark Risk Inputs</div>
+
+        <p style="font-size: 9pt; color: #555; margin-bottom: 15px; line-height: 1.5;">
+            This report is based on the information you provided. Here's a summary of your responses:
+        </p>
+
+        <div class="answers-grid">
+            <div class="answer-item">
+                <div class="answer-label">Brand Name</div>
+                <div class="answer-value">{{businessName}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Industry</div>
+                <div class="answer-value">{{businessType}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Trademark Registration</div>
+                <div class="answer-value">{{trademarkRegistered}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Similar Names Checked</div>
+                <div class="answer-value">{{similarNameSearch}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Domain Ownership</div>
+                <div class="answer-value">{{domainOwnership}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Brand Name Origin</div>
+                <div class="answer-value">{{brandNameOrigin}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Includes Location</div>
+                <div class="answer-value">{{includesLocation}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Usage Duration</div>
+                <div class="answer-value">{{brandUsageDuration}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Brand Usage Locations</div>
+                <div class="answer-value">{{brandUsageLocations}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Expansion Plans</div>
+                <div class="answer-value">{{expansionPlans}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Branding Investments</div>
+                <div class="answer-value">{{brandingInvestments}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Received Confusion</div>
+                <div class="answer-value">{{receivedConfusion}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Different from Legal Name</div>
+                <div class="answer-value">{{differentFromLegalName}}</div>
+            </div>
+            <div class="answer-item">
+                <div class="answer-label">Worked with Lawyer</div>
+                <div class="answer-value">{{workedWithLawyer}}</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+            <p style="font-size: 8pt; color: #666; line-height: 1.5;">
+                <strong>Note:</strong> This assessment reflects the information you provided during the quiz. 
+                For a comprehensive evaluation, a full trademark search conducted by an attorney is recommended.
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>Confidential Report - Generated for {{businessName}} on {{date}}</p>
+        </div>
+        <div class="page-number">Page 2 of 5</div>
+    </div>
+
+    <!-- Page 3: Why This Score Was Assigned -->
+    <div class="page">
+        <div class="header">
+            <div class="logo">Conscious Counsel</div>
+            <div class="document-title">Why This Score Was Assigned</div>
+        </div>
+
+        <div class="section-title">Factors Contributing to Your Risk Score</div>
+
+        <p style="font-size: 9pt; color: #555; margin-bottom: 15px; line-height: 1.5;">
+            Your risk score of <strong>{{score}}/40</strong> was calculated based on the following factors from your quiz responses:
+        </p>
+
+        <ul class="factor-list">
+            <li class="factor-item">
+                <span class="factor-bullet">•</span>
+                <span class="factor-text">{{riskFactor1}}</span>
+            </li>
+            <li class="factor-item">
+                <span class="factor-bullet">•</span>
+                <span class="factor-text">{{riskFactor2}}</span>
+            </li>
+            <li class="factor-item">
+                <span class="factor-bullet">•</span>
+                <span class="factor-text">{{riskFactor3}}</span>
+            </li>
+            <li class="factor-item">
+                <span class="factor-bullet">•</span>
+                <span class="factor-text">{{riskFactor4}}</span>
+            </li>
+        </ul>
+
+        <!-- Translation Box -->
+        <div class="translation-box">
+            <strong>What This Means:</strong><br>
+            {{translationText}}
+        </div>
+
+        <div style="margin-top: 20px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+            <p style="font-size: 8pt; color: #666; line-height: 1.5;">
+                <strong>Understanding Your Score:</strong><br>
+                • Scores of 25-40 indicate <strong>HIGH RISK</strong> - Immediate action recommended<br>
+                • Scores of 12-24 indicate <strong>MODERATE RISK</strong> - Proactive protection advised<br>
+                • Scores of 0-11 indicate <strong>LOW RISK</strong> - Monitoring and documentation recommended
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>Confidential Report - Generated for {{businessName}} on {{date}}</p>
+        </div>
+        <div class="page-number">Page 3 of 5</div>
+    </div>
+
+    <!-- Page 4: Priority Ladder -->
+    <div class="page">
+        <div class="header">
+            <div class="logo">Conscious Counsel</div>
+            <div class="document-title">Your Recommended Next Steps</div>
+        </div>
+
+        <div class="section-title">Priority Order</div>
+
+        <p style="font-size: 9pt; color: #555; margin-bottom: 15px; line-height: 1.5;">
+            Based on your risk assessment, here are your recommended actions in priority order:
+        </p>
+
+        <div class="priority-ladder">
+            <div class="priority-item">
+                <div class="priority-header">
+                    <div class="priority-number">1</div>
+                    <div class="priority-title">Priority 1</div>
+                </div>
+                <div class="priority-timing">Recommended within 30–60 days</div>
+                <div class="priority-description">
+                    Run a comprehensive trademark search before expanding or investing further in branding. 
+                    This includes USPTO federal database, state trademark databases, common law usage, 
+                    domain availability, and social media presence.
+                </div>
+            </div>
+
+            <div class="priority-item">
+                <div class="priority-header">
+                    <div class="priority-number">2</div>
+                    <div class="priority-title">Priority 2</div>
+                </div>
+                <div class="priority-timing">If search is clear</div>
+                <div class="priority-description">
+                    Decide whether to proceed with federal trademark registration. An experienced trademark 
+                    attorney can help you evaluate the search results and determine if registration makes 
+                    sense for your situation.
+                </div>
+            </div>
+
+            <div class="priority-item">
+                <div class="priority-header">
+                    <div class="priority-number">3</div>
+                    <div class="priority-title">Priority 3</div>
+                </div>
+                <div class="priority-timing">Ongoing</div>
+                <div class="priority-description">
+                    Monitor for similar brand usage as your business grows. Set up alerts for your brand 
+                    name and periodically check for potential conflicts, especially before major marketing 
+                    campaigns or expansion.
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+            <p style="font-size: 8pt; color: #666; line-height: 1.5;">
+                <strong>Why This Matters:</strong><br>
+                Without proper trademark protection, you risk being forced to rebrand after investing 
+                time and money in your business name. A comprehensive search and registration process 
+                protects your brand and gives you exclusive rights to use your name in your industry.
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>Confidential Report - Generated for {{businessName}} on {{date}}</p>
+        </div>
+        <div class="page-number">Page 4 of 5</div>
+    </div>
+
+    <!-- Page 5: Optional Next Step -->
+    <div class="page">
+        <div class="header">
+            <div class="logo">Conscious Counsel</div>
+            <div class="document-title">Optional Next Step</div>
+        </div>
+
+        <div class="cta-box">
+            <div class="cta-title">Optional Next Step: Attorney Review</div>
+            <div class="cta-text">
+                If you'd like, our legal team can walk through your results and explain whether a formal 
+                trademark search makes sense for your situation. This is a free consultation with no obligation.
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-left: 4px solid #14b8a6; border-radius: 6px;">
+            <p style="font-size: 9pt; color: #555; line-height: 1.5;">
+                <strong>What to Expect:</strong><br>
+                During the consultation, we'll review your risk factors, discuss your expansion plans, 
+                and help you understand whether a comprehensive trademark search is the right next step 
+                for your business.
+            </p>
+        </div>
+
+        <div style="margin-top: 18px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+            <p style="font-size: 8pt; color: #666; line-height: 1.5;">
+                <strong>Remember:</strong> This preliminary assessment is based on the information you 
+                provided and does not replace a comprehensive trademark search or legal advice from a 
+                qualified attorney.
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>Confidential Report - Generated for {{businessName}} on {{date}}</p>
+            <p>© Conscious Counsel. All rights reserved.</p>
+            <p style="margin-top: 10px; font-size: 8pt;">
+                This report is for informational purposes only and does not constitute legal advice.
+            </p>
+        </div>
+        <div class="page-number">Page 5 of 5</div>
+    </div>
+</body>
+
+</html>

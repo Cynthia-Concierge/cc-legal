@@ -16,12 +16,16 @@ interface ContractReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete?: () => void;
+  preSelectedDocumentType?: string; // Template ID (e.g., 'template-1', 'template-intake')
+  preSelectedDocumentLabel?: string; // Human-readable label (e.g., 'Waiver / Release of Liability')
 }
 
 export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   isOpen,
   onClose,
   onComplete,
+  preSelectedDocumentType,
+  preSelectedDocumentLabel,
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -37,6 +41,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   // Vault saving state
   const [isSaving, setIsSaving] = useState(false);
   const [savedToVault, setSavedToVault] = useState(false);
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentEndRef = useRef<HTMLDivElement>(null);
@@ -229,6 +234,22 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
     const data = await response.json();
     if (data.analysis) {
       setAnalysis(data.analysis);
+      
+      // Update the saved document with the analysis
+      if (savedDocId) {
+        vaultService.updateDocumentAnalysis(savedDocId, data.analysis)
+          .then(success => {
+            if (success) {
+              console.log('Analysis saved to document');
+            } else {
+              console.warn('Failed to save analysis to document');
+            }
+          })
+          .catch(err => {
+            console.error('Error saving analysis to document:', err);
+          });
+      }
+      
       onComplete?.();
     } else {
       throw new Error("No analysis returned from server");
@@ -272,17 +293,37 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
 
     // Auto-save to Vault in background
     try {
-      const docType = fileToAnalyze.name.toLowerCase().includes('waiver') ? 'Waiver' :
-        fileToAnalyze.name.toLowerCase().includes('contract') ? 'Contract' : 'Document';
+      // Use pre-selected document type if available, otherwise infer from filename
+      const docType = preSelectedDocumentLabel || 
+        (fileToAnalyze.name.toLowerCase().includes('waiver') ? 'Waiver' :
+        fileToAnalyze.name.toLowerCase().includes('contract') ? 'Contract' : 'Document');
       const cleanName = fileToAnalyze.name.replace(/\.[^/.]+$/, ""); // remove extension
-      const title = `Analyzed ${docType} - ${cleanName}`;
+      const title = preSelectedDocumentLabel 
+        ? `${preSelectedDocumentLabel} - ${cleanName}`
+        : `Analyzed ${docType} - ${cleanName}`;
 
-      console.log('Auto-saving to vault:', title);
+      // Determine category from document type
+      let category: 'contract' | 'insurance' | 'license' | 'formation' | 'other' = 'other';
+      if (preSelectedDocumentType === 'insurance') {
+        category = 'insurance';
+      } else if (preSelectedDocumentType?.startsWith('template-')) {
+        category = 'contract';
+      }
+
+      console.log('Auto-saving to vault:', title, 'with type:', preSelectedDocumentType);
 
       // We don't await this to avoid blocking the analysis, but we track its completion
-      vaultService.uploadDocument(fileToAnalyze, 'other', title, 'Uploaded for AI Risk Analysis')
+      vaultService.uploadDocument(
+        fileToAnalyze, 
+        category, 
+        title, 
+        'Uploaded for AI Risk Analysis',
+        undefined, // analysis will be added after
+        preSelectedDocumentType // Pass the document type
+      )
         .then((doc) => {
           if (doc) {
+            setSavedDocId(doc.id);
             console.log('Successfully saved to vault:', doc.id);
             setSavedToVault(true);
             toast.success("Document saved to your Vault");
@@ -543,6 +584,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
               setFile(null);
               setSavedToVault(false);
               setIsSaving(false);
+              setSavedDocId(null);
               setPastedText('');
               setDocumentName('');
             }}>

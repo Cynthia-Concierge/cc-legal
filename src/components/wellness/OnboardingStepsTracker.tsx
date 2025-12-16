@@ -71,8 +71,8 @@ export const OnboardingStepsTracker: React.FC<OnboardingStepsTrackerProps> = ({
     },
     {
       id: 'review',
-      title: 'Analyze Existing Risks',
-      description: 'Review old waivers or contracts for loopholes.',
+      title: 'Upload and Analyze Your Current Documents',
+      description: 'Upload your existing waivers or contracts and have them analyzed for loopholes.',
       icon: Search,
       completed: hasCompletedContractReview,
       action: onReviewDocuments,

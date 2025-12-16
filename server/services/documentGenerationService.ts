@@ -27,6 +27,13 @@ export interface BusinessProfileData {
   instagram?: string;
   businessType?: string;
   services?: string[];
+  // Trademark risk report specific fields
+  riskLevel?: string;
+  score?: number;
+  riskFactor1?: string;
+  riskFactor2?: string;
+  riskFactor3?: string;
+  riskFactor4?: string;
 }
 
 export class DocumentGenerationService {
@@ -282,6 +289,35 @@ export class DocumentGenerationService {
         '{{website}}': profileData.website || '',
         '{{instagram}}': profileData.instagram || '',
         '{{businessType}}': profileData.businessType || '',
+        
+        // Trademark risk report placeholders
+        '{{riskLevel}}': profileData.riskLevel || 'MODERATE RISK',
+        '{{score}}': profileData.score?.toString() || '0',
+        '{{riskLevelClass}}': (profileData.riskLevel || '').toLowerCase().replace(/\s+/g, '-'),
+        '{{riskFactor1}}': profileData.riskFactor1 || 'No federal trademark registration',
+        '{{riskFactor2}}': profileData.riskFactor2 || 'Similar name search not fully completed',
+        '{{riskFactor3}}': profileData.riskFactor3 || 'Expansion beyond current location planned',
+        '{{riskFactor4}}': profileData.riskFactor4 || 'Domain availability uncertain',
+        // New improved PDF fields
+        '{{verdict}}': profileData.verdict || 'Based on your responses, your brand shows moderate trademark risk. Additional protection is recommended before expansion or major brand investment.',
+        '{{trademarkRegistered}}': profileData.trademarkRegistered || 'No',
+        '{{trademarkRegisteredIcon}}': profileData.trademarkRegisteredIcon || '❌',
+        '{{expansionPlanned}}': profileData.expansionPlanned || 'No',
+        '{{expansionPlannedIcon}}': profileData.expansionPlannedIcon || '❌',
+        '{{similarNameSearch}}': profileData.similarNameSearch || 'No',
+        '{{similarNameSearchIcon}}': profileData.similarNameSearchIcon || '❌',
+        '{{domainOwnership}}': profileData.domainOwnership || 'Unchecked',
+        '{{translationText}}': profileData.translationText || 'These factors don\'t indicate a current conflict, but they increase exposure as your brand grows.',
+        // New question fields
+        '{{brandNameOrigin}}': profileData.brandNameOrigin || 'Not specified',
+        '{{includesLocation}}': profileData.includesLocation || 'No',
+        '{{brandUsageDuration}}': profileData.brandUsageDuration || 'Not specified',
+        '{{brandUsageLocations}}': profileData.brandUsageLocations || 'Not specified',
+        '{{expansionPlans}}': profileData.expansionPlans || 'Not specified',
+        '{{brandingInvestments}}': profileData.brandingInvestments || 'Not specified',
+        '{{receivedConfusion}}': profileData.receivedConfusion || 'No',
+        '{{differentFromLegalName}}': profileData.differentFromLegalName || 'Not sure',
+        '{{workedWithLawyer}}': profileData.workedWithLawyer || 'No',
       };
 
       // Perform all replacements

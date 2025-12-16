@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Shield, Home, FileText, Calendar, User, Menu, X, LogOut, Settings } from 'lucide-react';
+import { Shield, Home, FileText, Calendar, User, Menu, X, LogOut, Settings, Globe, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/wellness/ui/Button';
 
@@ -23,9 +23,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
     const menuItems = [
         { icon: <Home size={20} />, label: 'Overview', path: '/wellness/dashboard' },
-        { icon: <FileText size={20} />, label: 'Document Vault', path: '/wellness/dashboard/documents' },
+        { icon: <FileText size={20} />, label: 'Your Documents', path: '/wellness/dashboard/documents' },
+        { icon: <Globe size={20} />, label: 'Website Compliance', path: '/wellness/dashboard/website-compliance' },
+        { icon: <Search size={20} />, label: 'Trademark Scan', path: '/wellness/dashboard/trademark-scan' },
         // { icon: <Calendar size={20} />, label: 'Compliance', path: '/wellness/dashboard/compliance' },
-        { icon: <User size={20} />, label: 'My Profile', path: '/wellness/dashboard/profile' },
+        { icon: <User size={20} />, label: 'My Business Profile', path: '/wellness/dashboard/profile' },
     ];
 
     return (
@@ -99,22 +101,53 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     );
 };
 
+const MobileBottomNav: React.FC = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const navItems = [
+        { icon: <Home size={24} />, label: 'Home', path: '/wellness/dashboard' },
+        { icon: <FileText size={24} />, label: 'Docs', path: '/wellness/dashboard/documents' },
+        { icon: <Search size={24} />, label: 'Scan', path: '/wellness/dashboard/trademark-scan' },
+        { icon: <User size={24} />, label: 'Profile', path: '/wellness/dashboard/profile' },
+    ];
+
+    return (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-2 pb-safe z-50 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            {navItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                    <button
+                        key={item.path}
+                        onClick={() => navigate(item.path)}
+                        className={`
+                            flex flex-col items-center justify-center gap-1 min-w-[64px] transition-colors
+                            ${isActive ? 'text-brand-600' : 'text-slate-400 hover:text-slate-600'}
+                        `}
+                    >
+                        {item.icon}
+                        <span className="text-[10px] font-medium">{item.label}</span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+};
+
 export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
             <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-            {/* Mobile Header */}
-            <div className="md:hidden h-16 bg-white border-b border-slate-200 flex items-center px-4 sticky top-0 z-30">
-                <button
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="text-slate-500 hover:text-slate-900"
-                >
-                    <Menu size={24} />
-                </button>
-                <span className="ml-4 font-semibold text-slate-900">Conscious Counsel</span>
+            {/* Mobile Header - Simplified */}
+            <div className="md:hidden h-14 bg-white border-b border-slate-200 flex items-center justify-center px-4 sticky top-0 z-30">
+                <div className="flex items-center gap-2 text-brand-700">
+                    <Shield className="fill-current" size={20} />
+                    <span className="font-bold text-lg tracking-tight">Conscious Counsel</span>
+                </div>
+                {/* Optional: Add settings or logout here if needed, keeping it clean for now */}
             </div>
 
             {/* Main Content */}
@@ -123,6 +156,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     {children}
                 </main>
             </div>
+
+            <MobileBottomNav />
         </div>
     );
 };

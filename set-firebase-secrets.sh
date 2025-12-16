@@ -23,6 +23,10 @@ firebase functions:secrets:set SUPABASE_ANON_KEY
 firebase functions:secrets:set META_ACCESS_TOKEN
 firebase functions:secrets:set META_PIXEL_ID
 
+# Email secrets
+firebase functions:secrets:set RESEND_API_KEY
+firebase functions:secrets:set EMAIL_FROM_ADDRESS
+
 echo ""
 echo "✅ Secrets set! Remember to deploy: firebase deploy --only functions"
 

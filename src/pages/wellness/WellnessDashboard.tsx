@@ -16,12 +16,14 @@ import { LegalHealthProgress } from '../../components/wellness/dashboard/LegalHe
 import { NextActionWidget } from '../../components/wellness/dashboard/NextActionWidget';
 import { DocumentVault } from '../../components/wellness/vault/DocumentVault';
 import { supabase } from '../../lib/supabase';
+import { TrademarkQuizModal } from '../../components/wellness/TrademarkQuizModal';
 
 export const WellnessDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [answers, setAnswers] = useState<UserAnswers | null>(null);
   const [scoreData, setScoreData] = useState<ScoreResult | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationResult | null>(null);
+  const [activeTab, setActiveTab] = useState<'documents' | 'website' | 'ip'>('documents');
 
   // Drafting Modal State
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
@@ -35,6 +37,10 @@ export const WellnessDashboard: React.FC = () => {
 
   // Website Scan Modal State
   const [isWebsiteScanModalOpen, setIsWebsiteScanModalOpen] = useState(false);
+
+  // Trademark Modal State
+  const [isTrademarkModalOpen, setIsTrademarkModalOpen] = useState(false);
+
 
   // Track onboarding progress
   const [hasScannedWebsite, setHasScannedWebsite] = useState(false);
@@ -272,6 +278,13 @@ export const WellnessDashboard: React.FC = () => {
         initialWebsite={answers.website}
       />
 
+      {/* Trademark Quiz Modal */}
+      <TrademarkQuizModal
+        isOpen={isTrademarkModalOpen}
+        onClose={() => setIsTrademarkModalOpen(false)}
+        onComplete={() => setIsTrademarkModalOpen(false)}
+      />
+
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -309,242 +322,177 @@ export const WellnessDashboard: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
-        {/* Welcome Section */}
-        <section>
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome{user?.email ? `, ${user.email.split('@')[0]}` : ''}</h1>
-            <p className="text-lg text-slate-600">
-              Here is your personalized legal roadmap to protect your business.
-            </p>
-          </div>
-        </section>
+        {/* Simplified Header */}
+        <div className="text-center space-y-2 mb-8">
+          <h1 className="text-2xl font-bold text-slate-900">
+            {user?.email ? `Hello, ${user.email.split('@')[0]}` : 'Welcome Back'}
+          </h1>
+          <p className="text-slate-600">
+            Manage your legal protection in 3 simple steps.
+          </p>
+        </div>
 
-        {/* Next Best Action Widget */}
-        {nextAction && (
-          <section className="mb-8">
-            <NextActionWidget action={nextAction} onActionClick={handleActionClick} />
-          </section>
-        )}
+        {/* Mobile-First Tabs/Navigation */}
+        <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100/80 rounded-xl mb-6">
+          <button
+            onClick={() => setActiveTab('documents')}
+            className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'documents' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Documents
+          </button>
+          <button
+            onClick={() => setActiveTab('website')}
+            className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'website' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Website
+          </button>
+          <button
+            onClick={() => setActiveTab('ip')}
+            className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'ip' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            IP & Brand
+          </button>
+        </div>
 
-        {/* Main Content Grid */}
-        <section className="grid gap-6 lg:grid-cols-12">
-
-          {/* Left Column: Onboarding Steps Tracker */}
-          <div className="lg:col-span-8 space-y-6">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="text-brand-600" size={20} />
-              <h2 className="text-xl font-bold text-slate-900">Your Action Plan</h2>
-            </div>
-
-            <OnboardingStepsTracker
-              answers={answers}
-              onCompleteProfile={() => navigate('/wellness/profile')}
-              onScanWebsite={() => setIsWebsiteScanModalOpen(true)}
-              onReviewDocuments={() => setIsContractReviewModalOpen(true)}
-              onDraftDocument={(docId) => {
-                const doc = recommendations.topPriorities.find(d => d.id === docId) ||
-                  recommendations.freeTemplates.find(d => d.id === docId) ||
-                  recommendations.advancedTemplates.find(d => d.id === docId);
-                if (doc) {
-                  handleDraftClick(doc);
-                }
-              }}
-              hasCompletedContractReview={hasCompletedContractReview}
-              hasScannedWebsite={hasScannedWebsite}
-              priorityDocumentId={recommendations?.topPriorities[0]?.id}
-            />
-
-            {/* Document Vault */}
-            <DocumentVault />
-
-            {/* High Priority Documents - Hidden from UI for now */}
-            {/* Section removed from UI but functionality preserved */}
-          </div>
-
-          {/* Right Column: Risk Score & Business Profile */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* Risk Score Card */}
-            <Card className="border-none shadow-md overflow-hidden bg-white">
-              <div className={`p-6 flex flex-col items-center ${getRiskColor(scoreData.riskLevel)} rounded-t-lg`}>
-                <span className="text-xs font-bold tracking-wider uppercase mb-3 opacity-80">Risk Score</span>
-                <div className="relative mb-4">
-                  <svg className="w-24 h-24 transform -rotate-90">
-                    <circle
-                      className="text-white opacity-20"
-                      strokeWidth="6"
-                      stroke="currentColor"
-                      fill="transparent"
-                      r="42"
-                      cx="48"
-                      cy="48"
-                    />
-                    <circle
-                      className="text-current transition-all duration-1000 ease-out"
-                      strokeWidth="6"
-                      strokeDasharray={264}
-                      strokeDashoffset={264 - (264 * scoreData.score) / 100}
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="transparent"
-                      r="42"
-                      cx="48"
-                      cy="48"
-                    />
-                  </svg>
-                  <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center">
-                    <span className="text-3xl font-bold">{scoreData.score}</span>
+        {/* TAB CONTENT: DOCUMENTS */}
+        {activeTab === 'documents' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
+            {/* 1. Missing / Recommended Documents */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <FileText className="text-brand-600" size={20} />
+                  Missing Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {recommendations.topPriorities.length > 0 ? (
+                  recommendations.topPriorities.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-white p-2 rounded-full border border-red-100 text-red-500">
+                          <AlertTriangle size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{doc.title}</p>
+                          <p className="text-xs text-slate-500">Critical Protection</p>
+                        </div>
+                      </div>
+                      <Button size="sm" onClick={() => handleDraftClick(doc)}>Draft</Button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center p-4 text-slate-500 text-sm">
+                    <CheckCircle2 className="mx-auto text-green-500 mb-2" size={24} />
+                    All critical documents drafted!
                   </div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold bg-white/50 border border-current`}>
-                  {scoreData.riskLevel === 'Low' ? 'LOW EXPOSURE' : scoreData.riskLevel.toUpperCase()}
-                </span>
-              </div>
-              <div className="p-6 bg-white">
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  Your business model includes {answers.services.length} service{answers.services.length !== 1 ? 's' : ''} and specific risks like {answers.hasPhysicalMovement ? 'physical movement' : 'operational activities'}.
-                </p>
-              </div>
+                )}
+
+                {/* Show Advanced items if any */}
+                {recommendations.advancedTemplates.slice(0, 2).map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white p-2 rounded-full border border-slate-200 text-slate-400">
+                        <Lock size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{doc.title}</p>
+                        <p className="text-xs text-slate-500">Advanced Protection</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => setIsCalendlyModalOpen(true)}>Book Call</Button>
+                  </div>
+                ))}
+              </CardContent>
             </Card>
 
-            {/* Need a Pro Card */}
-            <Card className="bg-slate-900 text-white border-none">
-              <CardContent className="p-6 text-center">
-                <h3 className="font-bold text-lg mb-2">Need a Pro?</h3>
-                <p className="text-sm text-slate-300 mb-4">
-                  Get a certified wellness lawyer to review your final setup.
+            {/* 2. Your Vault (Uploaded/Drafted) */}
+            <DocumentVault />
+          </div>
+        )}
+
+        {/* TAB CONTENT: WEBSITE */}
+        {activeTab === 'website' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Globe className="text-brand-600" size={20} />
+                  Website Compliance
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  Ensure your website has the legally required disclaimers and policies.
                 </p>
+
+                {hasScannedWebsite ? (
+                  <div className="bg-green-50 border border-green-100 rounded-lg p-4 flex items-center gap-3">
+                    <CheckCircle2 className="text-green-600" size={24} />
+                    <div>
+                      <p className="font-medium text-slate-900">Scan Complete</p>
+                      <p className="text-xs text-slate-600">Your website report is saved in your vault.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 flex items-center gap-3">
+                    <AlertTriangle className="text-amber-600" size={24} />
+                    <div>
+                      <p className="font-medium text-slate-900">Not Scanned Yet</p>
+                      <p className="text-xs text-slate-600">Scan your site to identify missing policies.</p>
+                    </div>
+                  </div>
+                )}
+
                 <Button
-                  onClick={() => setIsCalendlyModalOpen(true)}
-                  className="w-full bg-brand-600 hover:bg-brand-700 text-white"
+                  fullWidth
+                  size="lg"
+                  onClick={() => setIsWebsiteScanModalOpen(true)}
+                  className="bg-brand-600 hover:bg-brand-700 text-white"
                 >
-                  <Phone className="mr-2 h-4 w-4" />
-                  Book Free Call
+                  {hasScannedWebsite ? 'Re-Scan Website' : 'Scan My Website'}
                 </Button>
               </CardContent>
             </Card>
+          </div>
+        )}
 
-            {/* Related Services */}
-            <Card className="bg-slate-50 border-slate-200">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex items-start gap-3 p-3 rounded-lg hover:bg-white transition-colors cursor-pointer" onClick={() => setIsContractReviewModalOpen(true)}>
-                  <Search className="text-brand-600 flex-shrink-0 mt-0.5" size={18} />
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">Contract Review</p>
-                    <p className="text-xs text-slate-600">Analyze existing waivers.</p>
-                  </div>
+        {/* TAB CONTENT: IP PROTECTION */}
+        {activeTab === 'ip' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Shield className="text-brand-600" size={20} />
+                  IP & Trademark Protection
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  Check if your brand name is available and secure your intellectual property.
+                </p>
+                <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
+                  <h4 className="font-medium text-slate-900 mb-2">Why trademark?</h4>
+                  <ul className="text-xs text-slate-600 space-y-2 list-disc pl-4">
+                    <li>Prevent others from using your name</li>
+                    <li>Increase business valuation</li>
+                    <li>Legal ownership of your brand</li>
+                  </ul>
                 </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg hover:bg-white transition-colors cursor-pointer" onClick={() => setIsWebsiteScanModalOpen(true)}>
-                  <Globe className="text-brand-600 flex-shrink-0 mt-0.5" size={18} />
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">Website Scanner</p>
-                    <p className="text-xs text-slate-600">Check compliance.</p>
-                  </div>
-                </div>
+                <Button
+                  fullWidth
+                  size="lg"
+                  onClick={() => setIsTrademarkModalOpen(true)}
+                  className="bg-brand-600 hover:bg-brand-700 text-white"
+                >
+                  Start Free Trademark Search
+                </Button>
               </CardContent>
             </Card>
           </div>
-        </section>
-
-
-        {/* Free Templates */}
-        <section>
-          <div className="flex items-center gap-2 mb-4 px-1">
-            <Unlock className="text-brand-600" size={20} />
-            <h2 className="text-xl font-bold text-slate-900">Free Templates</h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {recommendations.freeTemplates.map((doc) => (
-              <Card key={doc.id} className="hover:shadow-md transition-shadow group cursor-pointer border-l-4 border-l-brand-500">
-                <CardContent className="p-5">
-                  <div className="flex justify-between items-start mb-2">
-                    <FileText className="text-slate-400 group-hover:text-brand-600 transition-colors" size={24} />
-                    <span className="bg-brand-100 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Free</span>
-                  </div>
-                  <h3 className="font-semibold text-slate-900 mb-1">{doc.title}</h3>
-                  <p className="text-sm text-slate-500 mb-4 h-10 line-clamp-2">{doc.description}</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    fullWidth
-                    className="gap-2 group-hover:border-brand-200"
-                    onClick={() => handleDownloadPDF(doc)}
-                  >
-                    <Download size={14} /> Download PDF
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        {/* Advanced Templates (Locked) */}
-        {recommendations.advancedTemplates.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-4 px-1">
-              <Lock className="text-slate-400" size={20} />
-              <h2 className="text-xl font-bold text-slate-900">Recommended: Advanced Protection</h2>
-            </div>
-            <p className="text-slate-500 mb-6 px-1">These documents require real lawyers to review and customize for your specific business model.</p>
-
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {recommendations.advancedTemplates.map((doc) => (
-                <Card key={doc.id} className="bg-slate-50 border-slate-200 opacity-75 relative group hover:opacity-100 hover:shadow-lg transition-all duration-300 cursor-pointer">
-                  <CardContent className="p-5">
-                    <div className="flex justify-between items-start mb-2">
-                      <FileText className="text-slate-300 group-hover:text-slate-400 transition-colors" size={24} />
-                      <Lock className="text-slate-400" size={18} />
-                    </div>
-                    <h3 className="font-semibold text-slate-600 mb-1 group-hover:text-slate-700 transition-colors">{doc.title}</h3>
-                    <p className="text-sm text-slate-400 mb-4 group-hover:text-slate-500 transition-colors">{doc.description}</p>
-                    <div className="pt-2 border-t border-slate-200">
-                      <p className="text-xs text-slate-500 italic mb-3">
-                        Requires lawyer review
-                      </p>
-                      {/* Schedule a Call Button - appears on hover */}
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        fullWidth
-                        className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center gap-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsCalendlyModalOpen(true);
-                        }}
-                      >
-                        <Phone size={14} />
-                        Schedule a Call
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </section>
         )}
-
-        {/* Final CTA */}
-        <section className="mt-12 bg-gradient-to-r from-brand-500 to-brand-700 rounded-2xl p-8 md:p-12 text-center text-white shadow-xl">
-          <div className="max-w-2xl mx-auto space-y-6">
-            <h2 className="text-3xl font-bold">Want a lawyer to review your setup?</h2>
-            <p className="text-brand-50 text-lg">
-              Don't leave your studio's safety to chance. Book a free 15-minute legal strategy call with our team to customize your protection plan.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Button
-                size="lg"
-                variant="outline"
-                className="bg-white !text-black hover:bg-slate-100 border-none shadow-lg text-lg px-8 font-semibold"
-                onClick={() => setIsCalendlyModalOpen(true)}
-              >
-                <Phone className="mr-2 h-5 w-5 !text-black" />
-                Book My Call
-              </Button>
-            </div>
-            <p className="text-sm text-brand-200 pt-2 opacity-80">No credit card required. 100% Free consultation.</p>
-          </div>
-        </section>
 
       </main>
     </div>

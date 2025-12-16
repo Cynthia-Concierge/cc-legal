@@ -16,6 +16,8 @@ import { DashboardLayout } from "./components/wellness/layout/DashboardLayout";
 import { DashboardHome } from "./pages/wellness/dashboard/DashboardHome";
 import { DashboardVault } from "./pages/wellness/dashboard/DashboardVault";
 import { ComplianceCalendar } from "./pages/wellness/dashboard/ComplianceCalendar";
+import { WebsiteCompliancePage } from "./pages/wellness/dashboard/WebsiteCompliancePage";
+import { TrademarkScanPage } from "./pages/wellness/dashboard/TrademarkScanPage";
 import { Login } from "./pages/wellness/Login";
 import { ResetPassword } from "./pages/wellness/ResetPassword";
 
@@ -45,6 +47,8 @@ const App = () => (
             <Route path="/wellness/dashboard" element={<DashboardLayout><Outlet /></DashboardLayout>}>
               <Route index element={<DashboardHome />} />
               <Route path="documents" element={<DashboardVault />} />
+              <Route path="website-compliance" element={<WebsiteCompliancePage />} />
+              <Route path="trademark-scan" element={<TrademarkScanPage />} />
               <Route path="compliance" element={<ComplianceCalendar />} />
               <Route path="profile" element={<BusinessProfile />} />
             </Route>

@@ -10,45 +10,39 @@ export interface NextAction {
 }
 
 export const calculateLegalHealth = (state: DashboardState): number => {
-    let score = 0;
-    const { answers, progress } = state;
+    const { answers, progress, score } = state;
 
-    if (!answers) return 0;
+    if (!answers || !score) return 0;
 
-    // 1. Profile Completion (25 points)
-    if (answers.isProfileComplete) score += 25;
+    // Base health is the inverse of the risk score:
+    // High risk (e.g. 80) → low health (20), Low risk (e.g. 20) → high health (80)
+    let health = 100 - score.score;
 
-    // 2. Initial Assessment / Risk Score (already done if we have answers) (15 points)
-    score += 15;
-
-    // 3. Website Scan (20 points)
-    if (progress.hasScannedWebsite) score += 20;
-
-    // 4. Contract Review (20 points)
-    if (progress.hasCompletedContractReview) score += 20;
-
-    // 5. Actions Taken (20 points)
-    // Logic: has downloaded or drafted at least one document
+    // Progress bonus: each major action improves health a bit, but can't fully
+    // offset very high inherent risk. Max bonus = 20 points.
+    if (answers.isProfileComplete) health += 5;
+    if (progress.hasScannedWebsite) health += 5;
+    if (progress.hasCompletedContractReview) health += 5;
     if (
         (progress.documentsDrafted && progress.documentsDrafted.length > 0) ||
         (progress.documentsDownloaded && progress.documentsDownloaded.length > 0)
     ) {
-        score += 20;
+        health += 5;
     }
 
-    return Math.min(score, 100);
+    return Math.max(0, Math.min(health, 100));
 };
 
 export const getNextBestAction = (state: DashboardState): NextAction => {
     const { answers, progress, recommendations, score } = state;
 
-    // Priority 1: Complete Profile
-    if (!answers?.isProfileComplete) {
+    // Priority 1: Upload Existing Documents
+    if (!progress.hasCompletedContractReview) {
         return {
-            title: 'Complete Your Business Profile',
-            description: 'We need a few more details to give you accurate legal recommendations.',
-            actionLabel: 'Complete Profile',
-            actionType: 'profile',
+            title: 'Upload and Analyze Your Current Documents',
+            description: 'Upload your existing waivers or contracts and have them analyzed for loopholes.',
+            actionLabel: 'Upload Documents',
+            actionType: 'review',
             priority: 'critical'
         };
     }
@@ -64,16 +58,7 @@ export const getNextBestAction = (state: DashboardState): NextAction => {
         };
     }
 
-    // Priority 3: Review Existing Contracts (if high risk)
-    if (!progress.hasCompletedContractReview && score?.riskLevel === 'High') {
-        return {
-            title: 'Review Your Current Waivers',
-            description: 'Your high-risk activities require robust waivers. Let\'s check your current ones.',
-            actionLabel: 'Start Review',
-            actionType: 'review',
-            priority: 'high'
-        };
-    }
+
 
     // Fallback: Book a Call
     return {

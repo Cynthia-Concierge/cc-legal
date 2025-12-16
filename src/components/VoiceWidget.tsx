@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, FunctionDeclaration, Type } from "@google/genai";
 import { Message, ConnectionState, BookingDetails, BusinessConfig } from '../types/widget';
 import { decodeBase64, decodeAudioData, createPCMBlob } from '../utils/audioUtils';
+import { toast } from '@/hooks/use-toast';
 import Visualizer from './Visualizer';
 
 // --- Assets ---
@@ -229,7 +230,11 @@ const VoiceWidget: React.FC<VoiceWidgetProps> = ({
 
     } catch (err) {
       console.error("Failed to access camera", err);
-      alert("Could not access camera. Please check permissions.");
+      toast({
+        variant: "destructive",
+        title: "Could not access camera",
+        description: "Please check your browser camera permissions and try again.",
+      });
     }
   };
 
@@ -394,7 +399,10 @@ const VoiceWidget: React.FC<VoiceWidgetProps> = ({
     }
 
     if (!config) {
-      alert("Business configuration not loaded. Please wait...");
+      toast({
+        title: "Still loading",
+        description: "We’re still loading your business configuration. Please wait a moment and try again.",
+      });
       return;
     }
 
@@ -409,7 +417,11 @@ const VoiceWidget: React.FC<VoiceWidgetProps> = ({
         const errorMsg = "Gemini API Key not found. Please set VITE_GEMINI_API_KEY in your .env file.";
         console.error(errorMsg);
         setConnectionState(ConnectionState.ERROR);
-        alert(errorMsg + "\n\nAdd this to your .env file:\nVITE_GEMINI_API_KEY=your-api-key-here");
+        toast({
+          variant: "destructive",
+          title: "Gemini API key missing",
+          description: "Add VITE_GEMINI_API_KEY=your-api-key-here to your .env file and restart the dev server.",
+        });
         return;
       }
 
@@ -756,9 +768,17 @@ const VoiceWidget: React.FC<VoiceWidgetProps> = ({
       
       // Show user-friendly error
       if (errorMessage.includes('API Key')) {
-        alert(`API Key Error:\n\n${errorMessage}\n\nPlease add VITE_GEMINI_API_KEY to your .env file and restart the dev server.`);
+        toast({
+          variant: "destructive",
+          title: "API key error",
+          description: `${errorMessage} Please add VITE_GEMINI_API_KEY to your .env file and restart the dev server.`,
+        });
       } else {
-        alert(`Connection failed: ${errorMessage}\n\nCheck the browser console for more details.`);
+        toast({
+          variant: "destructive",
+          title: "Connection failed",
+          description: `${errorMessage} Check the browser console for more details.`,
+        });
       }
     }
   };

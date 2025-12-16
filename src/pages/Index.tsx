@@ -139,10 +139,15 @@ const Index = () => {
       normalizedWebsite = `https://${normalizedWebsite}`;
     }
 
+    // Generate a unique event_id for deduplication
+    const eventId = `lead_${crypto.randomUUID()}`;
+
     try {
       const API_BASE_URL =
         import.meta.env.VITE_API_URL ||
         (import.meta.env.DEV ? "" : "");
+
+
 
       // Save to Supabase contacts table (primary action - must succeed)
       try {
@@ -207,8 +212,6 @@ const Index = () => {
       // Note: Instantly.ai integration is now handled server-side in /api/save-contact
       // The lead is automatically added to the Instantly.ai campaign/list when saved to Supabase
 
-      // Generate a unique event_id for deduplication between Pixel and CAPI
-      const eventId = `lead_${crypto.randomUUID()}`;
 
       // Track Lead event via Meta Conversions API (server-side)
       try {
@@ -253,8 +256,13 @@ const Index = () => {
       // Continue to show thank you page even if services fail
     }
 
-    // Redirect to thank you page
-    navigate('/thank-you');
+    // Redirect to onboarding (Skip Thank You page)
+    const params = new URLSearchParams({
+      skipWelcome: 'true',
+      email: formData.email,
+      eventId: eventId
+    });
+    navigate(`/wellness/onboarding?${params.toString()}`);
   };
 
   // Handle scroll to form

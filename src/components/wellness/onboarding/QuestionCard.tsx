@@ -81,17 +81,31 @@ export const QuestionCard: React.FC<QuestionProps> = ({
               key={option}
               onClick={() => handleSelect(option)}
               className={`
-                relative flex items-center w-full min-h-[56px] p-4 text-left border rounded-xl transition-all duration-200
+                relative flex items-center w-full min-h-[56px] p-4 text-left border rounded-xl transition-all duration-200 group
                 ${isSelected(option)
-                  ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500'
-                  : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50 text-slate-700'}
+                  ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500 shadow-sm'
+                  : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50 text-slate-700 shadow-sm'}
               `}
             >
               <span className="flex-1 font-medium">{option}</span>
-              {isSelected(option) && (
-                <div className="h-5 w-5 bg-brand-500 rounded-full flex items-center justify-center text-white flex-shrink-0">
-                  <Check size={12} strokeWidth={3} />
+
+              {type === 'multi' ? (
+                // Multi-select: Checkbox style
+                <div className={`
+                  h-6 w-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200
+                  ${isSelected(option)
+                    ? 'bg-brand-600 border-brand-600 text-white'
+                    : 'border-slate-200 bg-white group-hover:border-brand-400'}
+                `}>
+                  {isSelected(option) && <Check size={14} strokeWidth={4} />}
                 </div>
+              ) : (
+                // Single-select: Radio/Check style (only shows when selected)
+                isSelected(option) && (
+                  <div className="h-6 w-6 bg-brand-600 rounded-full flex items-center justify-center text-white flex-shrink-0 animate-in zoom-in-50 duration-200">
+                    <Check size={14} strokeWidth={3} />
+                  </div>
+                )
               )}
             </button>
           ))}

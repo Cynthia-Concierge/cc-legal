@@ -33,7 +33,8 @@ export const vaultService = {
         category: UserDocument['category'],
         title?: string,
         description?: string,
-        analysis?: string
+        analysis?: string,
+        documentType?: string
     ): Promise<UserDocument | null> {
         if (!supabase) return null;
 
@@ -53,7 +54,7 @@ export const vaultService = {
 
         // 2. Create DB Record
         const docTitle = title || file.name;
-        const docData = {
+        const docData: any = {
             user_id: user.id,
             title: docTitle,
             description,
@@ -63,6 +64,11 @@ export const vaultService = {
             category,
             created_at: new Date().toISOString()
         };
+
+        // Add document_type if provided
+        if (documentType) {
+            docData.document_type = documentType;
+        }
 
         const { data: dbData, error: dbError } = await supabase
             .from('user_documents')
@@ -91,6 +97,30 @@ export const vaultService = {
         }
 
         return data.signedUrl;
+    },
+
+    /**
+     * Update a document's analysis
+     */
+    async updateDocumentAnalysis(id: string, analysis: string): Promise<boolean> {
+        if (!supabase) return false;
+
+        try {
+            const { error } = await supabase
+                .from('user_documents')
+                .update({ analysis })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error updating document analysis:', error);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error updating document analysis:', error);
+            return false;
+        }
     },
 
     /**

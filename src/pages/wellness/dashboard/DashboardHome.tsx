@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 import { UserAnswers, ScoreResult, RecommendationResult, DocumentItem, DashboardState } from '../../../types/wellness';
@@ -8,15 +8,22 @@ import { calculateLegalHealth, getNextBestAction, NextAction } from '../../../li
 import { vaultService } from '../../../lib/wellness/vaultService';
 import { Card, CardContent } from '../../../components/wellness/ui/Card';
 import { Button } from '../../../components/wellness/ui/Button';
-import { Lock, Unlock, Download, Shield, CheckCircle2, Phone, FileText, Search, Globe, Store } from 'lucide-react';
+import { Lock, Unlock, Shield, CheckCircle2, Phone, FileText, Search, Globe, Store, ChevronDown } from 'lucide-react';
 import { DraftingModal } from '../../../components/wellness/DraftingModal';
 import { CalendlyModal } from '../../../components/wellness/CalendlyModal';
 import { ContractReviewModal } from '../../../components/wellness/ContractReviewModal';
 import { OnboardingStepsTracker } from '../../../components/wellness/OnboardingStepsTracker';
 import { WebsiteScanModal } from '../../../components/wellness/WebsiteScanModal';
+import { TrademarkQuizModal } from '../../../components/wellness/TrademarkQuizModal';
 import { LegalHealthProgress } from '../../../components/wellness/dashboard/LegalHealthProgress';
 import { NextActionWidget } from '../../../components/wellness/dashboard/NextActionWidget';
-import { WelcomeWizard } from '../../../components/wellness/WelcomeWizard';
+import { ProtectionJourney } from '../../../components/wellness/dashboard/ProtectionJourney';
+import { IpProtectionWidget } from '../../../components/wellness/dashboard/IpProtectionWidget';
+import { toast } from '../../../components/ui/use-toast';
+
+import { SocialProofWidget } from '../../../components/wellness/dashboard/SocialProofWidget';
+import { WebsiteComplianceWidget } from '../../../components/wellness/dashboard/WebsiteComplianceWidget';
+import { socialProofStats } from '../../../config/socialProofStats';
 
 
 export const DashboardHome: React.FC = () => {
@@ -31,12 +38,18 @@ export const DashboardHome: React.FC = () => {
     const [isCalendlyModalOpen, setIsCalendlyModalOpen] = useState(false);
     const [isContractReviewModalOpen, setIsContractReviewModalOpen] = useState(false);
     const [isWebsiteScanModalOpen, setIsWebsiteScanModalOpen] = useState(false);
-    const [showWelcomeWizard, setShowWelcomeWizard] = useState(false);
+    const [isTrademarkModalOpen, setIsTrademarkModalOpen] = useState(false);
+    // Removed showWelcomeWizard
+    const [isDocListOpen, setIsDocListOpen] = useState(false); // Collapsed by default
 
     const [scanResults, setScanResults] = useState<any>(null);
+    const [trademarkQuizResult, setTrademarkQuizResult] = useState<{ score: number, risk: string } | null>(null);
     const [hasScannedWebsite, setHasScannedWebsite] = useState(false);
     const [hasCompletedContractReview, setHasCompletedContractReview] = useState(false);
     const [user, setUser] = useState<any>(null);
+
+    // Ref to scroll to the documents section
+    const documentsSectionRef = useRef<HTMLDivElement | null>(null);
 
     // Load dashboard data
     useEffect(() => {
@@ -139,12 +152,15 @@ export const DashboardHome: React.FC = () => {
                 } catch (e) { console.error('Error parsing scan results:', e); }
             }
 
-            // Check if user has seen wizard
-            const hasSeenWizard = localStorage.getItem('hasSeenWelcomeWizard');
-            if (!hasSeenWizard) {
-                // Small delay for better UX on entry
-                setTimeout(() => setShowWelcomeWizard(true), 1000);
+            // Load trademark quiz results
+            const savedTrademark = localStorage.getItem('wellness_trademark_result');
+            if (savedTrademark) {
+                try {
+                    setTrademarkQuizResult(JSON.parse(savedTrademark));
+                } catch (e) { }
             }
+
+
         };
 
         loadData();
@@ -185,33 +201,27 @@ export const DashboardHome: React.FC = () => {
         }
     };
 
-    const handleDownloadPDF = (doc: DocumentItem) => {
-        if (doc.pdfPath) {
-            const fileName = doc.pdfPath.split('/').pop();
-            const link = document.createElement('a');
-            link.href = `/pdfs/${fileName}`;
-            link.download = fileName || 'document.pdf';
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        }
-    };
-
     const handleGenerateDocument = async (doc: DocumentItem) => {
         try {
             // Get current user
             const { data: { user } } = await supabase.auth.getUser();
 
             if (!user) {
-                alert('Please log in to generate personalized documents.');
+                toast({
+                    variant: "destructive",
+                    title: "Please log in",
+                    description: "You need to be logged in to generate personalized documents.",
+                });
                 return;
             }
 
             // Check if profile is complete
             if (!answers?.isProfileComplete) {
-                if (window.confirm('To generate personalized documents, we need a bit more information about your business. Would you like to complete your profile now?')) {
-                    navigate('/wellness/dashboard/profile');
-                }
+                toast({
+                    title: "Finish your business profile",
+                    description: "Add a few details about your business so we can auto‑fill your documents.",
+                });
+                navigate('/wellness/dashboard/profile');
                 return;
             }
 
@@ -226,7 +236,8 @@ export const DashboardHome: React.FC = () => {
             console.log('[Generate] Generating document:', pdfFileName);
 
             // Call backend API to generate personalized document
-            const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+            // Use relative URL by default so it works in both dev (Vite proxy) and prod (Firebase Hosting rewrites)
+            const serverUrl = import.meta.env.VITE_SERVER_URL || '';
             const response = await fetch(`${serverUrl}/api/documents/generate`, {
                 method: 'POST',
                 headers: {
@@ -267,14 +278,21 @@ export const DashboardHome: React.FC = () => {
                     'Auto-generated personalized document'
                 );
                 console.log('[Vault] Document saved successfully');
-                alert('Document generated and saved to your Vault!');
+                toast({
+                    title: "Document ready",
+                    description: "Your personalized document was generated and saved to your Vault.",
+                });
             } catch (vaultError) {
                 console.error('[Vault] Error saving to vault:', vaultError);
                 // Don't block the user flow if vault save fails, just log it
             }
         } catch (error: any) {
             console.error('[Generate] Error generating document:', error);
-            alert(`Failed to generate document: ${error.message}`);
+            toast({
+                variant: "destructive",
+                title: "Failed to generate document",
+                description: error?.message || "Something went wrong while generating your document. Please try again.",
+            });
         }
     };
 
@@ -321,29 +339,32 @@ export const DashboardHome: React.FC = () => {
                 initialResults={scanResults}
             />
 
-            {/* Welcome Wizard */}
-            <WelcomeWizard
-                isOpen={showWelcomeWizard}
-                onClose={() => {
-                    setShowWelcomeWizard(false);
-                    localStorage.setItem('hasSeenWelcomeWizard', 'true');
-                }}
-                onQuickWin={() => {
-                    setShowWelcomeWizard(false);
-                    localStorage.setItem('hasSeenWelcomeWizard', 'true');
-                    // Find Social Media Disclaimer (usually first free template or specific ID)
-                    const quickWinDoc = recommendations?.freeTemplates.find(d => d.title.includes('Social Media')) || recommendations?.freeTemplates[0];
-                    if (quickWinDoc) {
-                        handleDraftClick(quickWinDoc);
+            <TrademarkQuizModal
+                isOpen={isTrademarkModalOpen}
+                onClose={() => setIsTrademarkModalOpen(false)}
+                onComplete={(score, risk, quizData) => {
+                    const result = { score, risk };
+                    setTrademarkQuizResult(result);
+                    localStorage.setItem('wellness_trademark_result', JSON.stringify(result));
+                    // Store quiz data if provided
+                    if (quizData) {
+                        localStorage.setItem('wellness_trademark_quiz_data', JSON.stringify(quizData));
                     }
                 }}
-                userName={answers.businessName ? answers.businessName.split(' ')[0] : undefined}
+                businessName={answers.businessName}
+                onBookCall={() => setIsCalendlyModalOpen(true)}
             />
+
+
 
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900">Overview</h1>
+                    {/* Mobile Greeting */}
+                    <h1 className="md:hidden text-2xl font-bold text-slate-900 mb-1">
+                        {answers.businessName ? `Hi, ${answers.businessName.split(' ')[0]}` : 'Welcome back'}
+                    </h1>
+                    <h1 className="hidden md:block text-3xl font-bold text-slate-900">Overview</h1>
                     <p className="text-slate-600">Your legal roadmap and current status.</p>
                 </div>
                 <div className="hidden md:block bg-white p-3 rounded-xl shadow-sm border border-slate-100">
@@ -351,163 +372,325 @@ export const DashboardHome: React.FC = () => {
                 </div>
             </div>
 
-            {/* Next Best Action */}
-            {nextAction && (
-                <NextActionWidget action={nextAction} onActionClick={handleActionClick} />
-            )}
+            {/* Mobile Risk Score & Stats */}
+            <div className="md:hidden mb-6">
+                <Card className="border-none shadow-md overflow-hidden bg-white">
+                    <div className={`p-6 flex flex-col items-center ${getRiskColor(scoreData.riskLevel)}`}>
+                        <span className="text-xs font-bold tracking-wider uppercase mb-3 opacity-80">Risk Score</span>
+                        <div className="relative mb-2">
+                            <div className="text-4xl font-bold">{scoreData.score}</div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold bg-white/50 border border-current mb-4`}>
+                            {scoreData.riskLevel === 'Low' ? 'LOW EXPOSURE' : scoreData.riskLevel.toUpperCase()}
+                        </span>
+
+                        <div className="text-sm font-medium opacity-90">
+                            {/* Calculate missing docs: Total needed - (free + drafted/advanced done?) 
+                               For now, let's just show Total Needed vs Total Missing based on simple logic 
+                            */}
+                            {(() => {
+                                if (!recommendations) return null;
+                                const total = (recommendations.freeTemplates?.length || 0) + (recommendations.advancedTemplates?.length || 0) + 1; // +1 for Insurance
+                                const completed = 0; // We define completed as fully finalized
+                                return (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <span>
+                                            <span className="font-bold">{completed}</span> out of <span className="font-bold">{total}</span> Documents Completed
+                                        </span>
+                                        <Button
+                                            variant="ghost"
+                                            className="text-xs text-current underline opacity-90 hover:opacity-100 hover:bg-transparent h-auto p-0 whitespace-normal text-center max-w-[200px]"
+                                            onClick={() => navigate('/wellness/dashboard/documents')}
+                                        >
+                                            Upload your documents now for review and analysis
+                                        </Button>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Next Best Action - Mobile Hero */}
+            {/* {nextAction && (
+                <div className="animate-in slide-in-from-bottom-4 duration-700">
+                    <NextActionWidget action={nextAction} onActionClick={handleActionClick} />
+                </div>
+            )} */}
+
+            {/* <div className="hidden md:block">
+                <SocialProofWidget
+                    stats={socialProofStats}
+                    animated={true}
+                    autoRefresh={true}
+                    refreshInterval={5 * 60 * 1000} // 5 minutes
+                />
+            </div> */}
 
             <div className="grid gap-6 lg:grid-cols-12">
                 {/* Left Column */}
                 <div className="lg:col-span-8 space-y-6">
-                    <OnboardingStepsTracker
+
+
+                    {/* <div className="hidden md:block">
+                        <OnboardingStepsTracker
+                            answers={answers}
+                            onCompleteProfile={() => navigate('/wellness/dashboard/profile')}
+                            onScanWebsite={() => setIsWebsiteScanModalOpen(true)}
+                            onReviewDocuments={() => setIsContractReviewModalOpen(true)}
+                            onDraftDocument={(docId) => {
+                                const doc = recommendations.topPriorities.find(d => d.id === docId) ||
+                                    recommendations.freeTemplates.find(d => d.id === docId);
+                                if (doc) handleDraftClick(doc);
+                            }}
+                            hasCompletedContractReview={hasCompletedContractReview}
+                            hasScannedWebsite={hasScannedWebsite}
+                            hasScanResults={!!scanResults}
+                            priorityDocumentId={recommendations?.topPriorities[0]?.id}
+                        />
+                    </div> */}
+
+                    {/* Protection Journey / Levels */}
+                    {/* <ProtectionJourney
                         answers={answers}
-                        onCompleteProfile={() => navigate('/wellness/dashboard/profile')}
-                        onScanWebsite={() => setIsWebsiteScanModalOpen(true)}
-                        onReviewDocuments={() => setIsContractReviewModalOpen(true)}
-                        onDraftDocument={(docId) => {
-                            const doc = recommendations.topPriorities.find(d => d.id === docId) ||
-                                recommendations.freeTemplates.find(d => d.id === docId);
-                            if (doc) handleDraftClick(doc);
-                        }}
-                        hasCompletedContractReview={hasCompletedContractReview}
+                        recommendations={recommendations}
                         hasScannedWebsite={hasScannedWebsite}
-                        hasScanResults={!!scanResults}
-                        priorityDocumentId={recommendations?.topPriorities[0]?.id}
-                    />
+                        hasCompletedContractReview={hasCompletedContractReview}
+                        onBookCall={() => setIsCalendlyModalOpen(true)}
+                        onGoToProfile={() => navigate('/wellness/dashboard/profile')}
+                        onOpenDocuments={() => {
+                            if (documentsSectionRef.current) {
+                                documentsSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                        }}
+                        onScanWebsite={() => setIsWebsiteScanModalOpen(true)}
+                        onReviewContracts={() => setIsContractReviewModalOpen(true)}
+                    /> */}
 
                     {/* Unified Document List */}
-                    <Card className="border-none shadow-md bg-white overflow-hidden">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                            <div>
-                                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                                    <FileText className="text-brand-600" size={24} />
-                                    All the Legal Documents Your Business Needs
-                                </h2>
-                                <p className="text-sm text-slate-500 mt-1">
-                                    Based on your business profile, these are the exact agreements, waivers, and policies recommended for your protection.
-                                </p>
+                    <div ref={documentsSectionRef} className="scroll-mt-6">
+                        <Card className="border-none shadow-md bg-white overflow-hidden transition-all duration-300">
+                            <div
+                                className="p-4 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
+                                onClick={() => setIsDocListOpen(!isDocListOpen)}
+                            >
+                                <div>
+                                    <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                                        <FileText className="text-brand-600" size={18} />
+                                        All the Legal Documents Your Business Needs
+                                    </h2>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Based on your business profile, these are the exact agreements, waivers, and policies recommended for your protection.
+                                    </p>
+                                </div>
+                                <ChevronDown
+                                    className={`text-slate-400 transition-transform duration-300 ${isDocListOpen ? 'rotate-180' : ''}`}
+                                    size={18}
+                                />
                             </div>
-                        </div>
 
-                        <div className="divide-y divide-slate-100">
-                            {/* Combine lists: Free templates first, then Advanced */}
-                            {[...recommendations.freeTemplates, ...recommendations.advancedTemplates].map((doc) => {
-                                const isFree = doc.category === 'free'; // Assuming 'free' is the category for unlocked docs
-                                const isLocked = !isFree;
+                            {isDocListOpen && (
+                                <div className="divide-y divide-slate-100 animate-in slide-in-from-top-2 duration-300">
+                                    {/* Combine lists: Free templates first, then Advanced */}
+                                    {[...recommendations.freeTemplates, ...recommendations.advancedTemplates].map((doc) => {
+                                        const isFree = doc.category === 'free'; // Assuming 'free' is the category for unlocked docs
+                                        const isLocked = !isFree;
 
-                                return (
-                                    <div key={doc.id} className={`p-4 hover:bg-slate-50 transition-colors group ${isLocked ? 'opacity-90' : ''}`}>
+                                        return (
+                                            <div key={doc.id} className={`p-4 hover:bg-slate-50 transition-colors group ${isLocked ? 'opacity-90' : ''}`}>
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                    {/* Left: Icon & Text */}
+                                                    <div className="flex items-start gap-3 flex-1">
+                                                        <div className={`
+                                                        w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-1
+                                                        ${isFree ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}
+                                                    `}>
+                                                            {isFree ? <Unlock size={20} /> : <Lock size={20} />}
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <h3 className={`font-semibold text-slate-900 ${isLocked ? 'text-slate-700' : ''}`}>
+                                                                    {doc.title}
+                                                                </h3>
+                                                                {isFree && (
+                                                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded uppercase">
+                                                                        Ready
+                                                                    </span>
+                                                                )}
+                                                                {isLocked && (
+                                                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase flex items-center gap-1">
+                                                                        <Lock size={10} /> Lawyer Review
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm text-slate-500 mt-0.5 max-w-2xl line-clamp-2 md:line-clamp-none">
+                                                                {doc.description}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Right: Actions */}
+                                                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center w-full sm:w-auto mt-2 sm:mt-0">
+                                                        {isFree ? (
+                                                            // Unlocked Actions
+                                                            <>
+                                                                <div className="flex gap-2 w-full sm:w-auto">
+                                                                    {['template-6', 'template-4', 'template-intake'].includes(doc.id) && (
+                                                                        <Button
+                                                                            variant="primary"
+                                                                            size="sm"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleGenerateDocument(doc);
+                                                                            }}
+                                                                            className="bg-brand-600 hover:bg-brand-700 text-white w-full sm:w-auto whitespace-nowrap"
+                                                                        >
+                                                                            Generate Personalized
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            // Locked Actions
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setIsCalendlyModalOpen(true);
+                                                                }}
+                                                                className="text-slate-400 hover:text-brand-600 hover:bg-brand-50 w-full sm:w-auto"
+                                                            >
+                                                                <Phone size={14} className="mr-2" />
+                                                                Schedule Review
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* Add Insurance Item (Hardcoded to match LegalInventoryChecklist) */}
+                                    <div className="p-4 hover:bg-slate-50 transition-colors group opacity-90">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             {/* Left: Icon & Text */}
                                             <div className="flex items-start gap-3 flex-1">
-                                                <div className={`
-                                                    w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-1
-                                                    ${isFree ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}
-                                                `}>
-                                                    {isFree ? <Unlock size={20} /> : <Lock size={20} />}
+                                                <div className="bg-slate-100 p-2 rounded-lg text-slate-500">
+                                                    <FileText size={18} />
                                                 </div>
                                                 <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className={`font-semibold text-slate-900 ${isLocked ? 'text-slate-700' : ''}`}>
-                                                            {doc.title}
-                                                        </h3>
-                                                        {isFree && (
-                                                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded uppercase">
-                                                                Ready
-                                                            </span>
-                                                        )}
-                                                        {isLocked && (
-                                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase flex items-center gap-1">
-                                                                <Lock size={10} /> Lawyer Review
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-sm text-slate-500 mt-0.5 max-w-2xl">
-                                                        {doc.description}
+                                                    <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                                        Insurance Certificates
+                                                        <span className="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                                                            Advanced
+                                                        </span>
+                                                    </h3>
+                                                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                                                        Upload your valid business insurance certificates.
                                                     </p>
                                                 </div>
                                             </div>
 
-                                            {/* Right: Actions */}
-                                            <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center w-full sm:w-auto mt-2 sm:mt-0">
-                                                {isFree ? (
-                                                    // Unlocked Actions
-                                                    <>
-                                                        <div className="flex gap-2 w-full sm:w-auto">
-                                                            {['template-6', 'template-4', 'template-intake'].includes(doc.id) && (
-                                                                <Button
-                                                                    variant="primary"
-                                                                    size="sm"
-                                                                    onClick={() => handleGenerateDocument(doc)}
-                                                                    className="bg-brand-600 hover:bg-brand-700 text-white flex-1 sm:flex-none whitespace-nowrap"
-                                                                >
-                                                                    Generate Personalized
-                                                                </Button>
-                                                            )}
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => handleDownloadPDF(doc)}
-                                                                className="flex-1 sm:flex-none whitespace-nowrap"
-                                                            >
-                                                                <Download size={14} className="mr-2" />
-                                                                Download
-                                                            </Button>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    // Locked Actions
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => setIsCalendlyModalOpen(true)}
-                                                        className="text-slate-400 hover:text-brand-600 hover:bg-brand-50 w-full sm:w-auto"
-                                                    >
-                                                        <Phone size={14} className="mr-2" />
-                                                        Schedule Review
-                                                    </Button>
-                                                )}
+                                            {/* Right: Action */}
+                                            <div className="flex-shrink-0">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="w-full sm:w-auto text-xs h-8 border-slate-200 text-slate-600 hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50"
+                                                    onClick={() => navigate('/wellness/dashboard/documents')}
+                                                >
+                                                    Upload
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    </Card>
+                                </div>
+                            )}
+                        </Card></div>
+
+                    {/* Website Compliance - Collapsible */}
+                    <div className="mt-6">
+                        <WebsiteComplianceWidget
+                            hasScannedWebsite={hasScannedWebsite}
+                            scanResults={scanResults}
+                            onOpenScanModal={() => setIsWebsiteScanModalOpen(true)}
+                        />
+                    </div>
+
+                    {/* IP Protection - Collapsible */}
+                    <div className="mt-6">
+                        <IpProtectionWidget
+                            onStartQuiz={() => setIsTrademarkModalOpen(true)}
+                            hasTakenQuiz={!!trademarkQuizResult}
+                            score={trademarkQuizResult?.score}
+                            riskLevel={trademarkQuizResult?.risk}
+                            onBookCall={() => setIsCalendlyModalOpen(true)}
+                        />
+                    </div>
                 </div>
 
                 {/* Right Column */}
                 <div className="lg:col-span-4 space-y-6">
-                    {/* Risk Score */}
-                    <Card className="border-none shadow-md overflow-hidden bg-white">
+                    {/* Risk Score - Desktop */}
+                    <Card className="hidden lg:block border-none shadow-md overflow-hidden bg-white">
                         <div className={`p-6 flex flex-col items-center ${getRiskColor(scoreData.riskLevel)} rounded-t-lg`}>
                             <span className="text-xs font-bold tracking-wider uppercase mb-3 opacity-80">Risk Score</span>
                             <div className="relative mb-4">
                                 <div className="text-3xl font-bold">{scoreData.score}</div>
                             </div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold bg-white/50 border border-current`}>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold bg-white/50 border border-current mb-4`}>
                                 {scoreData.riskLevel === 'Low' ? 'LOW EXPOSURE' : scoreData.riskLevel.toUpperCase()}
                             </span>
+
+                            <div className="text-sm font-medium opacity-90 text-center">
+                                {(() => {
+                                    if (!recommendations) return null;
+                                    const total = (recommendations.freeTemplates?.length || 0) + (recommendations.advancedTemplates?.length || 0) + 1; // +1 for Insurance
+                                    const completed = 0;
+                                    return (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <span>
+                                                <span className="font-bold">{completed}</span> out of <span className="font-bold">{total}</span> Documents Completed
+                                            </span>
+                                            <Button
+                                                variant="ghost"
+                                                className="text-xs text-current underline opacity-90 hover:opacity-100 hover:bg-transparent h-auto p-0 whitespace-normal text-center max-w-[200px]"
+                                                onClick={() => navigate('/wellness/dashboard/documents')}
+                                            >
+                                                Upload your documents now for review and analysis
+                                            </Button>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
                         </div>
                     </Card>
 
-
+                    {/* <WebsiteComplianceWidget
+                        hasScannedWebsite={hasScannedWebsite}
+                        scanResults={scanResults}
+                        onOpenScanModal={() => setIsWebsiteScanModalOpen(true)}
+                    /> */}
 
                     {/* Need a Pro Card */}
-                    <Card className="bg-slate-900 text-white border-none">
-                        <CardContent className="p-6 text-center">
-                            <h3 className="font-bold text-lg mb-2">Need a Pro?</h3>
-                            <Button
-                                onClick={() => setIsCalendlyModalOpen(true)}
-                                className="w-full bg-brand-600 mt-2"
-                            >
-                                <Phone className="mr-2 h-4 w-4" />
-                                Book Free Call
-                            </Button>
-                        </CardContent>
-                    </Card>
+                    <div className="hidden md:block">
+                        <Card className="bg-slate-900 text-white border-none">
+                            <CardContent className="p-6 text-center">
+                                <h3 className="font-bold text-lg mb-2">Need a Pro?</h3>
+                                <Button
+                                    onClick={() => setIsCalendlyModalOpen(true)}
+                                    className="w-full bg-brand-600 mt-2"
+                                >
+                                    <Phone className="mr-2 h-4 w-4" />
+                                    Book Free Call
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };

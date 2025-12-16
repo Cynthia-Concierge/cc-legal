@@ -776,6 +776,103 @@ app.post("/api/emails/welcome", async (req, res) => {
   }
 });
 
+// Send Onboarding Package (3 Free Documents)
+app.post("/api/documents/onboarding-package", async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+
+    console.log(`[Onboarding Package] Processing for user ${userId}`);
+
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL || "",
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+    );
+
+    const { data: profile, error } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !profile) {
+      console.error('[Onboarding Package] Profile not found:', error);
+      return res.status(404).json({ error: "Profile not found" });
+    }
+
+    // Get User Email
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const email = authUser?.user?.email;
+    const name = profile.business_name || authUser?.user?.user_metadata?.name || 'there';
+
+    if (!email) {
+      return res.status(404).json({ error: "User email not found" });
+    }
+
+    // Prepare Profile Data
+    const profileData = {
+      businessName: profile.business_name,
+      legalEntityName: profile.legal_entity_name,
+      entityType: profile.entity_type,
+      state: profile.state,
+      businessAddress: profile.business_address,
+      ownerName: profile.owner_name,
+      phone: profile.phone,
+      email: email,
+      website: profile.website_url,
+      instagram: profile.instagram,
+      businessType: profile.business_type,
+      services: profile.services
+    };
+
+    // Generate Documents
+    const templates = [
+      { id: 'social_media_disclaimer', name: 'Social Media Disclaimer.pdf' },
+      { id: 'media_release_form', name: 'Photo Release Form.pdf' },
+      { id: 'client_intake_form', name: 'Client Intake Form.pdf' }
+    ];
+
+    const attachments = [];
+
+    for (const tmpl of templates) {
+      try {
+        console.log(`[Onboarding Package] Generating ${tmpl.id}...`);
+        const pdfBuffer = await documentGenerationService.generateDocument(tmpl.id, profileData);
+        attachments.push({
+          filename: tmpl.name,
+          content: pdfBuffer
+        });
+      } catch (err) {
+        console.error(`[Onboarding Package] Failed to generate ${tmpl.id}:`, err);
+      }
+    }
+
+    if (attachments.length === 0) {
+      return res.status(500).json({ error: "Failed to generate any documents" });
+    }
+
+    // Send Email
+    await emailService.sendOnboardingPackageEmail(email, name, attachments);
+
+    console.log(`[Onboarding Package] Successfully sent ${attachments.length} documents to ${email}`);
+
+    return res.json({
+      success: true,
+      sentCount: attachments.length
+    });
+
+  } catch (error: any) {
+    console.error("[Onboarding Package] Error:", error);
+    return res.status(500).json({
+      error: "Internal server error",
+      message: error.message
+    });
+  }
+});
+
 // Send Website Scan Reminder Emails
 // This endpoint should be called daily via cron job to automatically send reminders
 // 
@@ -952,6 +1049,352 @@ app.post("/api/emails/send-website-scan-reminders", async (req, res) => {
     res.status(500).json({
       error: "Internal server error",
       message: error.message || "Failed to send website scan reminders",
+    });
+  }
+});
+
+// ================================================================
+// Send Legal Health Score Emails (Day 1 nurture sequence)
+// ================================================================
+//
+// This endpoint sends personalized Legal Health Score emails to users
+// - Pulls user data from business_profiles
+// - Calculates their risk score dynamically
+// - Sends customized email based on their risk factors
+//
+// To set up automation:
+// 1. Set up a daily cron job or schedule this for Day 1 after signup
+// 2. Call: POST /api/emails/send-legal-health-score
+// 3. Runs daily and checks all users who created password >24 hours ago but haven't received this email
+app.post("/api/emails/send-legal-health-score", async (req, res) => {
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Email service is not configured.",
+      });
+    }
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Supabase is not configured.",
+      });
+    }
+
+    // Create Supabase client with service role for admin queries
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // Query for eligible users:
+    // - Created password at least 24 hours ago (Day 1 of nurture sequence)
+    // - Haven't been sent the Legal Health Score email yet
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    // Get users from users table who were created 24+ hours ago
+    const { data: eligibleUsers, error: queryError } = await supabaseAdmin
+      .from('users')
+      .select('user_id, email, name, password_created_at')
+      .lt('password_created_at', twentyFourHoursAgo)
+      .or('legal_health_score_email_sent_at.is.null');
+
+    if (queryError) {
+      console.error('[Legal Health Score Emails] Error querying users:', queryError);
+      return res.status(500).json({
+        error: "Database error",
+        message: queryError.message,
+      });
+    }
+
+    if (!eligibleUsers || eligibleUsers.length === 0) {
+      return res.json({
+        success: true,
+        message: "No eligible users found",
+        sent: 0,
+      });
+    }
+
+    console.log(`[Legal Health Score Emails] Found ${eligibleUsers.length} eligible users`);
+
+    // Helper function to calculate score from profile data
+    const calculateScoreFromProfile = (profile: any): { score: number; riskLevel: 'Low' | 'Moderate' | 'High' } => {
+      let rawScore = 0;
+
+      // Rule 1: Movement = 30 points
+      if (profile.has_physical_movement) rawScore += 30;
+
+      // Rule 2: Retreats = 25 points
+      if (profile.hosts_retreats || profile.is_offsite_or_international) rawScore += 25;
+
+      // Rule 3: Hiring = 20 points
+      if (profile.hires_staff) {
+        rawScore += 20;
+        if (profile.team_size === '4-10') rawScore += 5;
+        if (profile.team_size === '10+') rawScore += 10;
+      }
+
+      // Rule 4: Online = 15 points
+      if (profile.collects_online) rawScore += 15;
+
+      // Rule 5: Digital Programs = 10 points
+      if (profile.offers_online_courses) rawScore += 10;
+
+      // Rule 6: Photos/Video = 5 points
+      if (profile.uses_photos) rawScore += 5;
+
+      // Rule 7: Client Volume
+      if (profile.monthly_clients === '50-200') rawScore += 5;
+      if (profile.monthly_clients === '200+') rawScore += 10;
+
+      // Normalize to 0-100 scale
+      const normalizedScore = Math.min(Math.round((rawScore / 130) * 100), 100);
+
+      let riskLevel: 'Low' | 'Moderate' | 'High' = 'Low';
+      if (normalizedScore >= 70) riskLevel = 'High';
+      else if (normalizedScore >= 40) riskLevel = 'Moderate';
+
+      return { score: normalizedScore, riskLevel };
+    };
+
+    // Send emails
+    const results = [];
+    for (const user of eligibleUsers) {
+      try {
+        // Get business profile for this user
+        const { data: profile } = await supabaseAdmin
+          .from('business_profiles')
+          .select('*')
+          .eq('user_id', user.user_id)
+          .single();
+
+        // If no profile, skip (they haven't completed onboarding)
+        if (!profile) {
+          console.log(`[Legal Health Score Emails] Skipping user ${user.email} - no business profile`);
+          continue;
+        }
+
+        // STRICT CHECK: Require business_name to be filled out (indicates profile completion)
+        // This ensures we only email users who completed the full Business Profile page
+        if (!profile.business_name || profile.business_name.trim() === '' || profile.business_name === 'My Wellness Business') {
+          console.log(`[Legal Health Score Emails] Skipping user ${user.email} - profile not complete (no business name)`);
+          continue;
+        }
+
+        // Calculate their score
+        const { score, riskLevel } = calculateScoreFromProfile(profile);
+
+        // Send email with personalized data
+        const result = await emailService.sendLegalHealthScoreEmail(
+          user.email,
+          {
+            name: user.name || profile.business_name || user.email.split('@')[0],
+            businessName: profile.business_name || 'your business',
+            businessType: profile.business_type || 'wellness business',
+            score: score,
+            riskLevel: riskLevel,
+            hasPhysicalMovement: profile.has_physical_movement || false,
+            hostsRetreats: profile.hosts_retreats || false,
+            hiresStaff: profile.hires_staff || false,
+            collectsOnline: profile.collects_online || false,
+            usesPhotos: profile.uses_photos || false,
+          }
+        );
+
+        // Mark that email was sent
+        await supabaseAdmin
+          .from('users')
+          .update({ legal_health_score_email_sent_at: new Date().toISOString() })
+          .eq('user_id', user.user_id);
+
+        results.push({
+          email: user.email,
+          success: true,
+          score: score,
+          riskLevel: riskLevel,
+          result: result,
+        });
+
+        console.log(`[Legal Health Score Emails] Sent to: ${user.email} (Score: ${score}, Risk: ${riskLevel})`);
+      } catch (emailError: any) {
+        console.error(`[Legal Health Score Emails] Error sending to user ${user.email}:`, emailError);
+        results.push({
+          email: user.email,
+          success: false,
+          error: emailError.message,
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+
+    res.json({
+      success: true,
+      message: `Sent ${successCount} Legal Health Score emails${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
+      sent: successCount,
+      failed: failureCount,
+      total: eligibleUsers.length,
+      results: results,
+    });
+  } catch (error: any) {
+    console.error("[Legal Health Score Emails] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to send Legal Health Score emails",
+    });
+  }
+});
+
+// ================================================================
+// Get Social Proof Statistics (for dashboard widget)
+// ================================================================
+//
+// Returns real-time stats about protected users
+// Can be cached on frontend with a TTL (time-to-live)
+//
+// NOTE: Uses a BASE_COUNT to boost numbers for social proof
+// Real users are added on top of this base
+app.get("/api/stats/social-proof", async (req, res) => {
+  try {
+    // ============================================================
+    // SOCIAL PROOF BASE COUNT
+    // ============================================================
+    // This is added to real user counts for social proof purposes
+    // Example: 36 real users + 1200 base = 1,236 shown to users
+    //
+    // As real users grow, the total increases (1,237, 1,238, etc.)
+    // Adjust this number as your real user base grows
+    const BASE_COUNT = 1200;
+
+    // Breakdown base counts by business type (should add up to BASE_COUNT)
+    const BASE_BREAKDOWN = {
+      yogaStudios: 115,    // ~10% of 1200
+      retreatLeaders: 78,  // ~6.5%
+      coaches: 180,        // ~15%
+      gyms: 132,           // ~11%
+      other: 695,          // Remaining: 57.5%
+    };
+    // ============================================================
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Supabase is not configured.",
+      });
+    }
+
+    // Create Supabase client with service role
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // Get total users with completed profiles
+    const { count: totalProtected, error: totalError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('business_name', 'is', null)
+      .neq('business_name', '')
+      .neq('business_name', 'My Wellness Business');
+
+    if (totalError) {
+      console.error('[Social Proof Stats] Error getting total:', totalError);
+    }
+
+    // Get breakdown by business type
+    const { data: profiles, error: profilesError } = await supabaseAdmin
+      .from('business_profiles')
+      .select('business_type')
+      .not('business_name', 'is', null)
+      .neq('business_name', '')
+      .neq('business_name', 'My Wellness Business');
+
+    if (profilesError) {
+      console.error('[Social Proof Stats] Error getting profiles:', profilesError);
+    }
+
+    // Calculate breakdown counts
+    const breakdown = {
+      yogaStudios: 0,
+      retreatLeaders: 0,
+      coaches: 0,
+      gyms: 0,
+      other: 0,
+    };
+
+    if (profiles) {
+      profiles.forEach((profile: any) => {
+        const type = profile.business_type;
+        if (type === 'Yoga Studio') {
+          breakdown.yogaStudios++;
+        } else if (type === 'Retreat Leader') {
+          breakdown.retreatLeaders++;
+        } else if (type === 'Online Coaching' || type === 'Personal Trainer') {
+          breakdown.coaches++;
+        } else if (type === 'Gym / Fitness Studio') {
+          breakdown.gyms++;
+        } else {
+          breakdown.other++;
+        }
+      });
+    }
+
+    // Get recent signups (last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: recentSignups, error: recentError } = await supabaseAdmin
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .gte('password_created_at', sevenDaysAgo);
+
+    if (recentError) {
+      console.error('[Social Proof Stats] Error getting recent signups:', recentError);
+    }
+
+    // Add BASE_COUNT to all stats for social proof
+    const realUsers = totalProtected || 0;
+    const realRecentSignups = recentSignups || 0;
+
+    // Calculate boosted "recent signups" (show ~2-3% of total as "this week")
+    // This keeps the ratio realistic as you grow
+    const boostedTotal = BASE_COUNT + realUsers;
+    const boostedRecentSignups = Math.max(
+      Math.floor(boostedTotal * 0.025), // 2.5% of total shown as "this week"
+      realRecentSignups + 10 // Or at least 10 + real signups
+    );
+
+    const stats = {
+      totalProtected: boostedTotal, // BASE_COUNT + real users
+      breakdown: {
+        yogaStudios: BASE_BREAKDOWN.yogaStudios + breakdown.yogaStudios,
+        retreatLeaders: BASE_BREAKDOWN.retreatLeaders + breakdown.retreatLeaders,
+        coaches: BASE_BREAKDOWN.coaches + breakdown.coaches,
+        gyms: BASE_BREAKDOWN.gyms + breakdown.gyms,
+        other: BASE_BREAKDOWN.other + breakdown.other,
+      },
+      recentSignups: boostedRecentSignups,
+      lastUpdated: new Date().toISOString(),
+      // For debugging: include real counts (not shown to users)
+      _debug: {
+        realUsers: realUsers,
+        realRecentSignups: realRecentSignups,
+        baseCount: BASE_COUNT,
+      }
+    };
+
+    console.log('[Social Proof Stats] Real users:', realUsers);
+    console.log('[Social Proof Stats] Boosted total:', boostedTotal);
+    console.log('[Social Proof Stats] Stats sent to frontend:', stats);
+
+    // Cache this response for 1 hour (3600 seconds)
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.json(stats);
+  } catch (error: any) {
+    console.error("[Social Proof Stats] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to fetch social proof stats",
     });
   }
 });
@@ -2380,6 +2823,492 @@ app.get("/api/workflow-results", async (req, res) => {
     });
   }
 });
+
+// ============================================
+// Trademark Risk Report API Endpoint
+// ============================================
+
+// Trademark Risk Report Request Endpoint
+app.post("/api/trademarks/request", async (req, res) => {
+  try {
+    const { user_id, businessName, score, riskLevel, email, name, answers, answerDetails } = req.body;
+
+    if (!businessName || !email) {
+      return res.status(400).json({ error: "Missing required fields: businessName, email" });
+    }
+
+    console.log(`[Trademark] Received request for: ${businessName} (${email})`);
+
+    // Generate risk factors based on quiz answers
+    const riskFactors = generateRiskFactors(answers, score, riskLevel);
+
+    // Extract answer details for PDF (use provided answerDetails if available, otherwise extract from answers)
+    const extractedDetails = answerDetails ? extractAnswerDetailsFromDetails(answerDetails) : extractAnswerDetails(answers);
+
+    // Generate verdict text based on risk level
+    const verdict = generateVerdict(riskLevel, score);
+
+    // Generate translation text
+    const translationText = generateTranslationText(riskLevel, score);
+
+    // 1. Generate PDF Report
+    let pdfBuffer: Buffer | undefined;
+    try {
+      const reportData = {
+        businessName: businessName,
+        businessType: 'Wellness Business', // Could be passed from frontend if available
+        riskLevel: riskLevel || 'MODERATE RISK',
+        score: score || 0,
+        riskFactor1: riskFactors[0] || 'No federal trademark registration',
+        riskFactor2: riskFactors[1] || 'Similar name search not fully completed',
+        riskFactor3: riskFactors[2] || 'Expansion beyond current location planned',
+        riskFactor4: riskFactors[3] || 'Domain availability uncertain',
+        email: email,
+        // New fields for improved PDF
+        verdict: verdict,
+        trademarkRegistered: extractedDetails.trademarkRegistered,
+        trademarkRegisteredIcon: extractedDetails.trademarkRegisteredIcon,
+        expansionPlanned: extractedDetails.expansionPlanned,
+        expansionPlannedIcon: extractedDetails.expansionPlannedIcon,
+        similarNameSearch: extractedDetails.similarNameSearch,
+        similarNameSearchIcon: extractedDetails.similarNameSearchIcon,
+        domainOwnership: extractedDetails.domainOwnership,
+        translationText: translationText,
+        // New question answers
+        brandNameOrigin: extractedDetails.brandNameOrigin || 'Not specified',
+        includesLocation: extractedDetails.includesLocation || 'No',
+        brandUsageDuration: extractedDetails.brandUsageDuration || 'Not specified',
+        brandUsageLocations: extractedDetails.brandUsageLocations || 'Not specified',
+        expansionPlans: extractedDetails.expansionPlans || 'Not specified',
+        brandingInvestments: extractedDetails.brandingInvestments || 'Not specified',
+        receivedConfusion: extractedDetails.receivedConfusion || 'No',
+        differentFromLegalName: extractedDetails.differentFromLegalName || 'Not sure',
+        workedWithLawyer: extractedDetails.workedWithLawyer || 'No',
+      };
+
+      pdfBuffer = await documentGenerationService.generateDocument(
+        'trademark_risk_report',
+        reportData
+      );
+      console.log('[Trademark] PDF generated successfully, size:', pdfBuffer.length);
+    } catch (pdfError: any) {
+      console.error('[Trademark] Error generating PDF:', pdfError);
+      // Continue without PDF - email will still be sent
+    }
+
+    // 2. Insert into Supabase trademark_requests
+    if (user_id) {
+      console.log('[Trademark] Attempting to save to database with user_id:', user_id);
+      try {
+        const { data, error: dbError } = await supabaseService.client
+          .from('trademark_requests')
+          .insert({
+            user_id: user_id,
+            business_name: businessName,
+            quiz_score: score,
+            risk_level: riskLevel,
+            status: 'completed' // Changed from 'pending' since we're sending the report immediately
+          })
+          .select();
+
+        if (dbError) {
+          console.error('[Trademark] Database insert error:', dbError);
+          console.error('[Trademark] Error details:', JSON.stringify(dbError, null, 2));
+        } else {
+          console.log('[Trademark] Successfully saved to database:', data);
+
+          // Log event: trademark_risk_report_sent (if legal_timeline table exists)
+          try {
+            const { error: eventError } = await supabaseService.client
+              .from('legal_timeline')
+              .insert({
+                user_id: user_id,
+                event_type: 'trademark_risk_report_sent',
+                event_data: {
+                  business_name: businessName,
+                  risk_level: riskLevel,
+                  score: score
+                },
+                created_at: new Date().toISOString()
+              });
+            if (eventError) {
+              console.warn('[Trademark] Could not log event (table may not exist):', eventError.message);
+            } else {
+              console.log('[Trademark] Event logged: trademark_risk_report_sent');
+            }
+          } catch (eventError: any) {
+            console.warn('[Trademark] Error logging event (non-critical):', eventError?.message || eventError);
+          }
+        }
+      } catch (dbErr: any) {
+        console.error('[Trademark] Database operation failed:', dbErr);
+        console.error('[Trademark] Error stack:', dbErr?.stack);
+      }
+    } else {
+      console.warn('[Trademark] No user_id provided, skipping DB save');
+      console.warn('[Trademark] Request body:', JSON.stringify(req.body, null, 2));
+    }
+
+    // 3. Send Risk Report Email with PDF attachment
+    await emailService.sendTrademarkRiskReport(
+      email,
+      name,
+      businessName,
+      riskLevel,
+      score,
+      pdfBuffer
+    );
+
+    // 4. Send Admin Alert
+    await emailService.sendAdminTrademarkAlert(email, businessName, riskLevel, score);
+
+    return res.json({ success: true, message: "Risk report processed and sent" });
+  } catch (error: any) {
+    console.error('[Trademark] Error processing request:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Download PDF endpoint - regenerates PDF on demand
+app.post("/api/trademarks/download-pdf", async (req, res) => {
+  try {
+    const { user_id, businessName, score, riskLevel, answers, answerDetails } = req.body;
+
+    if (!businessName || !user_id) {
+      return res.status(400).json({ error: "Missing required fields: businessName, user_id" });
+    }
+
+    console.log(`[Trademark PDF Download] Generating PDF for: ${businessName} (user: ${user_id})`);
+
+    // Generate risk factors based on quiz answers
+    const riskFactors = generateRiskFactors(answers, score, riskLevel);
+
+    // Extract answer details for PDF (use provided answerDetails if available, otherwise extract from answers)
+    const extractedDetails = answerDetails ? extractAnswerDetailsFromDetails(answerDetails) : extractAnswerDetails(answers);
+
+    // Generate verdict text based on risk level
+    const verdict = generateVerdict(riskLevel, score);
+
+    // Generate translation text
+    const translationText = generateTranslationText(riskLevel, score);
+
+    // Generate PDF Report
+    const reportData = {
+      businessName: businessName,
+      businessType: 'Wellness Business',
+      riskLevel: riskLevel || 'MODERATE RISK',
+      score: score || 0,
+      riskFactor1: riskFactors[0] || 'No federal trademark registration',
+      riskFactor2: riskFactors[1] || 'Similar name search not fully completed',
+      riskFactor3: riskFactors[2] || 'Expansion beyond current location planned',
+      riskFactor4: riskFactors[3] || 'Domain availability uncertain',
+      email: '', // Not needed for download
+      // New fields for improved PDF
+      verdict: verdict,
+      trademarkRegistered: extractedDetails.trademarkRegistered,
+      trademarkRegisteredIcon: extractedDetails.trademarkRegisteredIcon,
+      expansionPlanned: extractedDetails.expansionPlanned,
+      expansionPlannedIcon: extractedDetails.expansionPlannedIcon,
+      similarNameSearch: extractedDetails.similarNameSearch,
+      similarNameSearchIcon: extractedDetails.similarNameSearchIcon,
+      domainOwnership: extractedDetails.domainOwnership,
+      translationText: translationText,
+      // New question answers
+      brandNameOrigin: extractedDetails.brandNameOrigin || 'Not specified',
+      includesLocation: extractedDetails.includesLocation || 'No',
+      brandUsageDuration: extractedDetails.brandUsageDuration || 'Not specified',
+      brandUsageLocations: extractedDetails.brandUsageLocations || 'Not specified',
+      expansionPlans: extractedDetails.expansionPlans || 'Not specified',
+      brandingInvestments: extractedDetails.brandingInvestments || 'Not specified',
+      receivedConfusion: extractedDetails.receivedConfusion || 'No',
+      differentFromLegalName: extractedDetails.differentFromLegalName || 'Not sure',
+      workedWithLawyer: extractedDetails.workedWithLawyer || 'No',
+    };
+
+    const pdfBuffer = await documentGenerationService.generateDocument(
+      'trademark_risk_report',
+      reportData
+    );
+
+    console.log('[Trademark PDF Download] PDF generated successfully, size:', pdfBuffer.length);
+
+    // Set headers for PDF download
+    const filename = `Trademark-Risk-Report-${businessName.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length.toString());
+
+    // Send PDF
+    res.send(pdfBuffer);
+  } catch (error: any) {
+    console.error('[Trademark PDF Download] Error generating PDF:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to generate risk factors based on quiz answers
+function generateRiskFactors(answers: number[] | undefined, score: number, riskLevel: string): string[] {
+  const factors: string[] = [];
+
+  if (!answers || answers.length === 0) {
+    // Default factors based on score (updated for max score of 40)
+    if (score >= 25) {
+      factors.push('No federal trademark registration');
+      factors.push('Similar name search not fully completed');
+      factors.push('Expansion beyond current location planned');
+      factors.push('Domain availability uncertain');
+    } else if (score >= 12) {
+      factors.push('No federal trademark registration');
+      factors.push('Similar name search not fully completed');
+      factors.push('Some protection gaps identified');
+    } else {
+      factors.push('Basic protection in place');
+      factors.push('Consider comprehensive search for expansion');
+    }
+    return factors;
+  }
+
+  // Generate factors based on actual answers - use specific, non-duplicate factors
+  // Answer 1: Trademark registration (index 0)
+  if (answers[0] >= 5) {
+    factors.push('No federal trademark registration on file');
+  }
+
+  // Answer 2: Similar name check (index 1)
+  if (answers[1] === 5) {
+    factors.push('No similar name search completed');
+  } else if (answers[1] === 3) {
+    factors.push('Partial clearance search completed');
+  }
+
+  // Answer 3: Domain ownership (index 2)
+  if (answers[2] === 3) {
+    factors.push('Domain not owned by business');
+  } else if (answers[2] === 2) {
+    factors.push('Domain ownership status unclear');
+  }
+
+  // Answer 4: Expansion plans (index 3)
+  if (answers[3] === 3) {
+    factors.push('Planned expansion beyond current location');
+  } else if (answers[3] === 1) {
+    factors.push('Potential future expansion considered');
+  }
+
+  // Fill remaining slots with specific factors if needed
+  if (factors.length < 4) {
+    const additionalFactors = [
+      'Brand protection strategy needs development',
+      'Legal consultation recommended before major investment',
+      'Trademark monitoring not established',
+      'Comprehensive search not yet conducted'
+    ];
+
+    for (let i = factors.length; i < 4; i++) {
+      factors.push(additionalFactors[i - factors.length] || 'Additional protection recommended');
+    }
+  }
+
+  return factors.slice(0, 4); // Ensure exactly 4 factors
+}
+
+// Helper function to extract answer details from quiz answers
+function extractAnswerDetails(answers: number[] | undefined): any {
+  // Question 1: Trademark registration (score 0 = yes, 5 = no)
+  const q1Score = answers?.[0] ?? 5;
+  const trademarkRegistered = q1Score === 0 ? 'Yes' : 'No';
+  const trademarkRegisteredIcon = q1Score === 0 ? '✅' : '❌';
+
+  // Question 2: Similar name search (score 0 = full search, 3 = partial, 5 = none)
+  const q2Score = answers?.[1] ?? 5;
+  let similarNameSearch = 'No';
+  let similarNameSearchIcon = '❌';
+  if (q2Score === 0) {
+    similarNameSearch = 'Yes';
+    similarNameSearchIcon = '✅';
+  } else if (q2Score === 3) {
+    similarNameSearch = 'Partial';
+    similarNameSearchIcon = '⚠️';
+  }
+
+  // Question 3: Domain ownership (score 0 = yes, 2 = unchecked, 3 = no)
+  const q3Score = answers?.[2] ?? 2;
+  let domainOwnership = 'Unchecked';
+  if (q3Score === 0) {
+    domainOwnership = 'Yes';
+  } else if (q3Score === 3) {
+    domainOwnership = 'No';
+  }
+
+  // Question 4: Expansion plans (score 0 = no, 1 = maybe, 3 = yes)
+  const q4Score = answers?.[3] ?? 0;
+  let expansionPlanned = 'No';
+  let expansionPlannedIcon = '❌';
+  if (q4Score === 3) {
+    expansionPlanned = 'Yes';
+    expansionPlannedIcon = '✅';
+  } else if (q4Score === 1) {
+    expansionPlanned = 'Maybe';
+    expansionPlannedIcon = '⚠️';
+  }
+
+  return {
+    trademarkRegistered,
+    trademarkRegisteredIcon,
+    expansionPlanned,
+    expansionPlannedIcon,
+    similarNameSearch,
+    similarNameSearchIcon,
+    domainOwnership,
+  };
+}
+
+// Helper function to extract answer details from answerDetails array (more accurate)
+function extractAnswerDetailsFromDetails(answerDetails: Array<{ questionId: number, answerText: string | string[], score: number }>): any {
+  const result: any = {};
+
+  // Find answers by question ID
+  const getAnswer = (questionId: number) => {
+    return answerDetails.find(a => a.questionId === questionId);
+  };
+
+  // Question 1: Trademark registration
+  const q1 = getAnswer(1);
+  if (q1) {
+    const answer = typeof q1.answerText === 'string' ? q1.answerText : q1.answerText[0];
+    result.trademarkRegistered = answer.includes('Yes, I have a registration') ? 'Yes' : 'No';
+    result.trademarkRegisteredIcon = answer.includes('Yes, I have a registration') ? '✅' : '❌';
+  }
+
+  // Question 2: Similar name search
+  const q2 = getAnswer(2);
+  if (q2) {
+    const answer = typeof q2.answerText === 'string' ? q2.answerText : q2.answerText[0];
+    if (answer.includes('full federal search')) {
+      result.similarNameSearch = 'Yes';
+      result.similarNameSearchIcon = '✅';
+    } else if (answer.includes('googled')) {
+      result.similarNameSearch = 'Partial';
+      result.similarNameSearchIcon = '⚠️';
+    } else {
+      result.similarNameSearch = 'No';
+      result.similarNameSearchIcon = '❌';
+    }
+  }
+
+  // Question 3: Domain ownership
+  const q3 = getAnswer(3);
+  if (q3) {
+    const answer = typeof q3.answerText === 'string' ? q3.answerText : q3.answerText[0];
+    if (answer.includes('Yes, I own it')) {
+      result.domainOwnership = 'Yes';
+    } else if (answer.includes('someone else owns it')) {
+      result.domainOwnership = 'No';
+    } else {
+      result.domainOwnership = 'Unchecked';
+    }
+  }
+
+  // Question 4: Expansion plans (old question)
+  const q4 = getAnswer(4);
+  if (q4) {
+    const answer = typeof q4.answerText === 'string' ? q4.answerText : q4.answerText[0];
+    if (answer.includes('Yes, definitely')) {
+      result.expansionPlanned = 'Yes';
+      result.expansionPlannedIcon = '✅';
+    } else if (answer.includes('Maybe')) {
+      result.expansionPlanned = 'Maybe';
+      result.expansionPlannedIcon = '⚠️';
+    } else {
+      result.expansionPlanned = 'No';
+      result.expansionPlannedIcon = '❌';
+    }
+  }
+
+  // Question 5: Brand name origin
+  const q5 = getAnswer(5);
+  if (q5) {
+    result.brandNameOrigin = typeof q5.answerText === 'string' ? q5.answerText : q5.answerText[0];
+  }
+
+  // Question 6: Includes location
+  const q6 = getAnswer(6);
+  if (q6) {
+    result.includesLocation = typeof q6.answerText === 'string' ? q6.answerText : q6.answerText[0];
+  }
+
+  // Question 7: Usage duration
+  const q7 = getAnswer(7);
+  if (q7) {
+    result.brandUsageDuration = typeof q7.answerText === 'string' ? q7.answerText : q7.answerText[0];
+  }
+
+  // Question 8: Brand usage locations (multi-select)
+  const q8 = getAnswer(8);
+  if (q8) {
+    result.brandUsageLocations = Array.isArray(q8.answerText)
+      ? q8.answerText.join(', ')
+      : q8.answerText;
+  }
+
+  // Question 9: Expansion plans (new question)
+  const q9 = getAnswer(9);
+  if (q9) {
+    result.expansionPlans = typeof q9.answerText === 'string' ? q9.answerText : q9.answerText[0];
+  }
+
+  // Question 10: Branding investments (multi-select)
+  const q10 = getAnswer(10);
+  if (q10) {
+    result.brandingInvestments = Array.isArray(q10.answerText)
+      ? q10.answerText.join(', ')
+      : q10.answerText;
+  }
+
+  // Question 11: Received confusion
+  const q11 = getAnswer(11);
+  if (q11) {
+    result.receivedConfusion = typeof q11.answerText === 'string' ? q11.answerText : q11.answerText[0];
+  }
+
+  // Question 12: Different from legal name
+  const q12 = getAnswer(12);
+  if (q12) {
+    result.differentFromLegalName = typeof q12.answerText === 'string' ? q12.answerText : q12.answerText[0];
+  }
+
+  // Question 13: Worked with lawyer (optional)
+  const q13 = getAnswer(13);
+  if (q13) {
+    result.workedWithLawyer = typeof q13.answerText === 'string' ? q13.answerText : q13.answerText[0];
+  }
+
+  // Merge with defaults from extractAnswerDetails if missing
+  const defaults = extractAnswerDetails(undefined);
+  return { ...defaults, ...result };
+}
+
+// Helper function to generate verdict text based on risk level
+function generateVerdict(riskLevel: string, score: number): string {
+  if (riskLevel.includes('HIGH')) {
+    return `Based on your responses, your brand shows high trademark risk. Immediate action is recommended before investing further in branding or expansion to avoid potential conflicts and forced rebranding.`;
+  } else if (riskLevel.includes('MODERATE')) {
+    return `Based on your responses, your brand shows moderate trademark risk. Additional protection is recommended before expansion or major brand investment to minimize potential conflicts.`;
+  } else {
+    return `Based on your responses, your brand shows low immediate trademark risk, but additional protection is recommended before expansion or major brand investment.`;
+  }
+}
+
+// Helper function to generate translation text
+function generateTranslationText(riskLevel: string, score: number): string {
+  if (riskLevel.includes('HIGH')) {
+    return `These factors indicate a higher likelihood of trademark conflicts. Immediate action is recommended to protect your brand and avoid costly rebranding.`;
+  } else if (riskLevel.includes('MODERATE')) {
+    return `These factors don't indicate a current conflict, but they increase exposure as your brand grows. Proactive protection is advised.`;
+  } else {
+    return `These factors don't indicate a current conflict, but they increase exposure as your brand grows. Monitoring and additional protection are recommended.`;
+  }
+}
 
 // ============================================
 // Document Generation API Endpoints

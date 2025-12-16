@@ -1067,7 +1067,7 @@ const DashboardShowcase: React.FC = () => {
                             <CheckCircle2 className="w-3 h-3" />
                           </div>
                           <div className="step-content-mobile flex-1 min-w-0">
-                            <div className="step-name-mobile text-xs font-medium text-slate-900">Analyze Existing Risks</div>
+                            <div className="step-name-mobile text-xs font-medium text-slate-900">Upload and Analyze Your Current Documents</div>
                             <div className="step-status-mobile text-[9px] font-semibold text-emerald-600">COMPLETED</div>
                           </div>
                           <button className="step-btn-mobile text-[10px] py-1.5 px-2.5 rounded-md border border-slate-200 cursor-pointer flex-shrink-0 bg-transparent text-slate-500">Review</button>
@@ -1332,8 +1332,8 @@ const DashboardShowcase: React.FC = () => {
                               <CheckCircle2 className="w-4 h-4" />
                             </div>
                             <div className="step-content">
-                              <div className="step-name">Analyze Existing Risks</div>
-                              <div className="step-desc">Review old waivers or contracts for loopholes.</div>
+                              <div className="step-name">Upload and Analyze Your Current Documents</div>
+                              <div className="step-desc">Upload your existing waivers or contracts and have them analyzed for loopholes.</div>
                             </div>
                             <span className="step-status">COMPLETED</span>
                             <button className="btn-outline">Review Again</button>
@@ -1375,10 +1375,6 @@ const DashboardShowcase: React.FC = () => {
                         </div>
                         <div className="doc-actions">
                           <button className="btn-generate">Generate Personalized</button>
-                          <button className="btn-download">
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                            Download
-                          </button>
                         </div>
                       </div>
 
@@ -1395,10 +1391,6 @@ const DashboardShowcase: React.FC = () => {
                         </div>
                         <div className="doc-actions">
                           <button className="btn-generate">Generate Personalized</button>
-                          <button className="btn-download">
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                            Download
-                          </button>
                         </div>
                       </div>
 

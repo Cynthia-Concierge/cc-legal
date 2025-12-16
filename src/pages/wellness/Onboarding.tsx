@@ -5,6 +5,16 @@ import { ProgressBar } from '../../components/wellness/ui/ProgressBar';
 import { QuestionCard } from '../../components/wellness/onboarding/QuestionCard';
 import { ShieldCheck, Mail, Globe, Upload, Download, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../components/ui/use-toast';
+import { RecommendationSummary } from '../../components/wellness/onboarding/RecommendationSummary';
+import { IdentityForm } from '../../components/wellness/onboarding/IdentityForm';
+import { ContactDetailsForm } from '../../components/wellness/onboarding/ContactDetailsForm';
+import { CustomizationTransition } from '../../components/wellness/onboarding/CustomizationTransition';
+import { WebsiteInputForm } from '../../components/wellness/onboarding/WebsiteInputForm';
+import { ReviewProgressCard } from '../../components/wellness/onboarding/ReviewProgressCard';
+import { GeneratedDocumentsCard } from '../../components/wellness/onboarding/GeneratedDocumentsCard';
+import { LawyerBookingCard } from '../../components/wellness/onboarding/LawyerBookingCard';
+import { getRecommendedDocuments } from '../../lib/wellness/documentEngine';
 
 const INITIAL_ANSWERS: UserAnswers = {
   services: [],
@@ -12,10 +22,14 @@ const INITIAL_ANSWERS: UserAnswers = {
   collectsOnline: true,
   hiresStaff: true,
   isOffsiteOrInternational: true,
+  hasEmployees: true,
+  sellsProducts: true,
+  usesPhotos: true,
 };
 
 export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [searchParams] = useSearchParams();
   // Initialize step to 1 if skipWelcome is true, otherwise 0
   // Check URL directly to avoid hook dependency in initializer
@@ -36,6 +50,134 @@ export const Onboarding: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false); // For users who already have a password but want to change it
+
+  // Auto-advance state
+  const [hasAutoSubmittedEmail, setHasAutoSubmittedEmail] = useState(false);
+
+  // Track Lead pixel event if eventId is provided (redundancy/fail-safe)
+  useEffect(() => {
+    const eventId = searchParams.get('eventId');
+    if (eventId && typeof window !== 'undefined' && (window as any).fbq) {
+      console.log('[Onboarding] Tracking Lead with eventId:', eventId);
+      (window as any).fbq('track', 'Lead', {
+        content_name: 'Flow Continuation',
+        content_category: 'Lead Generation'
+      }, {
+        eventID: eventId
+      });
+    }
+  }, [searchParams]);
+
+  // Helper function to create business profile (called both when password is set and when skipped)
+  const createBusinessProfile = async (user: any) => {
+    if (!user) {
+      console.warn('⚠️ No user provided to createBusinessProfile');
+      return;
+    }
+
+    try {
+      console.log('🏢 Creating initial Business Profile with onboarding data...');
+
+      // Map Primary Business Type to Profile Business Type
+      let mappedBusinessType = answers.businessType || '';
+      if (!mappedBusinessType && answers.primaryBusinessType) {
+        switch (answers.primaryBusinessType) {
+          case 'Yoga': mappedBusinessType = 'Yoga Studio'; break;
+          case 'Pilates': mappedBusinessType = 'Pilates Studio'; break;
+          case 'Gym': mappedBusinessType = 'Gym / Fitness Studio'; break;
+          case 'Retreats': mappedBusinessType = 'Retreat Leader'; break;
+          case 'Coaching': mappedBusinessType = 'Online Coach'; break;
+          case 'Breathwork': mappedBusinessType = 'Breathwork / Meditation'; break;
+        }
+      }
+
+      // Synthesize boolean flags for Profile synchronization
+      const derivedHostsRetreats = !!(
+        answers.hostsRetreats ||
+        answers.services?.includes('Retreats or workshops') ||
+        answers.isOffsiteOrInternational ||
+        answers.primaryBusinessType === 'Retreats'
+      );
+
+      const derivedOffersOnline = !!(
+        answers.offersOnlineCourses ||
+        answers.services?.includes('Online coaching / digital programs') ||
+        answers.primaryBusinessType === 'Coaching'
+      );
+
+      // PREPARE DATA PAYLOAD
+      const profilePayload = {
+        user_id: user.id,
+        website_url: answers.website || '',
+
+        // If they have a website URL at this stage, they passed the scan step
+        has_scanned_website: !!(answers.website && answers.website.length > 3),
+        website_scan_completed_at: answers.website ? new Date().toISOString() : null,
+
+        business_type: mappedBusinessType,
+        // Map boolean flags
+        has_physical_movement: answers.hasPhysicalMovement,
+        collects_online: answers.collectsOnline,
+        hires_staff: answers.hiresStaff,
+        is_offsite_or_international: answers.isOffsiteOrInternational,
+
+        // Profile Section Boolean Sync
+        hosts_retreats: derivedHostsRetreats,
+        offers_online_courses: derivedOffersOnline,
+        uses_photos: answers.usesPhotos || false,
+
+        // Map arrays/new fields
+        services: answers.services || [],
+        has_w2_employees: answers.hasEmployees || false,
+        sells_products: answers.sellsProducts || false,
+
+        // Legal Entity & Contact Info
+        business_name: answers.legalEntityName || answers.businessName || '', // Auto-fill business name from legal entity
+        legal_entity_name: answers.legalEntityName || '',
+        entity_type: answers.entityType || '',
+        state: answers.state || '',
+        business_address: answers.businessAddress || '',
+        owner_name: answers.ownerName || '',
+        phone: answers.phone || '',
+
+        updated_at: new Date().toISOString()
+      };
+
+      // BACKUP: Save to localStorage in case DB write fails or race condition
+      try {
+        localStorage.setItem('pending_business_profile', JSON.stringify(profilePayload));
+        console.log('💾 Backup profile data saved to localStorage');
+      } catch (e) {
+        console.warn('Failed to save backup profile to localStorage', e);
+      }
+
+      if (supabase) {
+        const { error: profileError } = await supabase
+          .from('business_profiles')
+          .upsert(profilePayload, {
+            onConflict: 'user_id'
+          });
+
+        if (profileError) {
+          console.error('❌ Error creating initial business profile:', profileError);
+          // We don't block navigation, relying on the localStorage backup
+        } else {
+          console.log('✅ Initial Business Profile created successfully');
+
+          // If they scanned, also save progress to localStorage for Dashboard strictly
+          if (answers.website) {
+            const progress = {
+              hasScannedWebsite: true,
+              hasCompletedContractReview: false,
+            };
+            localStorage.setItem('wellness_onboarding_progress', JSON.stringify(progress));
+          }
+        }
+      }
+    } catch (profileErr) {
+      console.error('❌ Exception creating business profile:', profileErr);
+    }
+  };
 
   const handlePasswordSubmit = async () => {
     // If not updating and already has password, just continue
@@ -84,9 +226,9 @@ export const Onboarding: React.FC = () => {
             try {
               console.log('👤 Adding user to users table...');
               const userName = user.user_metadata?.name ||
-                               user.user_metadata?.full_name ||
-                               user.email?.split('@')[0] ||
-                               'User';
+                user.user_metadata?.full_name ||
+                user.email?.split('@')[0] ||
+                'User';
 
               console.log('📝 Attempting upsert with data:', {
                 user_id: user.id,
@@ -118,50 +260,29 @@ export const Onboarding: React.FC = () => {
                   code: userTableError.code
                 });
                 console.log('⚠️ Note: Database trigger should still add user to users table as fallback');
-                // Show error to user via toast
-                alert(`Warning: User account created but profile setup incomplete. Error: ${userTableError.message}. Please contact support if issues persist.`);
+                toast({
+                  variant: "destructive",
+                  title: "Profile setup incomplete",
+                  description: "Your account was created, but we couldn't finish setting up your profile. Please contact support if this continues.",
+                });
               } else {
                 console.log('✅ User added to users table successfully', insertData);
-              }
 
-              // Send welcome email when user sets password (regardless of application-level insert success)
-              // The database trigger ensures the user is added to the table even if app-level insert fails
-              if (user.email) {
-                console.log('📧 Triggering welcome email after password creation...');
-                fetch('/api/emails/welcome', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    email: user.email,
-                    name: userName || user.email.split('@')[0]
-                  })
-                }).catch(err => console.error('❌ Welcome email error:', err));
+                // Send welcome email when user sets password
+                if (user.email) {
+                  console.log('📧 Triggering welcome email after password creation...');
+                  fetch('/api/emails/welcome', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      email: user.email,
+                      name: userName || user.email.split('@')[0]
+                    })
+                  }).catch(err => console.error('❌ Welcome email error:', err));
+                }
               }
             } catch (userTableErr) {
-              console.error('❌ CRITICAL: Exception in users table insertion:', {
-                error: userTableErr,
-                message: userTableErr instanceof Error ? userTableErr.message : String(userTableErr),
-                stack: userTableErr instanceof Error ? userTableErr.stack : undefined
-              });
-              console.log('⚠️ Note: Database trigger should still add user to users table as fallback');
-              alert(`Warning: An error occurred while setting up your profile. Please contact support. Error: ${userTableErr instanceof Error ? userTableErr.message : String(userTableErr)}`);
-
-              // Still send welcome email - the database trigger should have added the user
-              const userName = user.user_metadata?.name ||
-                               user.user_metadata?.full_name ||
-                               user.email?.split('@')[0] ||
-                               'User';
-              if (user.email) {
-                console.log('📧 Triggering welcome email after password creation (despite error)...');
-                fetch('/api/emails/welcome', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    email: user.email,
-                    name: userName
-                  })
-                }).catch(err => console.error('❌ Welcome email error:', err));
-              }
+              console.error('❌ CRITICAL: Exception in users table insertion:', userTableErr);
             }
 
             // 2. Link contact record to user when password is created
@@ -177,25 +298,33 @@ export const Onboarding: React.FC = () => {
 
                 if (contactError) {
                   console.error('Error linking contact to user:', contactError);
-                  // Continue anyway - not critical if contact doesn't exist
                 } else {
                   console.log('✅ Linked contact record to user:', user.id);
                 }
               } catch (contactErr) {
                 console.error('Error updating contact:', contactErr);
-                // Continue anyway
               }
             }
 
-            // 4. Business profile will be created when user saves their business profile
-            // (No longer creating empty business profile here - only when they actually fill it out)
-          }
+            // 3. CREATE BUSINESS PROFILE IMMEDIATELY
+            // Ensure all onboarding data (including website scan) is persisted so the Dashboard is ready.
+            await createBusinessProfile(user);
+
+            // Navigate to Dashboard as this is now the final step
+            navigate('/wellness/dashboard');
+
+          } // Close if (user)
         } catch (postUpdateErr) {
           console.error('❌ Error in post-password operations:', postUpdateErr);
         }
 
-        // Success
-        navigate('/wellness/dashboard');
+        // Create Business Profile even for existing users if it doesn't exist?
+        // Actually, createBusinessProfile is safest to run to ensure sync
+        // But if they are just logging in, maybe we shouldn't overwrite?
+        // For onboarding context, we assume we want to save their current answers.
+
+        // Success - Move to Review Card (Step 17)
+        setStep(17);
       } catch (err: any) {
         console.error('Error setting password:', err);
         setPasswordError(err.message || 'Failed to update password');
@@ -204,6 +333,32 @@ export const Onboarding: React.FC = () => {
       }
     } else {
       // Fallback if no supabase
+      navigate('/wellness/dashboard');
+    }
+  };
+
+  // Handler for when user skips password creation
+  const handleSkipPassword = async () => {
+    setIsSubmitting(true);
+
+    try {
+      // Get current user (should have temp password from email step)
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          console.log('⏭️ User skipping password, saving business profile anyway...');
+          // Create business profile even though they skipped password
+          await createBusinessProfile(user);
+        } else {
+          console.warn('⚠️ No user found when skipping password');
+        }
+      }
+    } catch (err) {
+      console.error('Error handling skip:', err);
+    } finally {
+      setIsSubmitting(false);
+      // Move to Dashboard (Final Step)
       navigate('/wellness/dashboard');
     }
   };
@@ -345,9 +500,40 @@ export const Onboarding: React.FC = () => {
     }
   }, [answers, isCheckingExistingUser]);
 
+  // Auto-submit email if provided in session or URL (and skipping welcome)
+  // This must be AFTER the initial checkExistingUser effect which populates emailInput
+  useEffect(() => {
+    // Wait for checking existing user to finish
+    if (isCheckingExistingUser) return;
+
+    // Only if we are on step 1 (Email)
+    // We check step === 1 because skipWelcome=true sets initial step to 1
+    if (step === 1 && !hasAutoSubmittedEmail && !isSubmitting) {
+      // Check for email
+      const email = emailInput || answers.email || searchParams.get('email');
+
+      const shouldAutoSubmit =
+        searchParams.get('skipWelcome') === 'true' &&
+        email &&
+        email.includes('@') &&
+        email.length > 5;
+
+      if (shouldAutoSubmit) {
+        console.log('[Onboarding] Auto-submitting email step for:', email);
+        setHasAutoSubmittedEmail(true);
+        // Call submit handler
+        handleEmailSubmit(email);
+      }
+    }
+  }, [step, emailInput, answers.email, searchParams, isCheckingExistingUser, hasAutoSubmittedEmail, isSubmitting]);
+
   const handleEmailSubmit = async (email: string) => {
     if (!email || !email.includes('@')) {
-      alert('Please enter a valid email address');
+      toast({
+        variant: "destructive",
+        title: "Invalid email",
+        description: "Please enter a valid email address to continue.",
+      });
       setIsSubmitting(false);
       return;
     }
@@ -436,27 +622,15 @@ export const Onboarding: React.FC = () => {
               }
             }
 
-            // NOTE: Business profiles are NOT created here during onboarding
-            // They are only created when the user actually saves their business profile
-            // with a business name on the Business Profile page (BusinessProfile.tsx)
-            // This prevents incomplete profiles from being created prematurely and
-            // showing up in GoHighLevel with generic/default names
+            // NOTE: Business profiles are NOT created here during onboarding (Status: Step 1)
+            // We wait until they complete all questions and set a password (Step 13)
 
-            // Other error - log it but continue
-            console.error('Error details:', {
-              message: error.message,
-              status: error.status
-            });
-            // Continue anyway - we'll try to create user on Business Profile page
           }
         } else if (data.user) {
           console.log('✅ User created successfully:', data.user.id);
           console.log('📧 Email confirmation required:', data.user.email_confirmed_at ? 'No' : 'Yes');
 
-          // Email sending moved to Password Creation step (handlePasswordSubmit)
-          // to ensure user has actually set a password before we welcome them.
-
-          // User created - try to auto-sign in (may require email confirmation depending on Supabase settings)
+          // User created - try to auto-sign in
           try {
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
               email: trimmedEmail,
@@ -464,7 +638,6 @@ export const Onboarding: React.FC = () => {
             });
 
             if (signInError) {
-              // May require email confirmation - that's okay, user can set password on profile page
               console.log('ℹ️ Auto-signin requires email confirmation:', signInError.message);
             } else if (signInData.user) {
               console.log('✅ Auto-signed in new user:', signInData.user.id);
@@ -475,16 +648,9 @@ export const Onboarding: React.FC = () => {
         } else {
           console.warn('⚠️ No user data returned from signUp');
         }
-      } catch (err: any) {
-        console.error('❌ Error in user creation:', err);
-        console.error('Error details:', {
-          message: err.message,
-          stack: err.stack
-        });
-        // Continue anyway - user can set password on Business Profile
+      } catch (err) {
+        console.error('Error in email submit:', err);
       }
-    } else {
-      console.warn('⚠️ Supabase not configured - user will not be created in Supabase');
     }
 
     setIsSubmitting(false);
@@ -496,13 +662,19 @@ export const Onboarding: React.FC = () => {
     // Step 0: Welcome
     // Step 1: Email collection (handled separately)
     // Steps 2-7: Questions (6 questions)
+    // Step 8: Recommendation Summary
+    // Step 9: Identity Form (Step A)
+    // Step 10: Contact Details Form (Step B)
+    // Step 11: Confirmation / Transition (Step C)
+    // Step 12: Website Input Form
+    // Step 13: Password Creation
     if (step === 0) {
       // Move to email collection
       setStep(1);
-    } else if (step < 8) { // 1 is email, 2-7 are questions, 8 is password
+    } else if (step < 19) {
       setStep(step + 1);
     } else {
-      // Finished - go directly to dashboard (Business Profile is optional and can be accessed later)
+      // Finished - go directly to dashboard
       navigate('/wellness/dashboard');
     }
   };
@@ -576,59 +748,194 @@ export const Onboarding: React.FC = () => {
             <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center mx-auto">
               <Mail size={24} />
             </div>
-            <h2 className="text-2xl font-semibold text-slate-900">Let's Get Started</h2>
-            <p className="text-slate-600">Enter your email to begin your assessment</p>
+            <h2 className="text-2xl font-semibold text-slate-900">
+              {hasAutoSubmittedEmail ? 'Setting Up Your Profile...' : "Answer 5 Quick Questions"}
+            </h2>
+            <p className="text-slate-600">
+              {hasAutoSubmittedEmail ? 'Please wait while we prepare your questions.' : (
+                <>
+                  We’ll instantly tell you what legal documents your business is missing.
+                  <div className="mt-1 text-slate-500 text-sm">Takes ~45 seconds.</div>
+                </>
+              )}
+            </p>
           </div>
 
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && emailInput) {
-                      setIsSubmitting(true);
-                      handleEmailSubmit(emailInput);
-                    }
+
+
+          {!hasAutoSubmittedEmail ? (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Email address (to save your results)
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && emailInput) {
+                        setIsSubmitting(true);
+                        handleEmailSubmit(emailInput);
+                      }
+                    }}
+                    autoFocus
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    setIsSubmitting(true);
+                    handleEmailSubmit(emailInput);
                   }}
-                  autoFocus
-                />
+                  disabled={!emailInput || isSubmitting}
+                  className="w-full h-12 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Creating account...' : 'Start the 45-Second Assessment'}
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setIsSubmitting(true);
-                  handleEmailSubmit(emailInput);
-                }}
-                disabled={!emailInput || isSubmitting}
-                className="w-full h-12 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Creating account...' : 'Continue'}
-              </button>
             </div>
-          </div>
+          ) : (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-200 flex justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div>
+            </div>
+          )}
         </div>
+      </div >
+    );
+  }
+
+  // Steps 2-10: Questions (9 questions)
+  // Step 11: Recommendation Summary
+  // Step 12: Legal Entity Form
+  // Step 13: Contact Details
+  // Step 14: Transition
+  // Step 15: Website
+  // Step 16: Password Creation
+
+  // We need to render the password step distinct from renderQuestion because it's not a QuestionCard
+
+  // Step 11: Recommendation Summary
+  if (step === 11) {
+    const { advancedTemplates } = getRecommendedDocuments(answers);
+
+    // Sort logic: Core (Waiver, Terms) first
+    const priorities = ['template-1', 'template-2', 'template-3'];
+    const sorted = [...advancedTemplates].sort((a, b) => {
+      const aP = priorities.includes(a.id) ? 1 : 0;
+      const bP = priorities.includes(b.id) ? 1 : 0;
+      return bP - aP;
+    });
+
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <RecommendationSummary
+          recommendations={sorted}
+          onContinue={nextStep}
+        />
       </div>
     );
   }
 
-  // Steps 2-9: Questions (8 questions)
-  // Step 8 (index 6): W-2 (Unused) -> we want to skip or ensure we reach renders
-  // Actually, let's redefine the flow:
-  // Step 2-7 are the 6 visible questions.
-  // Step 8 is the Password Step.
+  // Step 12: Identity Form (Step A)
+  if (step === 12) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <IdentityForm
+          answers={answers}
+          onUpdate={updateAnswer}
+          onNext={nextStep}
+          onBack={() => setStep(step - 1)}
+        />
+      </div>
+    );
+  }
 
-  // We need to render the password step distinct from renderQuestion because it's not a QuestionCard
+  // Step 13: Contact Details Form (Step B)
+  if (step === 13) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <ContactDetailsForm
+          answers={answers}
+          onUpdate={updateAnswer}
+          onNext={nextStep}
+          onBack={() => setStep(step - 1)}
+        />
+      </div>
+    );
+  }
 
-  // Step 8: Password Creation
-  // Step 8: Password Creation
-  if (step === 8) {
+  // Step 14: Confirmation / Transition (Step C)
+  if (step === 14) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <CustomizationTransition
+          onNext={nextStep}
+        />
+      </div>
+    );
+  }
+
+  // Step 15: Website Input Form
+  if (step === 15) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <WebsiteInputForm
+          answers={answers}
+          onUpdate={updateAnswer}
+          onNext={nextStep}
+          onBack={() => setStep(step - 1)}
+        />
+      </div>
+    );
+  }
+
+  // Step 16: Review Progress / Final Card
+  if (step === 16) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <ReviewProgressCard
+          answers={answers}
+          onContinue={() => setStep(17)}
+        />
+      </div>
+    );
+  }
+
+  // Step 17: Generated Documents Breakdown
+  if (step === 17) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <GeneratedDocumentsCard
+          answers={answers}
+          onContinue={() => setStep(18)}
+          onSkip={() => setStep(19)}
+          onGenerate={() => {
+            toast({
+              title: "Documents Preparing...",
+              description: "Your custom documents are being prepared and will be ready in your dashboard.",
+            });
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Step 18: Lawyer Booking
+  if (step === 18) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <LawyerBookingCard
+          onComplete={() => setStep(19)}
+        />
+      </div>
+    );
+  }
+
+  // Step 19: Password Creation (Moved to end)
+  if (step === 19) {
     const showPasswordForm = isTempPassword || isUpdatingPassword;
 
     return (
@@ -733,10 +1040,11 @@ export const Onboarding: React.FC = () => {
 
               {isTempPassword && (
                 <button
-                  onClick={() => navigate('/wellness/dashboard')}
-                  className="w-full py-2 text-sm text-slate-500 hover:text-slate-700 font-medium"
+                  onClick={handleSkipPassword}
+                  disabled={isSubmitting}
+                  className="w-full py-2 text-sm text-slate-500 hover:text-slate-700 font-medium disabled:opacity-50"
                 >
-                  Skip for now
+                  {isSubmitting ? 'Saving...' : 'Skip for now'}
                 </button>
               )}
             </div>
@@ -746,8 +1054,6 @@ export const Onboarding: React.FC = () => {
     );
   }
 
-  // Steps 2-9: Questions (8 questions)
-  // Step 8 is Password Creation (handled above)
   const currentQuestionIndex = step - 2; // Adjust for email step
 
   const renderQuestion = () => {
@@ -848,7 +1154,20 @@ export const Onboarding: React.FC = () => {
             onAnswer={(val) => updateAnswer('sellsProducts', val)}
             onNext={nextStep}
             onBack={() => setStep(step - 1)}
-            isLast={false}
+          />
+        );
+      case 8:
+        return (
+          <QuestionCard
+            question="Do you use client photos or videos?"
+            subtext="For social media, website, or marketing."
+            type="single"
+            options={['Yes', 'No']}
+            selected={answers.usesPhotos}
+            onAnswer={(val) => updateAnswer('usesPhotos', val)}
+            onNext={nextStep}
+            onBack={() => setStep(step - 1)}
+            isLast={true}
           />
         );
       default:
@@ -859,11 +1178,23 @@ export const Onboarding: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center pt-12 p-4">
       <div className="w-full max-w-lg mb-8">
-        <div className="flex justify-between text-xs font-semibold uppercase text-slate-400 mb-2">
-          <span>Question {step - 1} of 6</span>
-          <span>{Math.round(((step - 1) / 6) * 100)}% Complete</span>
-        </div>
-        <ProgressBar current={step - 1} total={6} />
+        {currentQuestionIndex === 0 ? (
+          <div className="text-center mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Answer 9 Quick Questions</h2>
+            <p className="text-slate-600 leading-relaxed">
+              We’ll instantly tell you what legal documents your business is missing.
+              <span className="block mt-1 text-sm font-medium text-emerald-600">Takes ~45 seconds.</span>
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-between text-xs font-semibold uppercase text-slate-400 mb-2">
+              <span>Question {step - 1} of 9</span>
+              <span>{Math.round(((step - 1) / 9) * 100)}% Complete</span>
+            </div>
+            <ProgressBar current={step - 1} total={9} />
+          </>
+        )}
       </div>
       {renderQuestion()}
     </div>
