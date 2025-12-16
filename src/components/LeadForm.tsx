@@ -165,12 +165,12 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
 
           <div className="group">
             <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide group-focus-within:text-emerald-600 transition-colors">Phone Number*</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 overflow-hidden">
               <select
                 value={countryCode}
                 onChange={handleCountryCodeChange}
                 className={`px-3 py-3.5 rounded-lg border ${phoneError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-emerald-500"
-                  } focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 font-medium text-sm cursor-pointer`}
+                  } focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 font-medium text-sm cursor-pointer flex-shrink-0`}
                 style={{ minWidth: "100px" }}
               >
                 {COUNTRY_CODES.map((country) => (
@@ -187,8 +187,23 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
                 onChange={handlePhoneChange}
                 placeholder={countryCode === "+1" ? "(555) 123-4567" : "Enter phone number"}
                 maxLength={countryCode === "+1" ? 14 : 20}
-                className={`flex-1 px-4 py-3.5 rounded-lg border ${phoneError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-emerald-500"
+                className={`flex-1 min-w-0 px-4 py-3.5 rounded-lg border ${phoneError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-emerald-500"
                   } focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 placeholder:text-slate-400`}
+                style={{ 
+                  textAlign: 'left',
+                  direction: 'ltr'
+                }}
+                onFocus={(e) => {
+                  // Prevent horizontal scrolling by scrolling the input to the start
+                  const input = e.target;
+                  input.scrollLeft = 0;
+                  // Position cursor at end to prevent any scroll behavior
+                  if (input.value) {
+                    setTimeout(() => {
+                      input.setSelectionRange(input.value.length, input.value.length);
+                    }, 0);
+                  }
+                }}
               />
             </div>
             {phoneError && (

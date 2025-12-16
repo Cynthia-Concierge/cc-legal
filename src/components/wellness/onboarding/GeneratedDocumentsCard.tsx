@@ -83,8 +83,8 @@ export const GeneratedDocumentsCard: React.FC<GeneratedDocumentsCardProps> = ({
     }, []);
 
     return (
-        <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Card className="bg-white shadow-xl border-slate-100 overflow-hidden">
+        <div className="w-full max-w-md mx-auto flex flex-col min-h-[calc(100vh-100px)] md:min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Card className="bg-white shadow-xl border-slate-100 overflow-hidden flex-1 flex flex-col md:flex-none">
                 <div className="bg-emerald-50 p-6 border-b border-emerald-100 text-center">
                     <div className="w-16 h-16 bg-white text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-emerald-100">
                         <CheckCircle2 size={32} />
@@ -94,7 +94,7 @@ export const GeneratedDocumentsCard: React.FC<GeneratedDocumentsCardProps> = ({
                     </h2>
                 </div>
 
-                <CardContent className="p-8 space-y-8">
+                <CardContent className="p-8 space-y-8 flex-1 pb-24 md:pb-8">
                     <div className="space-y-6">
                         <p className="text-lg text-slate-600 leading-relaxed text-center">
                             Of your <span className="font-bold text-slate-900">{stats.total} documents</span>, <span className="font-bold text-emerald-600">{stats.freeCount} of them</span> have been fully and perfectly customized for you.
@@ -124,29 +124,32 @@ export const GeneratedDocumentsCard: React.FC<GeneratedDocumentsCardProps> = ({
                             </div>
                         </div>
                     </div>
-
-                    <div className="space-y-3">
-                        <Button
-                            fullWidth
-                            size="lg"
-                            onClick={onContinue}
-                            className="bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200"
-                        >
-                            Get Lawyer Review
-                            <ArrowRight className="ml-2 h-5 w-5" />
-                        </Button>
-
-                        {onSkip && (
-                            <button
-                                onClick={onSkip}
-                                className="w-full text-xs text-slate-400 hover:text-slate-600 font-medium py-2 transition-colors"
-                            >
-                                Skip
-                            </button>
-                        )}
-                    </div>
                 </CardContent>
             </Card>
+            
+            {/* Sticky button bar on mobile */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-lg md:relative md:border-t-0 md:shadow-none md:p-0 md:bg-transparent z-40">
+                <div className="max-w-md mx-auto space-y-3">
+                    <Button
+                        fullWidth
+                        size="lg"
+                        onClick={onContinue}
+                        className="bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200"
+                    >
+                        Get Lawyer Review
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+
+                    {onSkip && (
+                        <button
+                            onClick={onSkip}
+                            className="w-full text-xs text-slate-400 hover:text-slate-600 font-medium py-2 transition-colors"
+                        >
+                            Skip
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
     );
 };

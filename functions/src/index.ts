@@ -1639,7 +1639,7 @@ Keep it brief and practical. Focus on the most important problems.`;
               'trademark_risk_report',
               reportData
             );
-            console.log('[Trademark] PDF generated successfully, size:', pdfBuffer.length);
+            console.log('[Trademark] PDF generated successfully, size:', pdfBuffer?.length || 0);
           } catch (pdfError: any) {
             console.error('[Trademark] Error generating PDF:', pdfError);
             // Continue without PDF - email will still be sent
@@ -1778,6 +1778,7 @@ Keep it brief and practical. Focus on the most important problems.`;
 
           // Send PDF
           res.send(pdfBuffer);
+          return;
         } catch (error: any) {
           console.error('[Trademark PDF Download] Error generating PDF:', error);
           return res.status(500).json({ error: error.message });

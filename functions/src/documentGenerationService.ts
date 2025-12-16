@@ -30,6 +30,25 @@ export interface BusinessProfileData {
     riskFactor2?: string;
     riskFactor3?: string;
     riskFactor4?: string;
+    // Additional trademark fields
+    verdict?: string;
+    trademarkRegistered?: string;
+    trademarkRegisteredIcon?: string;
+    expansionPlanned?: string;
+    expansionPlannedIcon?: string;
+    similarNameSearch?: string;
+    similarNameSearchIcon?: string;
+    domainOwnership?: string;
+    translationText?: string;
+    brandNameOrigin?: string;
+    includesLocation?: string;
+    brandUsageDuration?: string;
+    brandUsageLocations?: string;
+    expansionPlans?: string;
+    brandingInvestments?: string;
+    receivedConfusion?: string;
+    differentFromLegalName?: string;
+    workedWithLawyer?: string;
 }
 
 export class DocumentGenerationService {

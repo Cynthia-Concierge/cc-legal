@@ -49,53 +49,60 @@ export const RecommendationSummary: React.FC<RecommendationSummaryProps> = ({
     }, []);
 
     return (
-        <Card className="w-full max-w-lg mx-auto shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <CardHeader className="text-center space-y-2 pb-2">
-                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-2">
-                    <ShieldCheck size={28} />
-                </div>
-                <CardTitle className="text-xl md:text-2xl text-slate-900 font-bold leading-tight">
-                    Here’s What Your Business Needs to Be Protected
-                </CardTitle>
-                <p className="text-slate-600">
-                    Based on the answers you just gave us:
-                </p>
-            </CardHeader>
+        <div className="w-full max-w-lg mx-auto flex flex-col min-h-[calc(100vh-100px)] md:min-h-0">
+            <Card className="w-full shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500 flex-1 flex flex-col md:flex-none">
+                <CardHeader className="text-center space-y-2 pb-2">
+                    <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-2">
+                        <ShieldCheck size={28} />
+                    </div>
+                    <CardTitle className="text-xl md:text-2xl text-slate-900 font-bold leading-tight">
+                        Here's What Your Business Needs to Be Protected
+                    </CardTitle>
+                    <p className="text-slate-600">
+                        Based on the answers you just gave us:
+                    </p>
+                </CardHeader>
 
-            <CardContent className="space-y-6">
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
-                    {recommendations.length > 0 ? (
-                        recommendations.map((doc) => (
-                            <div key={doc.id} className="flex items-start gap-3">
-                                <div className="mt-0.5 min-w-[20px] text-emerald-600">
-                                    <CheckCircle2 size={20} />
+                <CardContent className="space-y-6 flex-1 pb-24 md:pb-6">
+                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
+                        {recommendations.length > 0 ? (
+                            recommendations.map((doc) => (
+                                <div key={doc.id} className="flex items-start gap-3">
+                                    <div className="mt-0.5 min-w-[20px] text-emerald-600">
+                                        <CheckCircle2 size={20} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-semibold text-slate-800 text-sm leading-snug">
+                                            {doc.title}
+                                        </h4>
+                                        <p className="text-xs text-slate-500 leading-snug mt-0.5">
+                                            {doc.description}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 className="font-semibold text-slate-800 text-sm leading-snug">
-                                        {doc.title}
-                                    </h4>
-                                    <p className="text-xs text-slate-500 leading-snug mt-0.5">
-                                        {doc.description}
-                                    </p>
-                                </div>
-                            </div>
-                        ))
-                    ) : (
-                        <p className="text-sm text-slate-500 text-center italic">
-                            Your standard protection package is ready.
-                        </p>
-                    )}
+                            ))
+                        ) : (
+                            <p className="text-sm text-slate-500 text-center italic">
+                                Your standard protection package is ready.
+                            </p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+            
+            {/* Sticky button bar on mobile */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-lg md:relative md:border-t-0 md:shadow-none md:p-0 md:bg-transparent z-40">
+                <div className="max-w-lg mx-auto">
+                    <Button
+                        fullWidth
+                        size="lg"
+                        onClick={onContinue}
+                        className="bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200"
+                    >
+                        Generate My Custom Documents <ArrowRight className="ml-2 w-4 h-4" />
+                    </Button>
                 </div>
-
-                <Button
-                    fullWidth
-                    size="lg"
-                    onClick={onContinue}
-                    className="bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200"
-                >
-                    Generate My Custom Documents <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 };

@@ -1176,27 +1176,32 @@ export const Onboarding: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center pt-12 p-4">
-      <div className="w-full max-w-lg mb-8">
-        {currentQuestionIndex === 0 ? (
-          <div className="text-center mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Answer 9 Quick Questions</h2>
-            <p className="text-slate-600 leading-relaxed">
-              We’ll instantly tell you what legal documents your business is missing.
-              <span className="block mt-1 text-sm font-medium text-emerald-600">Takes ~45 seconds.</span>
-            </p>
-          </div>
-        ) : (
-          <>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* Sticky progress bar on mobile */}
+      {currentQuestionIndex > 0 && (
+        <div className="sticky top-0 z-50 bg-slate-50 border-b border-slate-200 px-4 pt-4 pb-3 md:relative md:border-b-0 md:pt-12">
+          <div className="w-full max-w-lg mx-auto">
             <div className="flex justify-between text-xs font-semibold uppercase text-slate-400 mb-2">
               <span>Question {step - 1} of 9</span>
               <span>{Math.round(((step - 1) / 9) * 100)}% Complete</span>
             </div>
             <ProgressBar current={step - 1} total={9} />
-          </>
+          </div>
+        </div>
+      )}
+      
+      <div className="flex-1 flex flex-col items-center pt-4 md:pt-12 p-4">
+        {currentQuestionIndex === 0 && (
+          <div className="w-full max-w-lg text-center mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Answer 9 Quick Questions</h2>
+            <p className="text-slate-600 leading-relaxed">
+              We'll instantly tell you what legal documents your business is missing.
+              <span className="block mt-1 text-sm font-medium text-emerald-600">Takes ~45 seconds.</span>
+            </p>
+          </div>
         )}
+        {renderQuestion()}
       </div>
-      {renderQuestion()}
     </div>
   );
 };

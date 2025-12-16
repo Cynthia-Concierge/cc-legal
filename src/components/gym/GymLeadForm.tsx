@@ -167,12 +167,12 @@ const GymLeadForm: React.FC<GymLeadFormProps> = ({ onSubmit }) => {
 
                         <div className="group space-y-2">
                             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Phone Number*</label>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 overflow-hidden">
                                 <select
                                     value={countryCode}
                                     onChange={handleCountryCodeChange}
                                     className={`px-3 py-3 bg-[#0B0F19] rounded border ${phoneError ? "border-red-500 focus:border-red-500" : "border-slate-800 focus:border-blue-600"
-                                        } outline-none transition-colors text-white text-sm cursor-pointer`}
+                                        } outline-none transition-colors text-white text-sm cursor-pointer flex-shrink-0`}
                                     style={{ minWidth: "90px" }}
                                 >
                                     {COUNTRY_CODES.map((country) => (
@@ -189,8 +189,23 @@ const GymLeadForm: React.FC<GymLeadFormProps> = ({ onSubmit }) => {
                                     onChange={handlePhoneChange}
                                     placeholder={countryCode === "+1" ? "(555) 123-4567" : "Phone number"}
                                     maxLength={countryCode === "+1" ? 14 : 20}
-                                    className={`flex-1 px-4 py-3 bg-[#0B0F19] rounded border ${phoneError ? "border-red-500 focus:border-red-500" : "border-slate-800 focus:border-blue-600"
+                                    className={`flex-1 min-w-0 px-4 py-3 bg-[#0B0F19] rounded border ${phoneError ? "border-red-500 focus:border-red-500" : "border-slate-800 focus:border-blue-600"
                                         } outline-none transition-colors text-white placeholder:text-slate-600`}
+                                    style={{ 
+                                        textAlign: 'left',
+                                        direction: 'ltr'
+                                    }}
+                                    onFocus={(e) => {
+                                        // Prevent horizontal scrolling by scrolling the input to the start
+                                        const input = e.target;
+                                        input.scrollLeft = 0;
+                                        // Position cursor at end to prevent any scroll behavior
+                                        if (input.value) {
+                                            setTimeout(() => {
+                                                input.setSelectionRange(input.value.length, input.value.length);
+                                            }, 0);
+                                        }
+                                    }}
                                 />
                             </div>
                             {phoneError && (
