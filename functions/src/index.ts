@@ -43,6 +43,19 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Country detection endpoint for phone input
+app.get("/api/detect-country", (req, res) => {
+  try {
+    const { getCountryFromIP, getRealIP } = require("./utils/geoUtils");
+    const ip = getRealIP(req);
+    const country = getCountryFromIP(ip);
+    res.json({ country });
+  } catch (error) {
+    console.error("[detect-country] Error:", error);
+    res.json({ country: "US" }); // Fallback to US
+  }
+});
+
 // Debug endpoint to check environment variables (remove in production)
 app.get("/debug/env", (req, res) => {
   res.json({
@@ -543,11 +556,29 @@ async function initializeRoutes() {
             services: profile.services
           };
 
-          // Generate Documents
+          // Generate Documents & Save to Vault
           const templates = [
-            { id: 'social_media_disclaimer', name: 'Social Media Disclaimer.pdf' },
-            { id: 'media_release_form', name: 'Photo Release Form.pdf' },
-            { id: 'client_intake_form', name: 'Client Intake Form.pdf' }
+            {
+              id: 'social_media_disclaimer',
+              name: 'Social Media Disclaimer.pdf',
+              docType: 'template-6',
+              category: 'marketing',
+              title: 'Social Media Disclaimer'
+            },
+            {
+              id: 'media_release_form',
+              name: 'Photo Release Form.pdf',
+              docType: 'template-4',
+              category: 'marketing', // Checklist says 'marketing' for template-4
+              title: 'Photo / Video Release'
+            },
+            {
+              id: 'client_intake_form',
+              name: 'Client Intake Form.pdf',
+              docType: 'template-intake',
+              category: 'core',
+              title: 'Client Intake Form'
+            }
           ];
 
           const attachments = [];
@@ -556,10 +587,59 @@ async function initializeRoutes() {
             try {
               console.log(`[Onboarding Package] Generating ${tmpl.id}...`);
               const pdfBuffer = await documentGenerationService.generateDocument(tmpl.id, profileData);
+
+              // Add to email attachments
               attachments.push({
                 filename: tmpl.name,
                 content: pdfBuffer
               });
+
+              // Save to Supabase Storage & DB
+              try {
+                const fileExt = 'pdf';
+                const fileName = `${userId}/${Date.now()}-${tmpl.docType}.${fileExt}`;
+
+                // Upload to Storage
+                const { error: uploadError } = await supabaseAdmin.storage
+                  .from('wellness-documents')
+                  .upload(fileName, pdfBuffer, {
+                    contentType: 'application/pdf',
+                    upsert: true
+                  });
+
+                if (uploadError) {
+                  console.error(`[Onboarding Package] Storage upload failed for ${tmpl.id}:`, uploadError);
+                } else {
+                  // Create DB Record
+                  // Check if exists first to avoid duplicates? Or just insert new version?
+                  // Let's insert new version, Vault handles multiple docs.
+
+                  const docData = {
+                    user_id: userId,
+                    title: tmpl.title,
+                    description: 'Auto-generated during onboarding',
+                    analysis: '✅ This document was automatically generated based on your profile and is ready to use.',
+                    file_path: fileName,
+                    file_type: fileExt,
+                    category: tmpl.category,
+                    document_type: tmpl.docType,
+                    created_at: new Date().toISOString()
+                  };
+
+                  const { error: dbError } = await supabaseAdmin
+                    .from('user_documents')
+                    .insert(docData);
+
+                  if (dbError) {
+                    console.error(`[Onboarding Package] DB insert failed for ${tmpl.id}:`, dbError);
+                  } else {
+                    console.log(`[Onboarding Package] Saved ${tmpl.id} to Vault successfully.`);
+                  }
+                }
+              } catch (saveErr) {
+                console.error(`[Onboarding Package] Error saving to vault for ${tmpl.id}:`, saveErr);
+              }
+
             } catch (err) {
               console.error(`[Onboarding Package] Failed to generate ${tmpl.id}:`, err);
               // Continue with others
@@ -897,6 +977,16 @@ async function initializeRoutes() {
             });
           }
 
+          // Normalize phone number to E.164 format
+          const { normalizePhone } = require("./utils/phoneNormalization");
+          const normalizedPhone = phone ? normalizePhone(phone, 'US') : null;
+          if (phone && !normalizedPhone) {
+            return res.status(400).json({
+              success: false,
+              error: "Invalid phone number format"
+            });
+          }
+
           let normalizedWebsite = website?.trim() || "";
           if (normalizedWebsite && !normalizedWebsite.startsWith("http")) {
             normalizedWebsite = `https://${normalizedWebsite}`;
@@ -905,7 +995,7 @@ async function initializeRoutes() {
           const contactData = {
             name,
             email,
-            phone: phone || "",
+            phone: normalizedPhone || "",
             website: normalizedWebsite,
             source,
           };
@@ -932,7 +1022,7 @@ async function initializeRoutes() {
               firstName: firstName,
               lastName: lastName,
               email: email.trim().toLowerCase(),
-              phone: phone?.trim() || "",
+              phone: normalizedPhone || "",
               locationId: "7HUNbHEuRf1cXZD4hxxr",
               tags: ["ricki new funnel"],
               source: "Cynthia AI",
@@ -1023,7 +1113,7 @@ async function initializeRoutes() {
               const instantlyLeadData = {
                 first_name: firstName,
                 last_name: lastName,
-                phone: phone?.trim() || "",
+                phone: normalizedPhone || "",
                 website: normalizedWebsite || "",
                 custom_variables: {
                   // Will be updated later if workflow completes
@@ -1647,19 +1737,39 @@ Keep it brief and practical. Focus on the most important problems.`;
 
           // 2. Insert into Supabase trademark_requests
           if (user_id) {
+            const insertData: any = {
+              user_id: user_id,
+              business_name: businessName,
+              quiz_score: score,
+              risk_level: riskLevel,
+              status: 'completed' // Changed from 'pending' since we're sending the report immediately
+            };
+
+            // Add quiz answers if provided
+            if (answers && Array.isArray(answers)) {
+              insertData.quiz_answers = answers;
+            }
+
+            // Add answer details if provided
+            if (answerDetails && Array.isArray(answerDetails)) {
+              insertData.answer_details = answerDetails;
+            }
+
             const { error: dbError } = await supabaseService.client
               .from('trademark_requests')
-              .insert({
-                user_id: user_id,
-                business_name: businessName,
-                quiz_score: score,
-                risk_level: riskLevel,
-                status: 'completed' // Changed from 'pending' since we're sending the report immediately
-              });
+              .insert(insertData);
 
             if (dbError) {
-              console.error('[Trademark] Database error:', dbError);
+              console.error('[Trademark] Database insert error:', dbError);
+              console.error('[Trademark] Error details:', JSON.stringify(dbError, null, 2));
+              console.error('[Trademark] Error code:', dbError.code);
+              console.error('[Trademark] Error message:', dbError.message);
+              console.error('[Trademark] Error hint:', dbError.hint);
+              // Don't fail the request if DB insert fails - email was still sent
             } else {
+              console.log('[Trademark] Successfully saved to database');
+              console.log('[Trademark] Saved with quiz_answers:', answers ? 'Yes' : 'No');
+              console.log('[Trademark] Saved with answer_details:', answerDetails ? 'Yes' : 'No');
               // Log event: trademark_risk_report_sent (if legal_timeline table exists)
               try {
                 const { error: eventError } = await supabaseService.client
@@ -1700,10 +1810,209 @@ Keep it brief and practical. Focus on the most important problems.`;
           // 4. Send Admin Alert
           await emailService.sendAdminTrademarkAlert(email, businessName, riskLevel, score);
 
+          // 5. Add "completed IP scan" tag to GoHighLevel
+          try {
+            console.log(`[Trademark] Adding 'completed IP scan' tag to GoHighLevel for ${email}...`);
+            // Lookup contact first
+            const lookupResponse = await fetch(
+              `https://services.leadconnectorhq.com/contacts/lookup?email=${encodeURIComponent(email.trim().toLowerCase())}&locationId=7HUNbHEuRf1cXZD4hxxr`,
+              {
+                method: "GET",
+                headers: {
+                  Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+                  Version: "2021-07-28",
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+
+            if (lookupResponse.ok) {
+              const lookupData = await lookupResponse.json();
+              const contactId = lookupData.contacts?.[0]?.id || lookupData.contact?.id;
+
+              if (contactId) {
+                const existingTags = lookupData.contacts?.[0]?.tags || lookupData.contact?.tags || [];
+                const newTag = "completed IP scan";
+
+                if (!existingTags.includes(newTag)) {
+                  const updatedTags = [...existingTags, newTag];
+
+                  await fetch(
+                    `https://services.leadconnectorhq.com/contacts/${contactId}`,
+                    {
+                      method: "PUT",
+                      headers: {
+                        Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+                        Version: "2021-07-28",
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({ tags: updatedTags }),
+                    }
+                  );
+                  console.log(`[Trademark] ✅ Added 'completed IP scan' tag to contact ${contactId}`);
+                } else {
+                  console.log(`[Trademark] Contact already has 'completed IP scan' tag`);
+                }
+              }
+            } else {
+              // Contact might not exist (rare if they are logged in), but let's try to create one just in case
+              // or just log warning. They should definitely exist if they are a user.
+              console.warn(`[Trademark] GHL Contact lookup failed for ${email}, cannot add tag.`);
+            }
+          } catch (ghlError) {
+            console.error(`[Trademark] Error adding GHL tag:`, ghlError);
+            // Don't fail the request b/c of this
+          }
+
           return res.json({ success: true, message: "Risk report processed and sent" });
         } catch (error: any) {
           console.error('[Trademark] Error processing request:', error);
           return res.status(500).json({ error: error.message });
+        }
+      });
+
+      // Add GoHighLevel tag for business profile creation + sync all profile data
+      app.post("/api/add-ghl-business-profile-tag", async (req, res) => {
+        try {
+          const { email, profileData } = req.body;
+
+          if (!email) {
+            return res.status(400).json({
+              error: "email is required",
+            });
+          }
+
+          console.log("[GHL Tag] Adding 'created business profile' tag and syncing data for:", email);
+
+          // Step 1: Look up the contact in GoHighLevel by email
+          const lookupResponse = await fetch(
+            `https://services.leadconnectorhq.com/contacts/lookup?email=${encodeURIComponent(email.trim().toLowerCase())}&locationId=7HUNbHEuRf1cXZD4hxxr`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+                Version: "2021-07-28",
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (!lookupResponse.ok) {
+            const errorText = await lookupResponse.text();
+            console.error("[GHL Tag] Error looking up contact:", errorText);
+            // If contact not found, we should probably create it
+            // But for now, let's return error as the user should exist from signup
+            return res.status(404).json({
+              error: "Contact not found in GoHighLevel",
+              message: errorText,
+            });
+          }
+
+          const lookupData = await lookupResponse.json();
+          const contactId = lookupData.contacts?.[0]?.id || lookupData.contact?.id;
+
+          if (!contactId) {
+            console.error("[GHL Tag] No contact ID found in lookup response:", lookupData);
+            return res.status(404).json({
+              error: "Contact not found in GoHighLevel",
+              message: "No contact ID in response",
+            });
+          }
+
+          console.log("[GHL Tag] Found contact ID:", contactId);
+
+          // Step 2: Get the existing tags for this contact
+          const existingTags = lookupData.contacts?.[0]?.tags || lookupData.contact?.tags || [];
+          console.log("[GHL Tag] Existing tags:", existingTags);
+
+          // Step 3: Add the new tag if it doesn't already exist
+          const newTag = "created business profile";
+          const updatedTags = existingTags.includes(newTag)
+            ? existingTags
+            : [...existingTags, newTag];
+
+          // Step 4: Build custom fields from profile data
+          const customFields: any = {};
+
+          if (profileData) {
+            // Basic business info
+            if (profileData.businessName) customFields.business_name = profileData.businessName;
+            if (profileData.website) customFields.website = profileData.website;
+            if (profileData.instagram) customFields.instagram_handle = profileData.instagram;
+            if (profileData.businessType) customFields.business_type = profileData.businessType;
+
+            // Scale & operations
+            if (profileData.staffCount) customFields.team_size = profileData.staffCount;
+            if (profileData.clientCount) customFields.monthly_clients = profileData.clientCount;
+            if (profileData.primaryConcern) customFields.primary_concern = profileData.primaryConcern;
+
+            // Yes/No fields
+            if (profileData.usesPhotos !== undefined) customFields.uses_client_photos = profileData.usesPhotos ? 'Yes' : 'No';
+            if (profileData.hostsRetreats !== undefined) customFields.hosts_retreats = profileData.hostsRetreats ? 'Yes' : 'No';
+            if (profileData.offersOnlineCourses !== undefined) customFields.offers_online_courses = profileData.offersOnlineCourses ? 'Yes' : 'No';
+            if (profileData.hasEmployees !== undefined) customFields.has_w2_employees = profileData.hasEmployees ? 'Yes' : 'No';
+            if (profileData.sellsProducts !== undefined) customFields.sells_products = profileData.sellsProducts ? 'Yes' : 'No';
+
+            // Onboarding questions
+            if (profileData.services && Array.isArray(profileData.services)) {
+              customFields.services_offered = profileData.services.join(', ');
+            }
+            if (profileData.hasPhysicalMovement !== undefined) customFields.physical_movement = profileData.hasPhysicalMovement ? 'Yes' : 'No';
+            if (profileData.collectsOnline !== undefined) customFields.online_payments = profileData.collectsOnline ? 'Yes' : 'No';
+            if (profileData.hiresStaff !== undefined) customFields.hires_staff = profileData.hiresStaff ? 'Yes' : 'No';
+            if (profileData.isOffsiteOrInternational !== undefined) customFields.offsite_international = profileData.isOffsiteOrInternational ? 'Yes' : 'No';
+          }
+
+          console.log("[GHL Tag] Custom fields to update:", Object.keys(customFields).length);
+
+          // Step 5: Update the contact with tags AND custom fields
+          const updatePayload: any = {
+            tags: updatedTags,
+          };
+
+          // Only add customField if we have data
+          if (Object.keys(customFields).length > 0) {
+            updatePayload.customField = customFields;
+          }
+
+          const updateResponse = await fetch(
+            `https://services.leadconnectorhq.com/contacts/${contactId}`,
+            {
+              method: "PUT",
+              headers: {
+                Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+                Version: "2021-07-28",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(updatePayload),
+            }
+          );
+
+          if (!updateResponse.ok) {
+            const errorText = await updateResponse.text();
+            console.error("[GHL Tag] Error updating contact:", errorText);
+            return res.status(500).json({
+              error: "Failed to update contact in GoHighLevel",
+              message: errorText,
+            });
+          }
+
+          const updateResult = await updateResponse.json();
+          console.log("[GHL Tag] Successfully added 'created business profile' tag and synced custom fields");
+
+          return res.json({
+            success: true,
+            contactId,
+            tags: updatedTags,
+            customFieldsUpdated: Object.keys(customFields).length,
+            message: "Successfully updated GoHighLevel contact with profile data",
+          });
+        } catch (error: any) {
+          console.error("[GHL Tag] Error adding business profile tag:", error);
+          return res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to add GoHighLevel tag",
+          });
         }
       });
 
