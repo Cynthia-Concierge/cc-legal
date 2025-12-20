@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Zap, Lock, Shield } from 'lucide-react';
+import { PhoneInput } from './ui/phone-input';
 
 interface LeadFormProps {
   onSubmit: (formData: {
@@ -15,72 +16,18 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-// Common country codes
-const COUNTRY_CODES = [
-  { code: "+1", country: "US/CA", flag: "🇺🇸" },
-  { code: "+44", country: "UK", flag: "🇬🇧" },
-  { code: "+61", country: "AU", flag: "🇦🇺" },
-  { code: "+33", country: "FR", flag: "🇫🇷" },
-  { code: "+49", country: "DE", flag: "🇩🇪" },
-  { code: "+81", country: "JP", flag: "🇯🇵" },
-  { code: "+86", country: "CN", flag: "🇨🇳" },
-  { code: "+91", country: "IN", flag: "🇮🇳" },
-  { code: "+52", country: "MX", flag: "🇲🇽" },
-  { code: "+55", country: "BR", flag: "🇧🇷" },
-];
-
-// Phone validation function - requires 10 digits for US, or valid international format
-function isValidPhone(phone: string, countryCode: string): boolean {
-  const cleaned = phone.replace(/\D/g, "");
-  // For US/Canada (+1), require exactly 10 digits
-  if (countryCode === "+1") {
-    return cleaned.length === 10;
-  }
-  // For other countries, require at least 7 digits (minimum for most countries)
-  return cleaned.length >= 7 && cleaned.length <= 15;
-}
-
-// Format phone number as user types: (555) 123-4567 for US, or just digits for others
-function formatPhoneNumber(value: string, countryCode: string): string {
-  const cleaned = value.replace(/\D/g, "");
-  if (cleaned.length === 0) return "";
-
-  // US/Canada formatting
-  if (countryCode === "+1") {
-    if (cleaned.length <= 3) return `(${cleaned}`;
-    if (cleaned.length <= 6) return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
-    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
-  }
-
-  // For other countries, just return digits (or add spaces every 3-4 digits)
-  return cleaned;
-}
-
 const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
-  const [phoneValue, setPhoneValue] = useState("");
-  const [countryCode, setCountryCode] = useState("+1");
+  const [phone, setPhone] = useState("");
   const [emailError, setEmailError] = useState("");
   const [phoneError, setPhoneError] = useState("");
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target.value;
-    const formatted = formatPhoneNumber(input, countryCode);
-    setPhoneValue(formatted);
-    setPhoneError(""); // Clear error on input
-  };
-
-  const handleCountryCodeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newCode = e.target.value;
-    setCountryCode(newCode);
-    // Reformat phone number with new country code
-    const cleaned = phoneValue.replace(/\D/g, "");
-    const reformatted = formatPhoneNumber(cleaned, newCode);
-    setPhoneValue(reformatted);
-    setPhoneError(""); // Clear error on change
-  };
-
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEmailError(""); // Clear error on input
+  };
+
+  const handlePhoneChange = (value: string) => {
+    setPhone(value);
+    setPhoneError(""); // Clear error on input
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -88,7 +35,6 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
     const formData = new FormData(e.currentTarget);
     const name = (formData.get("name") as string).trim();
     const email = (formData.get("email") as string).trim();
-    const phoneInput = phoneValue.trim();
     const website = (formData.get("website") as string).trim();
 
     // Validate email
@@ -97,23 +43,15 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
       return;
     }
 
-    // Validate phone
-    if (!isValidPhone(phoneInput, countryCode)) {
-      if (countryCode === "+1") {
-        setPhoneError("Please enter a valid 10-digit phone number.");
-      } else {
-        setPhoneError("Please enter a valid phone number.");
-      }
+    // Validate phone (must be in E.164 format from PhoneInput)
+    if (!phone || phone.length < 10) {
+      setPhoneError("Please enter a valid phone number.");
       return;
     }
 
     // Clear any previous errors
     setEmailError("");
     setPhoneError("");
-
-    // Clean phone number (remove formatting) and prepend country code before submitting
-    const cleaned = phoneInput.replace(/\D/g, "");
-    const phone = `${countryCode}${cleaned}`;
 
     onSubmit({ name, email, phone, website });
   };
@@ -143,7 +81,7 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
               name="name"
               required
               placeholder="Your full name"
-              className="w-full px-4 py-3.5 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 placeholder:text-slate-400"
+              className="w-full px-4 py-3.5 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 text-base placeholder:text-slate-400"
             />
           </div>
 
@@ -156,7 +94,7 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
               placeholder="Your email address"
               onChange={handleEmailChange}
               className={`w-full px-4 py-3.5 rounded-lg border ${emailError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-emerald-500"
-                } focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 placeholder:text-slate-400`}
+                } focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 text-base placeholder:text-slate-400`}
             />
             {emailError && (
               <p className="mt-1.5 text-xs text-red-600">{emailError}</p>
@@ -165,50 +103,12 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
 
           <div className="group">
             <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide group-focus-within:text-emerald-600 transition-colors">Phone Number*</label>
-            <div className="flex gap-2 overflow-hidden">
-              <select
-                value={countryCode}
-                onChange={handleCountryCodeChange}
-                className={`px-3 py-3.5 rounded-lg border ${phoneError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-emerald-500"
-                  } focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 font-medium text-sm cursor-pointer flex-shrink-0`}
-                style={{ minWidth: "100px" }}
-              >
-                {COUNTRY_CODES.map((country) => (
-                  <option key={country.code} value={country.code}>
-                    {country.flag} {country.code}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="tel"
-                name="phone"
-                required
-                value={phoneValue}
-                onChange={handlePhoneChange}
-                placeholder={countryCode === "+1" ? "(555) 123-4567" : "Enter phone number"}
-                maxLength={countryCode === "+1" ? 14 : 20}
-                className={`flex-1 min-w-0 px-4 py-3.5 rounded-lg border ${phoneError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-emerald-500"
-                  } focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 placeholder:text-slate-400`}
-                style={{ 
-                  textAlign: 'left',
-                  direction: 'ltr'
-                }}
-                onFocus={(e) => {
-                  // Prevent horizontal scrolling by scrolling the input to the start
-                  const input = e.target;
-                  input.scrollLeft = 0;
-                  // Position cursor at end to prevent any scroll behavior
-                  if (input.value) {
-                    setTimeout(() => {
-                      input.setSelectionRange(input.value.length, input.value.length);
-                    }, 0);
-                  }
-                }}
-              />
-            </div>
-            {phoneError && (
-              <p className="mt-1.5 text-xs text-red-600">{phoneError}</p>
-            )}
+            <PhoneInput
+              value={phone}
+              onChange={handlePhoneChange}
+              error={phoneError}
+              className="px-4 py-3.5 bg-slate-50 focus:bg-white text-slate-900 text-base placeholder:text-slate-400"
+            />
           </div>
 
           <div className="group">
@@ -241,7 +141,7 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
                 const target = e.target as HTMLInputElement;
                 target.setCustomValidity("");
               }}
-              className="w-full px-4 py-3.5 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 placeholder:text-slate-400"
+              className="w-full px-4 py-3.5 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 text-base placeholder:text-slate-400"
             />
           </div>
 

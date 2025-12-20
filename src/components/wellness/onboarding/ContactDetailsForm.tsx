@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { ArrowRight } from 'lucide-react';
 import { UserAnswers } from '../../../types/wellness';
-import { COUNTRY_CODES, formatPhoneNumber, parsePhoneNumber } from '../../../utils/phoneUtils';
+import { PhoneInput } from '../../ui/phone-input';
 
 interface ContactDetailsFormProps {
     answers: UserAnswers;
@@ -18,31 +18,6 @@ export const ContactDetailsForm: React.FC<ContactDetailsFormProps> = ({
     onNext,
     onBack
 }) => {
-    // Initialize phone state
-    const { countryCode: initialCode, number: initialNumber } = parsePhoneNumber(answers.phone || "");
-    const [countryCode, setCountryCode] = useState(initialCode);
-    const [phoneDisplay, setPhoneDisplay] = useState(formatPhoneNumber(initialNumber, initialCode));
-
-    const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const input = e.target.value;
-        const formatted = formatPhoneNumber(input, countryCode);
-        setPhoneDisplay(formatted);
-
-        const cleaned = input.replace(/\D/g, "");
-        onUpdate('phone', `${countryCode}${cleaned}`);
-    };
-
-    const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newCode = e.target.value;
-        setCountryCode(newCode);
-
-        // Reformat existing number with new code logic
-        const cleaned = phoneDisplay.replace(/\D/g, "");
-        const formatted = formatPhoneNumber(cleaned, newCode);
-        setPhoneDisplay(formatted);
-
-        onUpdate('phone', `${newCode}${cleaned}`);
-    };
 
     return (
         <div className="w-full max-w-lg mx-auto flex flex-col min-h-[calc(100vh-100px)] md:min-h-0">
@@ -69,28 +44,11 @@ export const ContactDetailsForm: React.FC<ContactDetailsFormProps> = ({
                     {/* Phone Number */}
                     <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">Phone Number</label>
-                        <div className="flex gap-2">
-                            <select
-                                value={countryCode}
-                                onChange={handleCountryChange}
-                                className="px-3 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all bg-white text-slate-900 font-medium text-sm cursor-pointer"
-                                style={{ minWidth: "100px" }}
-                            >
-                                {COUNTRY_CODES.map((country) => (
-                                    <option key={country.code} value={country.code}>
-                                        {country.flag} {country.code}
-                                    </option>
-                                ))}
-                            </select>
-                            <input
-                                type="tel"
-                                placeholder={countryCode === "+1" ? "(555) 123-4567" : "Enter phone number"}
-                                value={phoneDisplay}
-                                onChange={handlePhoneChange}
-                                maxLength={countryCode === "+1" ? 14 : 20}
-                                className="flex-1 h-12 px-4 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all"
-                            />
-                        </div>
+                        <PhoneInput
+                            value={answers.phone || ''}
+                            onChange={(value) => onUpdate('phone', value)}
+                            className="h-12 px-4 rounded-xl border-slate-200 focus:border-brand-500 focus:ring-brand-500"
+                        />
                     </div>
 
                     {/* Business Address */}

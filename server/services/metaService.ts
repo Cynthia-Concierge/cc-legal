@@ -37,8 +37,10 @@ export class MetaService {
       const hashedEmail = userData.email
         ? await this.hashData(userData.email.toLowerCase().trim())
         : undefined;
+      // Phone should already be in E.164 format (+15551234567) from backend normalization
+      // Meta requires E.164 format with country code, so we keep it as-is
       const hashedPhone = userData.phone
-        ? await this.hashData(userData.phone.replace(/\D/g, "")) // Remove non-digits
+        ? await this.hashData(userData.phone.trim())
         : undefined;
 
       // Prepare user data object

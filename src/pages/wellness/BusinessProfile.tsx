@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserAnswers, BusinessType, StaffCount, ClientCount, PrimaryConcern, EntityType } from '../../types/wellness';
 import { Button } from '../../components/wellness/ui/Button';
+import { PhoneInput } from '../../components/ui/phone-input';
 import { ArrowLeft, Store, Users, Target, Building2, Lock, FileText, CheckCircle2, ChevronRight, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../hooks/use-toast';
@@ -1035,12 +1036,10 @@ export const BusinessProfile = () => {
                       <label className="block text-sm font-medium text-slate-700 mb-1">
                         Phone Number <span className="text-slate-400 font-normal">(Optional)</span>
                       </label>
-                      <input
-                        type="tel"
-                        placeholder="(555) 123-4567"
-                        className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                      <PhoneInput
                         value={formData.phone}
-                        onChange={(e) => handleChange('phone', e.target.value)}
+                        onChange={(value) => handleChange('phone', value)}
+                        className="px-4 py-2 rounded-lg border-slate-200 focus:ring-brand-500"
                       />
                     </div>
                   </div>

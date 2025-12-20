@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { ArrowRight } from 'lucide-react';
 import { UserAnswers, EntityType } from '../../../types/wellness';
+import { PhoneInput } from '../../ui/phone-input';
 
 interface LegalEntityFormProps {
     answers: UserAnswers;
@@ -88,12 +89,10 @@ export const LegalEntityForm: React.FC<LegalEntityFormProps> = ({
                     {/* Phone Number */}
                     <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">Phone Number (Optional)</label>
-                        <input
-                            type="tel"
-                            placeholder="(555) 123-4567"
+                        <PhoneInput
                             value={answers.phone || ''}
-                            onChange={(e) => onUpdate('phone', e.target.value)}
-                            className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all"
+                            onChange={(value) => onUpdate('phone', value)}
+                            className="h-12 px-4 rounded-xl border-slate-200 focus:border-brand-500 focus:ring-brand-500"
                         />
                     </div>
 

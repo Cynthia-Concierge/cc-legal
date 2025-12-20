@@ -24,6 +24,8 @@ import { OnboardingPipeline } from "./services/onboardingPipeline.js";
 import { WidgetService } from "./services/widgetService.js";
 import { BookingService } from "./services/bookingService.js";
 import { MetaService } from "./services/metaService.js";
+import { getCountryFromIP, getRealIP } from "./utils/geoUtils.js";
+import { normalizePhone } from "./utils/phoneNormalization.js";
 
 // Load environment variables
 dotenv.config();
@@ -153,6 +155,18 @@ const documentGenerationService = new DocumentGenerationService();
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "Scraping API is running" });
+});
+
+// Country detection endpoint (for phone input country detection)
+app.get("/api/detect-country", (req, res) => {
+  try {
+    const ip = getRealIP(req);
+    const country = getCountryFromIP(ip);
+    res.json({ country, ip }); // Return both for debugging
+  } catch (error) {
+    console.error("[API] Error detecting country:", error);
+    res.json({ country: "US", error: "Detection failed, using default" });
+  }
 });
 
 // Info endpoint for the scrape-and-analyze route
@@ -418,8 +432,21 @@ app.post("/api/scan-website-compliance", async (req, res) => {
       }
     } catch (error: any) {
       console.warn("[Simple Scan] Failed to scrape with HTML, trying markdown only:", error.message);
-      markdown = await (firecrawlService as any).scrapePage(normalizedUrl);
-      html = "";
+      try {
+        markdown = await (firecrawlService as any).scrapePage(normalizedUrl);
+        html = "";
+      } catch (fallbackError: any) {
+        console.error("[Simple Scan] Both HTML and markdown scraping failed:", fallbackError.message);
+        // Return a partial result - we can still try to find links from the URL structure
+        return res.status(200).json({
+          success: true,
+          url: normalizedUrl,
+          foundDocuments: [],
+          missingDocuments: Object.values(requiredDocuments),
+          message: "Unable to scrape website content. This may be due to Firecrawl API issues or website restrictions. Please try again later.",
+          error: fallbackError.message,
+        });
+      }
     }
 
     // Step 2: Extract legal links from footer - use finalUrl for relative link resolution
@@ -694,11 +721,14 @@ app.post("/api/track-meta-lead", async (req, res) => {
       console.warn("Warning: eventId not provided in request. Deduplication may not work correctly.");
     }
 
+    // Normalize phone to E.164 format (phone is already in E.164 from frontend PhoneInput)
+    const normalizedPhone = phone ? normalizePhone(phone, 'US') : undefined;
+
     // Send lead event to Meta
     const result = await metaService.sendLeadEvent(
       {
         email,
-        phone,
+        phone: normalizedPhone,
         firstName,
         lastName,
         website,
@@ -733,6 +763,60 @@ app.post("/api/track-meta-lead", async (req, res) => {
     res.status(statusCode).json({
       error: "Internal server error",
       message: errorMessage,
+    });
+  }
+});
+
+// Track Onboarding Event (for sendBeacon and direct API calls)
+app.post("/api/track-onboarding-event", async (req, res) => {
+  try {
+    const eventData = req.body;
+
+    // Validate required fields
+    if (!eventData.session_id || !eventData.step_number || !eventData.event_type) {
+      return res.status(400).json({ 
+        error: "Missing required fields",
+        required: ["session_id", "step_number", "event_type"]
+      });
+    }
+
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL || "",
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+    );
+
+    // Insert event using service role to bypass RLS
+    const { data, error } = await supabaseAdmin
+      .from('onboarding_events')
+      .insert([{
+        session_id: eventData.session_id,
+        email: eventData.email || null,
+        user_id: eventData.user_id || null,
+        contact_id: eventData.contact_id || null,
+        step_number: eventData.step_number,
+        step_name: eventData.step_name || `Step ${eventData.step_number}`,
+        event_type: eventData.event_type,
+        entry_point: eventData.entry_point || 'onboarding_direct',
+        source: eventData.source || 'onboarding_direct',
+        time_spent_seconds: eventData.time_spent_seconds || null,
+      }])
+      .select();
+
+    if (error) {
+      console.error('[Track Onboarding Event] Error:', error);
+      return res.status(500).json({ 
+        error: "Failed to track event",
+        message: error.message 
+      });
+    }
+
+    console.log(`[Track Onboarding Event] ✅ Tracked: Step ${eventData.step_number} - ${eventData.event_type}`);
+    return res.json({ success: true, data });
+  } catch (error: any) {
+    console.error('[Track Onboarding Event] Exception:', error);
+    return res.status(500).json({ 
+      error: "Internal server error",
+      message: error.message 
     });
   }
 });
@@ -786,6 +870,7 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
     }
 
     console.log(`[Onboarding Package] Processing for user ${userId}`);
+    console.log(`[Onboarding Package] Request received at: ${new Date().toISOString()}`);
 
     const supabaseAdmin = createClient(
       process.env.SUPABASE_URL || "",
@@ -799,9 +884,18 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
       .single();
 
     if (error || !profile) {
-      console.error('[Onboarding Package] Profile not found:', error);
-      return res.status(404).json({ error: "Profile not found" });
+      console.error('[Onboarding Package] ❌ PROFILE NOT FOUND - Email will NOT be sent');
+      console.error('[Onboarding Package] Error details:', error);
+      console.error('[Onboarding Package] User ID searched:', userId);
+      console.error('[Onboarding Package] ⚠️ This means Resend will show NO attempt because emailService.sendOnboardingPackageEmail() is never called');
+      return res.status(404).json({ 
+        error: "Profile not found",
+        message: "Business profile does not exist. Email cannot be sent without profile data.",
+        userId: userId
+      });
     }
+
+    console.log(`[Onboarding Package] ✅ Profile found, proceeding with document generation...`);
 
     // Get User Email
     const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
@@ -828,11 +922,29 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
       services: profile.services
     };
 
-    // Generate Documents
+    // Generate Documents & Save to Vault
     const templates = [
-      { id: 'social_media_disclaimer', name: 'Social Media Disclaimer.pdf' },
-      { id: 'media_release_form', name: 'Photo Release Form.pdf' },
-      { id: 'client_intake_form', name: 'Client Intake Form.pdf' }
+      { 
+        id: 'social_media_disclaimer', 
+        name: 'Social Media Disclaimer.pdf',
+        docType: 'template-6',
+        category: 'marketing',
+        title: 'Social Media Disclaimer'
+      },
+      { 
+        id: 'media_release_form', 
+        name: 'Photo Release Form.pdf',
+        docType: 'template-4',
+        category: 'marketing',
+        title: 'Photo / Video Release'
+      },
+      { 
+        id: 'client_intake_form', 
+        name: 'Client Intake Form.pdf',
+        docType: 'template-intake',
+        category: 'core',
+        title: 'Client Intake Form'
+      }
     ];
 
     const attachments = [];
@@ -841,10 +953,55 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
       try {
         console.log(`[Onboarding Package] Generating ${tmpl.id}...`);
         const pdfBuffer = await documentGenerationService.generateDocument(tmpl.id, profileData);
+        
+        // Add to email attachments
         attachments.push({
           filename: tmpl.name,
           content: pdfBuffer
         });
+
+        // Save to Supabase Storage & DB (Vault)
+        try {
+          const fileExt = 'pdf';
+          const fileName = `${userId}/${Date.now()}-${tmpl.docType}.${fileExt}`;
+
+          // Upload to Storage
+          const { error: uploadError } = await supabaseAdmin.storage
+            .from('wellness-documents')
+            .upload(fileName, pdfBuffer, {
+              contentType: 'application/pdf',
+              upsert: true
+            });
+
+          if (uploadError) {
+            console.error(`[Onboarding Package] Storage upload failed for ${tmpl.id}:`, uploadError);
+          } else {
+            // Create DB Record
+            const docData = {
+              user_id: userId,
+              title: tmpl.title,
+              description: 'Auto-generated during onboarding',
+              analysis: '✅ This document was automatically generated based on your profile and is ready to use.',
+              file_path: fileName,
+              file_type: fileExt,
+              category: tmpl.category,
+              document_type: tmpl.docType,
+              created_at: new Date().toISOString()
+            };
+
+            const { error: dbError } = await supabaseAdmin
+              .from('user_documents')
+              .insert(docData);
+
+            if (dbError) {
+              console.error(`[Onboarding Package] DB insert failed for ${tmpl.id}:`, dbError);
+            } else {
+              console.log(`[Onboarding Package] Saved ${tmpl.id} to Vault successfully.`);
+            }
+          }
+        } catch (saveErr) {
+          console.error(`[Onboarding Package] Error saving to vault for ${tmpl.id}:`, saveErr);
+        }
       } catch (err) {
         console.error(`[Onboarding Package] Failed to generate ${tmpl.id}:`, err);
       }
@@ -1737,6 +1894,15 @@ app.post("/api/save-contact", async (req, res) => {
       });
     }
 
+    // Normalize phone number to E.164 format
+    const normalizedPhone = phone ? normalizePhone(phone, 'US') : null;
+    if (phone && !normalizedPhone) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid phone number format"
+      });
+    }
+
     // Normalize website URL
     let normalizedWebsite = website?.trim() || "";
     if (normalizedWebsite && !normalizedWebsite.startsWith("http")) {
@@ -1746,7 +1912,7 @@ app.post("/api/save-contact", async (req, res) => {
     const contactData = {
       name,
       email,
-      phone: phone || "",
+      phone: normalizedPhone || "",
       website: normalizedWebsite,
       source: source || "wellness", // Default if not provided
     };
@@ -1773,7 +1939,7 @@ app.post("/api/save-contact", async (req, res) => {
         firstName: firstName,
         lastName: lastName,
         email: email.trim().toLowerCase(),
-        phone: phone?.trim() || "",
+        phone: normalizedPhone || "",
         locationId: "7HUNbHEuRf1cXZD4hxxr",
         tags: ["ricki new funnel"],
         source: "Cynthia AI",
@@ -1864,7 +2030,7 @@ app.post("/api/save-contact", async (req, res) => {
         const instantlyLeadData = {
           first_name: firstName,
           last_name: lastName,
-          phone: phone?.trim() || "",
+          phone: normalizedPhone || "",
           website: normalizedWebsite || "",
           custom_variables: {
             // Will be updated later if workflow completes
@@ -2791,6 +2957,91 @@ app.get("/api/contacts", async (req, res) => {
   }
 });
 
+// Update Calendly booking status for a contact and user
+app.post("/api/contacts/update-calendly-booking", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required",
+      });
+    }
+
+    // Use service role key to bypass RLS (allows updating by email even if user_id not set yet)
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabase = createClient(
+      process.env.SUPABASE_URL || "",
+      serviceKey || ""
+    );
+
+    const bookingTimestamp = new Date().toISOString();
+    const results: any = {
+      contact: null,
+      user: null,
+    };
+
+    // Update contact record
+    const { data: contactData, error: contactError } = await supabase
+      .from("contacts")
+      .update({
+        calendly_booked_at: bookingTimestamp,
+        updated_at: bookingTimestamp
+      })
+      .eq("email", email.trim().toLowerCase())
+      .select();
+
+    if (contactError) {
+      console.error("[Update Calendly Booking] Contact update error:", contactError);
+    } else if (contactData && contactData.length > 0) {
+      results.contact = contactData[0];
+      console.log(`[Update Calendly Booking] ✅ Updated contact ${email} with Calendly booking timestamp`);
+    } else {
+      console.warn(`[Update Calendly Booking] No contact found with email: ${email}`);
+    }
+
+    // Also update users table if user exists
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .update({
+        calendly_booked_at: bookingTimestamp,
+        updated_at: bookingTimestamp
+      })
+      .eq("email", email.trim().toLowerCase())
+      .select();
+
+    if (userError) {
+      console.error("[Update Calendly Booking] User update error:", userError);
+    } else if (userData && userData.length > 0) {
+      results.user = userData[0];
+      console.log(`[Update Calendly Booking] ✅ Updated user ${email} with Calendly booking timestamp`);
+    } else {
+      console.log(`[Update Calendly Booking] No user found with email: ${email} (user may not have created password yet)`);
+    }
+
+    // Return success if at least one record was updated
+    if (results.contact || results.user) {
+      return res.json({
+        success: true,
+        message: "Calendly booking status updated",
+        data: results,
+      });
+    } else {
+      // Neither contact nor user found
+      return res.status(404).json({
+        error: "Contact or user not found",
+        message: `No contact or user found with email: ${email}`,
+      });
+    }
+  } catch (error: any) {
+    console.error("[Update Calendly Booking] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to update Calendly booking status",
+    });
+  }
+});
+
 // Get workflow results endpoint
 app.get("/api/workflow-results", async (req, res) => {
   try {
@@ -2838,6 +3089,10 @@ app.post("/api/trademarks/request", async (req, res) => {
     }
 
     console.log(`[Trademark] Received request for: ${businessName} (${email})`);
+    console.log(`[Trademark] Request body keys:`, Object.keys(req.body));
+    console.log(`[Trademark] user_id:`, user_id ? `${user_id.substring(0, 8)}...` : 'MISSING');
+    console.log(`[Trademark] answers:`, answers ? `Array(${answers.length})` : 'MISSING');
+    console.log(`[Trademark] answerDetails:`, answerDetails ? `Array(${answerDetails.length})` : 'MISSING');
 
     // Generate risk factors based on quiz answers
     const riskFactors = generateRiskFactors(answers, score, riskLevel);
@@ -2897,25 +3152,58 @@ app.post("/api/trademarks/request", async (req, res) => {
     }
 
     // 2. Insert into Supabase trademark_requests
+    let dbSaveSuccess = false;
+    let dbError: any = null;
+    
     if (user_id) {
       console.log('[Trademark] Attempting to save to database with user_id:', user_id);
+      console.log('[Trademark] Answers provided:', answers ? `Yes (${answers.length} items)` : 'No');
+      console.log('[Trademark] Answer details provided:', answerDetails ? `Yes (${answerDetails.length} items)` : 'No');
+      
       try {
-        const { data, error: dbError } = await supabaseService.client
+        const insertData: any = {
+          user_id: user_id,
+          business_name: businessName,
+          quiz_score: score,
+          risk_level: riskLevel,
+          status: 'completed' // Changed from 'pending' since we're sending the report immediately
+        };
+
+        // Add quiz answers if provided
+        if (answers && Array.isArray(answers)) {
+          insertData.quiz_answers = answers;
+          console.log('[Trademark] Adding quiz_answers to insert:', answers);
+        }
+
+        // Add answer details if provided
+        if (answerDetails && Array.isArray(answerDetails)) {
+          insertData.answer_details = answerDetails;
+          console.log('[Trademark] Adding answer_details to insert:', answerDetails.length, 'items');
+        }
+
+        console.log('[Trademark] Insert data keys:', Object.keys(insertData));
+        
+        const { data, error: insertError } = await supabaseService.client
           .from('trademark_requests')
-          .insert({
-            user_id: user_id,
-            business_name: businessName,
-            quiz_score: score,
-            risk_level: riskLevel,
-            status: 'completed' // Changed from 'pending' since we're sending the report immediately
-          })
+          .insert(insertData)
           .select();
+        
+        dbError = insertError;
 
         if (dbError) {
-          console.error('[Trademark] Database insert error:', dbError);
+          console.error('[Trademark] ❌ Database insert error:', dbError);
           console.error('[Trademark] Error details:', JSON.stringify(dbError, null, 2));
+          console.error('[Trademark] Error code:', dbError.code);
+          console.error('[Trademark] Error message:', dbError.message);
+          console.error('[Trademark] Error hint:', dbError.hint);
+          dbSaveSuccess = false;
+          // Log but don't fail the request - email was still sent
         } else {
-          console.log('[Trademark] Successfully saved to database:', data);
+          console.log('[Trademark] ✅ Successfully saved to database');
+          console.log('[Trademark] Record ID:', data?.[0]?.id);
+          console.log('[Trademark] Saved with quiz_answers:', answers ? `Yes (${answers.length} answers)` : 'No');
+          console.log('[Trademark] Saved with answer_details:', answerDetails ? `Yes (${answerDetails.length} details)` : 'No');
+          dbSaveSuccess = true;
 
           // Log event: trademark_risk_report_sent (if legal_timeline table exists)
           try {
@@ -2945,8 +3233,11 @@ app.post("/api/trademarks/request", async (req, res) => {
         console.error('[Trademark] Error stack:', dbErr?.stack);
       }
     } else {
-      console.warn('[Trademark] No user_id provided, skipping DB save');
-      console.warn('[Trademark] Request body:', JSON.stringify(req.body, null, 2));
+      console.warn('[Trademark] ⚠️ No user_id provided, skipping DB save');
+      console.warn('[Trademark] Request body keys:', Object.keys(req.body));
+      console.warn('[Trademark] Full request body:', JSON.stringify(req.body, null, 2));
+      dbSaveSuccess = false;
+      dbError = { message: 'No user_id provided in request' };
     }
 
     // 3. Send Risk Report Email with PDF attachment
@@ -2962,7 +3253,63 @@ app.post("/api/trademarks/request", async (req, res) => {
     // 4. Send Admin Alert
     await emailService.sendAdminTrademarkAlert(email, businessName, riskLevel, score);
 
-    return res.json({ success: true, message: "Risk report processed and sent" });
+    // 5. Add "completed IP scan" tag to GoHighLevel
+    try {
+      console.log(`[Trademark] Adding 'completed IP scan' tag to GoHighLevel for ${email}...`);
+      // Lookup contact first
+      const lookupResponse = await fetch(
+        `https://services.leadconnectorhq.com/contacts/lookup?email=${encodeURIComponent(email.trim().toLowerCase())}&locationId=7HUNbHEuRf1cXZD4hxxr`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+            Version: "2021-07-28",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (lookupResponse.ok) {
+        const lookupData = await lookupResponse.json();
+        const contactId = lookupData.contacts?.[0]?.id || lookupData.contact?.id;
+
+        if (contactId) {
+          const existingTags = lookupData.contacts?.[0]?.tags || lookupData.contact?.tags || [];
+          const newTag = "completed IP scan";
+
+          if (!existingTags.includes(newTag)) {
+            const updatedTags = [...existingTags, newTag];
+
+            await fetch(
+              `https://services.leadconnectorhq.com/contacts/${contactId}`,
+              {
+                method: "PUT",
+                headers: {
+                  Authorization: "Bearer pit-4da3a3e7-57b8-406a-abcb-4a661e37efdb",
+                  Version: "2021-07-28",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ tags: updatedTags }),
+              }
+            );
+            console.log(`[Trademark] ✅ Added 'completed IP scan' tag to contact ${contactId}`);
+          } else {
+            console.log(`[Trademark] Contact already has 'completed IP scan' tag`);
+          }
+        }
+      } else {
+        console.warn(`[Trademark] GHL Contact lookup failed for ${email}, cannot add tag.`);
+      }
+    } catch (ghlError) {
+      console.error(`[Trademark] Error adding GHL tag:`, ghlError);
+    }
+
+    return res.json({ 
+      success: true, 
+      message: "Risk report processed and sent",
+      dbSaved: dbSaveSuccess,
+      dbError: dbError ? dbError.message : null
+    });
   } catch (error: any) {
     console.error('[Trademark] Error processing request:', error);
     return res.status(500).json({ error: error.message });
@@ -3424,6 +3771,217 @@ app.get("/api/business/:id/config", async (req, res) => {
     res.status(500).json({
       error: "Internal server error",
       message: error.message || "Failed to get business config",
+    });
+  }
+});
+
+// ============================================
+// Admin Impersonation API Endpoint
+// ============================================
+
+// Admin login as user endpoint
+app.post("/api/admin/impersonate-user", async (req, res) => {
+  try {
+    const { adminToken, targetUserId } = req.body;
+
+    if (!adminToken || !targetUserId) {
+      return res.status(400).json({
+        error: "adminToken and targetUserId are required",
+      });
+    }
+
+    // Verify admin token and get admin user
+    const supabaseUrl = process.env.SUPABASE_URL || "";
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const anonKey = process.env.SUPABASE_ANON_KEY || "";
+    
+    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+      return res.status(500).json({
+        error: "Server configuration error",
+      });
+    }
+
+    // Use service role to verify the token and get user info
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
+    // Verify the admin token by calling Supabase's auth API
+    // We'll use fetch to call the /auth/v1/user endpoint with the token
+    try {
+      const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'apikey': anonKey,
+        },
+      });
+
+      if (!userResponse.ok) {
+        const errorData = await userResponse.json().catch(() => ({}));
+        console.error('[Admin Impersonate] Token verification failed:', userResponse.status, errorData);
+        return res.status(401).json({
+          error: "Invalid admin token",
+          details: errorData.message || `HTTP ${userResponse.status}`,
+        });
+      }
+
+      const adminUserData = await userResponse.json();
+      
+      if (!adminUserData || !adminUserData.id) {
+        return res.status(401).json({
+          error: "Invalid admin token",
+          details: "User data not found in token",
+        });
+      }
+
+      // Check if user is admin using service role (bypasses RLS)
+      const { data: adminData, error: adminCheckError } = await supabaseAdmin
+        .from('users')
+        .select('role')
+        .eq('user_id', adminUserData.id)
+        .single();
+
+      if (adminCheckError || adminData?.role !== 'admin') {
+        console.error('[Admin Impersonate] Admin check error:', adminCheckError);
+        return res.status(403).json({
+          error: "Only admins can impersonate users",
+          details: adminCheckError?.message || "User is not an admin",
+        });
+      }
+
+      // Admin verified, continue with impersonation
+    } catch (error: any) {
+      console.error('[Admin Impersonate] Token verification error:', error);
+      return res.status(401).json({
+        error: "Invalid admin token",
+        details: error.message || "Token verification failed",
+      });
+    }
+
+    // Get the target user's auth record
+    const { data: targetUser, error: targetError } = await supabaseAdmin.auth.admin.getUserById(targetUserId);
+    
+    if (targetError || !targetUser) {
+      return res.status(404).json({
+        error: "Target user not found",
+      });
+    }
+
+    // Generate a magic link that can be used to sign in
+    // We'll generate a link and extract the token from it
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: targetUser.user.email || '',
+    });
+
+    if (linkError || !linkData) {
+      console.error('[Admin Impersonate] Error generating link:', linkError);
+      return res.status(500).json({
+        error: "Failed to generate session link",
+        message: linkError?.message || "Unknown error",
+      });
+    }
+
+    // Extract the token from the magic link
+    // Supabase's generateLink returns properties with hashed_token and action_link
+    const actionLink = linkData.properties.action_link;
+    const hashedToken = linkData.properties.hashed_token;
+    
+    console.log('[Admin Impersonate] Generated link data:', {
+      hasActionLink: !!actionLink,
+      hasHashedToken: !!hashedToken,
+      properties: Object.keys(linkData.properties || {}),
+    });
+    
+    // First, try to get token_hash from properties (this is the most reliable)
+    let tokenHash: string | null = hashedToken || null;
+    let token: string | null = null;
+    let type: string = 'magiclink';
+
+    // Try to extract token from the action_link URL
+    if (actionLink) {
+      try {
+        const linkUrl = new URL(actionLink);
+        
+        // Try query params first
+        token = linkUrl.searchParams.get('token');
+        const urlTokenHash = linkUrl.searchParams.get('token_hash');
+        const urlType = linkUrl.searchParams.get('type');
+        
+        if (urlTokenHash) tokenHash = urlTokenHash;
+        if (urlType) type = urlType;
+
+        // If not in query params, try hash fragment
+        if (!token && linkUrl.hash) {
+          const hashParams = new URLSearchParams(linkUrl.hash.substring(1));
+          token = hashParams.get('access_token') || hashParams.get('token');
+          const hashTokenHash = hashParams.get('token_hash');
+          const hashType = hashParams.get('type');
+          
+          if (hashTokenHash) tokenHash = hashTokenHash;
+          if (hashType) type = hashType;
+        }
+
+        // If we still don't have a token, try to extract from the full URL string
+        if (!token) {
+          const tokenMatch = actionLink.match(/[#&?]token=([^&#]+)/) || actionLink.match(/[#&?]access_token=([^&#]+)/);
+          if (tokenMatch) {
+            token = decodeURIComponent(tokenMatch[1]);
+          }
+        }
+      } catch (urlError: any) {
+        console.error('[Admin Impersonate] URL parsing error:', urlError);
+        // Continue - we'll use the action link directly if parsing fails
+      }
+    }
+
+    // If we have tokenHash but no token, or if we have the action link, use direct link approach
+    if (!tokenHash || (!token && !actionLink)) {
+      console.error('[Admin Impersonate] Missing required data:', {
+        hasToken: !!token,
+        hasTokenHash: !!tokenHash,
+        hasActionLink: !!actionLink,
+        properties: linkData.properties,
+      });
+      
+      // Fallback: return the full action link and let the frontend handle it
+      if (actionLink) {
+        return res.json({
+          success: true,
+          data: {
+            userId: targetUserId,
+            email: targetUser.user.email,
+            actionLink: actionLink,
+            useDirectLink: true,
+          },
+        });
+      }
+      
+      return res.status(500).json({
+        error: "Failed to extract token from magic link",
+        details: "No token hash or action link available",
+      });
+    }
+
+    // Return the token and hash so the client can use it to sign in
+    res.json({
+      success: true,
+      data: {
+        userId: targetUserId,
+        email: targetUser.user.email,
+        token: token,
+        tokenHash: tokenHash,
+        type: type || 'magiclink',
+      },
+    });
+  } catch (error: any) {
+    console.error("[Admin Impersonate] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to impersonate user",
     });
   }
 });
