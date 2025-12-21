@@ -28,133 +28,109 @@ const ALL_TEMPLATES: DocumentItem[] = [
     pdfPath: '/pdfs/client_intake_form.pdf'
   },
 
-  // ADVANCED TEMPLATES (locked - require lawyer review)
+  // ALL TEMPLATES NOW FREE (AI-generated HTML templates)
   {
     id: 'template-1',
     title: 'Basic Waiver of Liability',
     description: 'Standard protection for physical activities.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/waiver_release_of_liability.pdf'
   },
   {
     id: 'template-2',
     title: 'Service Agreement & Membership Contract',
     description: 'Comprehensive agreement for services and membership terms.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/service_agreement_membership_contract.pdf'
-  },
-  {
-    id: 'template-3',
-    title: 'Terms & Conditions, Disclaimer',
-    description: 'Website terms, privacy policy, and service disclaimers.',
-    isLocked: true,
-    category: 'advanced',
-    pdfPath: '/pdfs/terms_privacy_disclaimer.pdf'
   },
   {
     id: 'template-5',
     title: 'Testimonial Consent & Use Agreement',
     description: 'Legal permission to use client testimonials and reviews.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/testimonial_consent_agreement.pdf'
   },
   {
     id: 'template-7',
     title: 'Independent Contractor Agreement',
     description: 'Agreement for freelancers and independent contractors.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/independent_contractor_agreement.pdf'
   },
   {
     id: 'template-8',
     title: 'Employment Agreement',
     description: 'Comprehensive employment terms for full or part-time employees.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/employment_agreement.pdf'
-  },
-  {
-    id: 'template-9',
-    title: 'Influencer & Collaboration Agreement',
-    description: 'Terms for influencer partnerships and collaborations.',
-    isLocked: true,
-    category: 'advanced',
-    pdfPath: '/pdfs/influencer_collaboration_agreement.pdf'
-  },
-  {
-    id: 'template-10',
-    title: 'Trademark & Intellectual Property (IP) Protection Guide',
-    description: 'Guide to protecting your brand, trademarks, and intellectual property.',
-    isLocked: true,
-    category: 'advanced',
-    pdfPath: '/pdfs/trademark_ip_protection_guide.pdf'
   },
   {
     id: 'template-membership',
     title: 'Membership Agreement',
     description: 'Recurring billing terms and cancellation rules.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/membership_agreement.pdf'
   },
   {
     id: 'template-studio',
     title: 'Studio Policies',
     description: 'Rules of conduct for your facility.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/studio_policies.pdf'
   },
   {
     id: 'template-class',
     title: 'Class Terms & Conditions',
     description: 'Booking and attendance policies.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/class_terms_conditions.pdf'
   },
   {
     id: 'template-privacy',
     title: 'Privacy Policy',
     description: 'Legally required for data collection.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/privacy_policy.pdf'
   },
   {
     id: 'template-website',
     title: 'Website Terms & Conditions',
     description: 'Governs use of your website.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/website_terms_conditions.pdf'
   },
   {
     id: 'template-refund',
     title: 'Refund & Cancellation Policy',
     description: 'Clear rules for online purchases.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/refund_cancellation_policy.pdf'
   },
   {
     id: 'template-disclaimer',
     title: 'Website Disclaimer',
     description: 'Protect your business from content liability.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/website_disclaimer.pdf'
   },
   {
     id: 'template-cookie',
     title: 'Cookie Policy',
     description: 'Inform users about data collection cookies.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/cookie_policy.pdf'
   },
   // RETREAT SPECIALS
@@ -162,16 +138,16 @@ const ALL_TEMPLATES: DocumentItem[] = [
     id: 'template-retreat-waiver',
     title: 'Retreat Liability Waiver',
     description: 'Essential specifically for multi-day retreats and travel.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/waiver_release_of_liability.pdf' // mapped to standard waiver for now
   },
   {
     id: 'template-travel',
     title: 'Travel & Excursion Agreement',
     description: 'For off-site excursions and international travel risks.',
-    isLocked: true,
-    category: 'advanced',
+    isLocked: false,
+    category: 'free',
     pdfPath: '/pdfs/waiver_release_of_liability.pdf'
   }
 ];
@@ -184,11 +160,10 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
   const coreIds = [
     'template-1', // Waiver
     'template-website', // Website Terms
-    'template-privacy', // Privacy Policy (Separate if needed, but template-3 seems to cover it)
+    'template-privacy', // Privacy Policy
     'template-disclaimer', // Disclaimer
     'template-cookie', // Cookie Policy
     'template-refund', // Refund Policy
-    'template-10', // IP Protection (Good general advice)
   ];
   advancedDocs.push(...ALL_TEMPLATES.filter(t => coreIds.includes(t.id)));
 
@@ -247,6 +222,11 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
 
   // Deduplicate just in case
   advancedDocs = Array.from(new Set(advancedDocs));
+
+  // CRITICAL FIX: Remove any documents from advancedDocs that are already in freeDocs
+  // to prevent double-counting when calculating totals
+  const freeDocIds = new Set(freeDocs.map(d => d.id));
+  advancedDocs = advancedDocs.filter(doc => !freeDocIds.has(doc.id));
 
   // Sort: Core first, then others
   // (Optional sorting logic here)
