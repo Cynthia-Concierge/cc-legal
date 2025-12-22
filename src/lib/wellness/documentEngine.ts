@@ -153,8 +153,12 @@ const ALL_TEMPLATES: DocumentItem[] = [
 ];
 
 export function getRecommendedDocuments(answers: UserAnswers): RecommendationResult {
-  const freeDocs = ALL_TEMPLATES.filter(t => t.category === 'free');
-  let advancedDocs: DocumentItem[] = [];
+  // The 3 core free documents that are always auto-generated and ready to download
+  const alwaysFreeIds = ['template-6', 'template-4', 'template-intake'];
+  const freeDocs = ALL_TEMPLATES.filter(t => alwaysFreeIds.includes(t.id));
+
+  // Build list of recommended documents based on user's answers
+  let recommendedDocs: DocumentItem[] = [];
 
   // 1. Core Documents (Recommended for EVERYONE)
   const coreIds = [
@@ -165,18 +169,18 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
     'template-cookie', // Cookie Policy
     'template-refund', // Refund Policy
   ];
-  advancedDocs.push(...ALL_TEMPLATES.filter(t => coreIds.includes(t.id)));
+  recommendedDocs.push(...ALL_TEMPLATES.filter(t => coreIds.includes(t.id)));
 
   // 2. Dynamic Recommendations based on Answers
 
   // IF has Employees -> Employment Agreement
   if (answers.hasEmployees) {
     const doc = ALL_TEMPLATES.find(t => t.id === 'template-8'); // Employment Agreement
-    if (doc) advancedDocs.push(doc);
+    if (doc) recommendedDocs.push(doc);
   } else if (answers.hiresStaff) {
     // If they hire staff but not employees, they need Contractor Agreement
     const doc = ALL_TEMPLATES.find(t => t.id === 'template-7'); // Contractor Agreement
-    if (doc) advancedDocs.push(doc);
+    if (doc) recommendedDocs.push(doc);
   }
 
   // IF Studio Owner (has physical location implies studio policies)
@@ -186,7 +190,7 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
 
   if (isStudio) {
     const studioDocs = ALL_TEMPLATES.filter(t => ['template-studio', 'template-class', 'template-membership', 'template-2'].includes(t.id));
-    advancedDocs.push(...studioDocs);
+    recommendedDocs.push(...studioDocs);
   }
 
   // IF Hosts Retreats -> Recommend specific retreat docs
@@ -196,7 +200,7 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
 
   if (hostsRetreats) {
     const retreatDocs = ALL_TEMPLATES.filter(t => ['template-retreat-waiver', 'template-travel'].includes(t.id));
-    advancedDocs.push(...retreatDocs);
+    recommendedDocs.push(...retreatDocs);
   }
 
   // IF Online Courses -> Website Terms (already added), but maybe explicit Digital Product terms?
@@ -206,39 +210,34 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
 
   if (offersOnline) {
     const doc = ALL_TEMPLATES.find(t => t.id === 'template-refund'); // Refund Policy (good for digital)
-    if (doc) advancedDocs.push(doc);
+    if (doc && !recommendedDocs.includes(doc)) recommendedDocs.push(doc);
   }
 
   // IF Sells Products -> Refund Policy
   if (answers.sellsProducts) {
     const doc = ALL_TEMPLATES.find(t => t.id === 'template-refund');
-    if (doc && !advancedDocs.includes(doc)) advancedDocs.push(doc);
+    if (doc && !recommendedDocs.includes(doc)) recommendedDocs.push(doc);
   }
 
-  // IF Client Photos -> Photo Release (it's free, but good to highlight)
-  if (answers.usesPhotos) {
-    // It's in freeDocs
+  // Add testimonial agreement if applicable
+  const usesTestimonials = answers.primaryBusinessType === 'Coaching' ||
+    (answers.services && (answers.services.includes('Online coaching') || answers.services.includes('Retreats')));
+  if (usesTestimonials) {
+    const doc = ALL_TEMPLATES.find(t => t.id === 'template-5');
+    if (doc && !recommendedDocs.includes(doc)) recommendedDocs.push(doc);
   }
 
-  // Deduplicate just in case
-  advancedDocs = Array.from(new Set(advancedDocs));
-
-  // CRITICAL FIX: Remove any documents from advancedDocs that are already in freeDocs
-  // to prevent double-counting when calculating totals
-  const freeDocIds = new Set(freeDocs.map(d => d.id));
-  advancedDocs = advancedDocs.filter(doc => !freeDocIds.has(doc.id));
-
-  // Sort: Core first, then others
-  // (Optional sorting logic here)
+  // Deduplicate recommended docs
+  recommendedDocs = Array.from(new Set(recommendedDocs));
 
   // Pick top priorities - Core Legal Documents
   // We prioritize the Waiver, Service Agreement, and Website Terms as the "Big 3"
   const priorityIds = ['template-1', 'template-2', 'template-website'];
-  const topPriorities = advancedDocs.filter(doc => priorityIds.includes(doc.id));
+  const topPriorities = recommendedDocs.filter(doc => priorityIds.includes(doc.id));
 
   return {
-    freeTemplates: freeDocs,
-    advancedTemplates: advancedDocs,
+    freeTemplates: freeDocs, // Only the 3 auto-generated free documents
+    advancedTemplates: recommendedDocs, // All recommended documents based on answers
     topPriorities
   };
 }
