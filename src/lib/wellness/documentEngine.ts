@@ -153,15 +153,15 @@ const ALL_TEMPLATES: DocumentItem[] = [
 ];
 
 export function getRecommendedDocuments(answers: UserAnswers): RecommendationResult {
-  // The 3 core free documents that are always auto-generated and ready to download
-  const alwaysFreeIds = ['template-6', 'template-4', 'template-intake'];
-  const freeDocs = ALL_TEMPLATES.filter(t => alwaysFreeIds.includes(t.id));
-
-  // Build list of recommended documents based on user's answers
+  // ALL DOCUMENTS ARE NOW FREE AND FULLY CUSTOMIZABLE
+  // Build list of recommended documents based on user's specific answers
   let recommendedDocs: DocumentItem[] = [];
 
-  // 1. Core Documents (Recommended for EVERYONE)
+  // 1. Core Documents (Recommended for EVERYONE - always included)
   const coreIds = [
+    'template-6', // Social Media Disclaimer
+    'template-4', // Photo Release Form
+    'template-intake', // Client Intake Form
     'template-1', // Waiver
     'template-website', // Website Terms
     'template-privacy', // Privacy Policy
@@ -171,7 +171,7 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
   ];
   recommendedDocs.push(...ALL_TEMPLATES.filter(t => coreIds.includes(t.id)));
 
-  // 2. Dynamic Recommendations based on Answers
+  // 2. Dynamic Recommendations based on User's Answers
 
   // IF has Employees -> Employment Agreement
   if (answers.hasEmployees) {
@@ -203,7 +203,7 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
     recommendedDocs.push(...retreatDocs);
   }
 
-  // IF Online Courses -> Website Terms (already added), but maybe explicit Digital Product terms?
+  // IF Online Courses -> Refund Policy (if not already added)
   const offersOnline = answers.offersOnlineCourses ||
     answers.primaryBusinessType === 'Coaching' ||
     (answers.services && answers.services.includes('Online coaching / digital programs'));
@@ -213,7 +213,7 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
     if (doc && !recommendedDocs.includes(doc)) recommendedDocs.push(doc);
   }
 
-  // IF Sells Products -> Refund Policy
+  // IF Sells Products -> Refund Policy (if not already added)
   if (answers.sellsProducts) {
     const doc = ALL_TEMPLATES.find(t => t.id === 'template-refund');
     if (doc && !recommendedDocs.includes(doc)) recommendedDocs.push(doc);
@@ -236,8 +236,8 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
   const topPriorities = recommendedDocs.filter(doc => priorityIds.includes(doc.id));
 
   return {
-    freeTemplates: freeDocs, // Only the 3 auto-generated free documents
-    advancedTemplates: recommendedDocs, // All recommended documents based on answers
+    freeTemplates: recommendedDocs, // ALL recommended documents are free and customizable
+    advancedTemplates: [], // No longer any "advanced" documents - everything is free
     topPriorities
   };
 }
