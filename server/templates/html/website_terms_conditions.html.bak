@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Terms and Conditions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #000;
+            padding: 60px 80px;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 20px;
+        }
+
+        .document-title {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        .date {
+            text-align: right;
+            font-style: italic;
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .info-box {
+            background: #f8f8f8;
+            border: 2px solid #333;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .section {
+            margin: 25px 0;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .section-content {
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            margin-left: 40px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="document-title">WEBSITE TERMS AND CONDITIONS</div>
+    </div>
+
+    <!-- Date -->
+    <div class="date">Last Updated: {{date}}</div>
+
+    <!-- Business Information Box -->
+    <div class="info-box">
+        <h3>Business Information</h3>
+
+        <div class="info-row">
+            <div class="info-label">Business Name:</div>
+            <div class="info-value">{{BusinessName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Website:</div>
+            <div class="info-value">{{Website}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Contact Email:</div>
+            <div class="info-value">{{Email}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Business Address:</div>
+            <div class="info-value">{{BusinessAddress}}</div>
+        </div>
+    </div>
+
+    <!-- Introduction -->
+    <div class="section">
+        <div class="section-content">
+            Welcome to <strong>{{BusinessName}}</strong>. These Terms and Conditions ("Terms") govern your access to and
+            use of our website, including any content, functionality, products, and services offered on or through
+            {{Website}} (the "Website").
+        </div>
+        <div class="section-content">
+            By accessing or using the Website, you agree to be bound by these Terms. If you do not agree with these
+            Terms, you must not access or use the Website.
+        </div>
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+        <div class="section-title">1. ACCEPTANCE OF TERMS</div>
+        <div class="section-content">
+            By using this Website, you acknowledge that you have read, understood, and agree to be bound by these Terms,
+            as well as our Privacy Policy. <strong>{{BusinessName}}</strong> reserves the right to modify these Terms at
+            any time without prior notice. Your continued use of the Website after any changes constitutes your
+            acceptance of the revised Terms.
+        </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+        <div class="section-title">2. USE OF WEBSITE</div>
+        <div class="section-content">
+            You may use the Website for lawful purposes only. You agree not to:
+        </div>
+        <ul>
+            <li>Use the Website in any manner that could damage, disable, overburden, or impair the Website or interfere
+                with any other party's use;</li>
+            <li>Attempt to gain unauthorized access to any portion of the Website, other accounts, computer systems, or
+                networks connected to the Website;</li>
+            <li>Use any automated means (including bots, scrapers, or spiders) to access the Website without our express
+                written permission;</li>
+            <li>Upload, post, or transmit any content that is unlawful, harmful, threatening, abusive, harassing,
+                defamatory, vulgar, obscene, or otherwise objectionable;</li>
+            <li>Violate any applicable local, state, national, or international law; or</li>
+            <li>Impersonate any person or entity or falsely state or misrepresent your affiliation with any person or
+                entity.</li>
+        </ul>
+    </div>
+
+    <!-- Section 3 -->
+    <div class="section">
+        <div class="section-title">3. INTELLECTUAL PROPERTY RIGHTS</div>
+        <div class="section-content">
+            All content on this Website, including but not limited to text, graphics, logos, images, videos, audio clips,
+            digital downloads, data compilations, and software, is the property of <strong>{{BusinessName}}</strong> or
+            its content suppliers and is protected by United States and international copyright, trademark, patent, trade
+            secret, and other intellectual property or proprietary rights laws.
+        </div>
+        <div class="section-content">
+            You may not reproduce, distribute, modify, create derivative works of, publicly display, publicly perform,
+            republish, download, store, or transmit any material from our Website without our prior written consent,
+            except as follows:
+        </div>
+        <ul>
+            <li>Your computer may temporarily store copies of such materials in RAM incidental to your accessing and
+                viewing those materials;</li>
+            <li>You may store files that are automatically cached by your web browser for display enhancement purposes;
+            </li>
+            <li>You may print or download one copy of a reasonable number of pages of the Website for your own personal,
+                non-commercial use and not for further reproduction, publication, or distribution.</li>
+        </ul>
+        <div class="section-content">
+            <strong>No part of our content may be used to train, develop, or improve any artificial intelligence model,
+                algorithm, or dataset without our express written consent.</strong>
+        </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. USER ACCOUNTS AND REGISTRATION</div>
+        <div class="section-content">
+            If you register for an account on our Website, you agree to:
+        </div>
+        <ul>
+            <li>Provide accurate, current, and complete information;</li>
+            <li>Maintain and promptly update your account information;</li>
+            <li>Maintain the security and confidentiality of your password;</li>
+            <li>Notify us immediately of any unauthorized use of your account;</li>
+            <li>Accept all responsibility for any activity that occurs under your account.</li>
+        </ul>
+        <div class="section-content">
+            We reserve the right to suspend or terminate your account at any time for any reason, including violation of
+            these Terms.
+        </div>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. PURCHASES AND PAYMENTS</div>
+        <div class="section-content">
+            If you wish to purchase any product or service made available through the Website, you may be asked to supply
+            certain information, including payment information. You agree that all information you provide is accurate,
+            current, and complete.
+        </div>
+        <div class="section-content">
+            All purchases are subject to our acceptance. We reserve the right to refuse or cancel any order for any
+            reason, including errors in product or pricing information, suspected fraud, or other reasons.
+        </div>
+        <div class="section-content">
+            Prices are subject to change without notice. Payment is due at the time of purchase unless otherwise agreed
+            upon in writing.
+        </div>
+    </div>
+
+    <!-- Section 6 -->
+    <div class="section">
+        <div class="section-title">6. THIRD-PARTY LINKS AND CONTENT</div>
+        <div class="section-content">
+            The Website may contain links to third-party websites or services that are not owned or controlled by
+            <strong>{{BusinessName}}</strong>. We have no control over, and assume no responsibility for, the content,
+            privacy policies, or practices of any third-party websites or services.
+        </div>
+        <div class="section-content">
+            You acknowledge and agree that <strong>{{BusinessName}}</strong> shall not be responsible or liable, directly
+            or indirectly, for any damage or loss caused or alleged to be caused by or in connection with the use of or
+            reliance on any such content, goods, or services available on or through any such third-party websites or
+            services.
+        </div>
+    </div>
+
+    <!-- Section 7 -->
+    <div class="section">
+        <div class="section-title">7. DISCLAIMER OF WARRANTIES</div>
+        <div class="section-content">
+            THE WEBSITE AND ALL CONTENT, PRODUCTS, AND SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT
+            WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF
+            MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, OR COURSE OF PERFORMANCE.
+        </div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> does not warrant that:
+        </div>
+        <ul>
+            <li>The Website will be available at all times or uninterrupted;</li>
+            <li>The Website will be error-free or that defects will be corrected;</li>
+            <li>The information on the Website is accurate, complete, reliable, current, or error-free;</li>
+            <li>Any results or outcomes can be guaranteed from use of the Website or its content.</li>
+        </ul>
+        <div class="section-content">
+            <strong>The information and services offered on the Website are for general informational and educational
+                purposes only. Nothing on this Website constitutes medical, legal, financial, or professional advice.
+                Always consult with a qualified professional before making any decisions based on information found on
+                this Website.</strong>
+        </div>
+    </div>
+
+    <!-- Section 8 -->
+    <div class="section">
+        <div class="section-title">8. LIMITATION OF LIABILITY</div>
+        <div class="section-content">
+            TO THE FULLEST EXTENT PERMITTED BY LAW, <strong>{{BusinessName}}</strong>, ITS OWNERS, OFFICERS, DIRECTORS,
+            EMPLOYEES, CONTRACTORS, AGENTS, LICENSORS, AND SUPPLIERS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
+            SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF PROFITS, DATA, USE,
+            GOODWILL, OR OTHER INTANGIBLE LOSSES, RESULTING FROM:
+        </div>
+        <ul>
+            <li>Your access to or use of (or inability to access or use) the Website;</li>
+            <li>Any conduct or content of any third party on the Website;</li>
+            <li>Any content obtained from the Website;</li>
+            <li>Unauthorized access, use, or alteration of your transmissions or content;</li>
+            <li>Any errors, mistakes, or inaccuracies of content;</li>
+            <li>Personal injury or property damage resulting from your use of the Website.</li>
+        </ul>
+        <div class="section-content">
+            IN NO EVENT SHALL <strong>{{BusinessName}}</strong>'S TOTAL LIABILITY EXCEED THE AMOUNT PAID BY YOU, IF ANY,
+            FOR ACCESSING OR USING THE WEBSITE IN THE SIX (6) MONTHS PRIOR TO THE CLAIM.
+        </div>
+    </div>
+
+    <!-- Section 9 -->
+    <div class="section">
+        <div class="section-title">9. INDEMNIFICATION</div>
+        <div class="section-content">
+            You agree to indemnify, defend, and hold harmless <strong>{{BusinessName}}</strong>, its owners, officers,
+            directors, employees, contractors, agents, licensors, and suppliers from and against any and all claims,
+            liabilities, damages, losses, costs, expenses, or fees (including reasonable attorneys' fees) arising from:
+        </div>
+        <ul>
+            <li>Your use of the Website;</li>
+            <li>Your violation of these Terms;</li>
+            <li>Your violation of any rights of another party; or</li>
+            <li>Your violation of any applicable laws, rules, or regulations.</li>
+        </ul>
+    </div>
+
+    <!-- Section 10 -->
+    <div class="section">
+        <div class="section-title">10. GOVERNING LAW AND DISPUTE RESOLUTION</div>
+        <div class="section-content">
+            These Terms shall be governed by and construed in accordance with the laws of the State of
+            <strong>{{Jurisdiction}}</strong>, without regard to its conflict of law provisions.
+        </div>
+        <div class="section-content">
+            Any disputes arising out of or relating to these Terms or your use of the Website shall be resolved through
+            binding arbitration in accordance with the rules of the American Arbitration Association, or, at
+            <strong>{{BusinessName}}</strong>'s option, in the courts located in <strong>{{Jurisdiction}}</strong>. You
+            consent to the exclusive jurisdiction and venue of such courts.
+        </div>
+    </div>
+
+    <!-- Section 11 -->
+    <div class="section">
+        <div class="section-title">11. SEVERABILITY</div>
+        <div class="section-content">
+            If any provision of these Terms is held to be invalid or unenforceable, such provision shall be struck and the
+            remaining provisions shall remain in full force and effect.
+        </div>
+    </div>
+
+    <!-- Section 12 -->
+    <div class="section">
+        <div class="section-title">12. ENTIRE AGREEMENT</div>
+        <div class="section-content">
+            These Terms, together with our Privacy Policy and any other legal notices published on the Website, constitute
+            the entire agreement between you and <strong>{{BusinessName}}</strong> concerning your use of the Website.
+        </div>
+    </div>
+
+    <!-- Section 13 -->
+    <div class="section">
+        <div class="section-title">13. CONTACT INFORMATION</div>
+        <div class="section-content">
+            If you have any questions about these Terms, please contact us at:
+        </div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong><br>
+            {{BusinessAddress}}<br>
+            Email: {{Email}}<br>
+            Phone: {{Phone}}
+        </div>
+    </div>
+
+    <!-- Acknowledgement -->
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT</div>
+        <div class="section-content">
+            BY USING THIS WEBSITE, YOU ACKNOWLEDGE THAT YOU HAVE READ THESE TERMS AND CONDITIONS, UNDERSTAND THEM, AND
+            AGREE TO BE BOUND BY THEM.
+        </div>
+    </div>
+
+</body>
+
+</html>

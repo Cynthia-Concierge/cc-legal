@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Disclaimer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #000;
+            padding: 60px 80px;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 20px;
+        }
+
+        .document-title {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        .date {
+            text-align: right;
+            font-style: italic;
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .info-box {
+            background: #f8f8f8;
+            border: 2px solid #333;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .section {
+            margin: 25px 0;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .section-content {
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            margin-left: 40px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        .warning-box {
+            background: #fff9e6;
+            border: 2px solid #d4a900;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .warning-box strong {
+            display: block;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        /* Watermark/Disclaimer Styles */
+        .disclaimer-banner {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #f0ad4e;
+            border-left: 6px solid #f0ad4e;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .disclaimer-banner-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #856404;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .disclaimer-banner-text {
+            font-size: 10px;
+            color: #856404;
+            line-height: 1.4;
+        }
+
+        .footer-disclaimer {
+            margin-top: 50px;
+            padding: 25px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            page-break-inside: avoid;
+        }
+
+        .footer-disclaimer-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 8px;
+        }
+
+        .footer-disclaimer-text {
+            font-size: 10px;
+            line-height: 1.8;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+
+        .cta-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px;
+            border-radius: 5px;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .cta-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .cta-text {
+            font-size: 10px;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .cta-link {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 8px 20px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Disclaimer Banner -->
+    <div class="disclaimer-banner">
+        <div class="disclaimer-banner-title">⚠️ DRAFT DOCUMENT - NOT LEGAL ADVICE</div>
+        <div class="disclaimer-banner-text">
+            This is a template document that has not been reviewed by an attorney for your specific situation.
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="document-title">WEBSITE DISCLAIMER</div>
+    </div>
+
+    <!-- Date -->
+    <div class="date">Last Updated: {{date}}</div>
+
+    <!-- Business Information Box -->
+    <div class="info-box">
+        <h3>Business Information</h3>
+
+        <div class="info-row">
+            <div class="info-label">Business Name:</div>
+            <div class="info-value">{{BusinessName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Website:</div>
+            <div class="info-value">{{Website}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Contact Email:</div>
+            <div class="info-value">{{Email}}</div>
+        </div>
+    </div>
+
+    <!-- Warning Box -->
+    <div class="warning-box">
+        <strong>IMPORTANT NOTICE</strong>
+        The information provided on this website is for general informational and educational purposes only. It is not
+        intended to be a substitute for professional medical, legal, financial, or other expert advice.
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+        <div class="section-title">1. NO PROFESSIONAL ADVICE</div>
+        <div class="section-content">
+            The content on <strong>{{BusinessName}}</strong>'s website, including blog posts, videos, social media,
+            emails, and other materials, is provided for informational and educational purposes only.
+        </div>
+        <div class="section-content">
+            <strong>Nothing on this website constitutes:</strong>
+        </div>
+        <ul>
+            <li>Medical advice, diagnosis, or treatment recommendations;</li>
+            <li>Legal advice or representation;</li>
+            <li>Financial, investment, or tax advice;</li>
+            <li>Mental health counseling or therapy;</li>
+            <li>Nutritional or dietary advice from a licensed dietitian; or</li>
+            <li>Any other form of professional advice.</li>
+        </ul>
+        <div class="section-content">
+            You are strongly encouraged to consult with qualified professionals (physicians, attorneys, financial
+            advisors, etc.) before making any decisions based on information found on this website.
+        </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+        <div class="section-title">2. NO GUARANTEES OR WARRANTIES</div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> makes no representations or warranties of any kind, express or implied,
+            regarding:
+        </div>
+        <ul>
+            <li>The accuracy, completeness, reliability, or currentness of the information on this website;</li>
+            <li>The results, outcomes, or benefits you may or may not achieve from using our services, products, programs,
+                or information;</li>
+            <li>The fitness of our services for your particular needs or circumstances; or</li>
+            <li>That the website will be error-free, uninterrupted, or free from viruses or harmful components.</li>
+        </ul>
+        <div class="section-content">
+            <strong>All information and services are provided "AS IS" and "AS AVAILABLE" without any warranty
+                whatsoever.</strong>
+        </div>
+    </div>
+
+    <!-- Section 3 -->
+    <div class="section">
+        <div class="section-title">3. HEALTH AND FITNESS DISCLAIMER</div>
+        <div class="section-content">
+            Participation in physical activities such as yoga, pilates, fitness classes, personal training, retreats, or
+            wellness programs involves inherent risks, including but not limited to the risk of injury, illness, or
+            death.
+        </div>
+        <div class="section-content">
+            <strong>Before beginning any exercise or wellness program, you should:</strong>
+        </div>
+        <ul>
+            <li>Consult with a licensed physician, especially if you have pre-existing medical conditions, injuries, or
+                are pregnant;</li>
+            <li>Obtain medical clearance to participate in physical activities;</li>
+            <li>Inform instructors of any health concerns, limitations, or injuries;</li>
+            <li>Listen to your body and stop any activity that causes pain or discomfort.</li>
+        </ul>
+        <div class="section-content">
+            By participating in any activities offered by <strong>{{BusinessName}}</strong>, you acknowledge that you do
+            so at your own risk and assume full responsibility for your health and safety.
+        </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. RESULTS NOT GUARANTEED</div>
+        <div class="section-content">
+            Testimonials, success stories, case studies, and examples of results shared on this website represent the
+            experiences of specific individuals and are not guarantees of results you will achieve.
+        </div>
+        <div class="section-content">
+            Your results may vary depending on numerous factors, including but not limited to:
+        </div>
+        <ul>
+            <li>Your individual effort, consistency, and commitment;</li>
+            <li>Your starting point, goals, and personal circumstances;</li>
+            <li>Your physical condition, age, and health status;</li>
+            <li>External factors beyond our control.</li>
+        </ul>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> does not guarantee any specific outcomes, results, weight loss, muscle gain,
+            stress reduction, or other benefits from our services or programs.
+        </div>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. THIRD-PARTY CONTENT AND LINKS</div>
+        <div class="section-content">
+            This website may contain links to third-party websites, products, services, or resources. We do not endorse,
+            control, or assume responsibility for any third-party content.
+        </div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> is not liable for:
+        </div>
+        <ul>
+            <li>The accuracy or reliability of third-party information;</li>
+            <li>The quality, safety, or legality of third-party products or services;</li>
+            <li>Any damages, losses, or issues arising from your use of third-party websites or services;</li>
+            <li>The privacy practices of third-party websites (please review their privacy policies).</li>
+        </ul>
+        <div class="section-content">
+            Your use of any third-party links is at your own risk.
+        </div>
+    </div>
+
+    <!-- Section 6 -->
+    <div class="section">
+        <div class="section-title">6. AFFILIATE DISCLOSURES</div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> may earn commissions or receive compensation when you purchase products or
+            services through affiliate links on this website. This does not increase your cost.
+        </div>
+        <div class="section-content">
+            We only recommend products and services we genuinely believe provide value. However, we are not responsible
+            for the quality, performance, or outcomes of any third-party products or services.
+        </div>
+    </div>
+
+    <!-- Section 7 -->
+    <div class="section">
+        <div class="section-title">7. ASSUMPTION OF RISK</div>
+        <div class="section-content">
+            By using this website or participating in any services offered by <strong>{{BusinessName}}</strong>, you
+            acknowledge and assume all risks associated with:
+        </div>
+        <ul>
+            <li>Relying on information provided on this website;</li>
+            <li>Participating in physical activities, wellness programs, or online courses;</li>
+            <li>Using products, equipment, or facilities;</li>
+            <li>Interacting with instructors, staff, or other participants.</li>
+        </ul>
+        <div class="section-content">
+            You expressly waive any claims against <strong>{{BusinessName}}</strong> for injuries, damages, or losses
+            arising from your use of this website or participation in our services.
+        </div>
+    </div>
+
+    <!-- Section 8 -->
+    <div class="section">
+        <div class="section-title">8. LIMITATION OF LIABILITY</div>
+        <div class="section-content">
+            To the fullest extent permitted by law, <strong>{{BusinessName}}</strong>, its owners, employees, instructors,
+            contractors, agents, and affiliates shall not be liable for any direct, indirect, incidental, consequential,
+            special, or punitive damages arising from:
+        </div>
+        <ul>
+            <li>Your use of (or inability to use) this website;</li>
+            <li>Any errors, omissions, or inaccuracies in the content;</li>
+            <li>Reliance on information provided on this website;</li>
+            <li>Participation in our services, programs, or activities;</li>
+            <li>Unauthorized access to your data or account;</li>
+            <li>Any other matter related to this website or our services.</li>
+        </ul>
+        <div class="section-content">
+            Some jurisdictions do not allow the exclusion of certain warranties or limitations of liability, so these
+            limitations may not apply to you.
+        </div>
+    </div>
+
+    <!-- Section 9 -->
+    <div class="section">
+        <div class="section-title">9. INTELLECTUAL PROPERTY</div>
+        <div class="section-content">
+            All content on this website, including text, images, videos, graphics, logos, and other materials, is the
+            intellectual property of <strong>{{BusinessName}}</strong> and is protected by copyright, trademark, and other
+            laws.
+        </div>
+        <div class="section-content">
+            <strong>You may not:</strong>
+        </div>
+        <ul>
+            <li>Copy, reproduce, distribute, or publicly display our content without permission;</li>
+            <li>Use our content for commercial purposes without a license;</li>
+            <li>Modify, create derivative works, or reverse engineer our content;</li>
+            <li>Use our content to train AI models, algorithms, or datasets without express written consent.</li>
+        </ul>
+        <div class="section-content">
+            Unauthorized use of our intellectual property may result in legal action.
+        </div>
+    </div>
+
+    <!-- Section 10 -->
+    <div class="section">
+        <div class="section-title">10. CHANGES TO DISCLAIMER</div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> reserves the right to update, modify, or revise this Disclaimer at any time
+            without prior notice. Your continued use of this website after changes are posted constitutes your acceptance
+            of the updated Disclaimer.
+        </div>
+        <div class="section-content">
+            We encourage you to review this Disclaimer periodically.
+        </div>
+    </div>
+
+    <!-- Section 11 -->
+    <div class="section">
+        <div class="section-title">11. GOVERNING LAW</div>
+        <div class="section-content">
+            This Disclaimer shall be governed by and construed in accordance with the laws of the State of
+            <strong>{{Jurisdiction}}</strong>, without regard to conflict of law principles.
+        </div>
+    </div>
+
+    <!-- Section 12 -->
+    <div class="section">
+        <div class="section-title">12. CONTACT INFORMATION</div>
+        <div class="section-content">
+            If you have any questions about this Disclaimer, please contact us:
+        </div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong><br>
+            {{BusinessAddress}}<br>
+            Email: {{Email}}<br>
+            Phone: {{Phone}}
+        </div>
+    </div>
+
+    <!-- Acknowledgement -->
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT</div>
+        <div class="section-content">
+            By using this website, you acknowledge that you have read, understood, and agree to be bound by this
+            Disclaimer. If you do not agree with any part of this Disclaimer, please discontinue use of this website
+            immediately.
+        </div>
+    </div>
+
+
+    <!-- Footer Disclaimer -->
+    <div class="footer-disclaimer">
+        <div class="footer-disclaimer-title">⚖️ Important Legal Disclaimer</div>
+        <div class="footer-disclaimer-text">
+            <strong>This document is a template and has NOT been reviewed by a licensed attorney.</strong> It is provided for informational purposes only and does not constitute legal advice. This template may not be appropriate for your specific business, state, or legal requirements.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>This is NOT a legally binding contract</strong> until it has been reviewed, customized, and approved by a qualified attorney who understands your business and applicable laws. Using this template without proper legal review may leave you exposed to significant legal and financial risks.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>We strongly recommend</strong> having this document reviewed by an experienced attorney before using it with clients. Generic templates cannot account for your unique business model, state-specific regulations, or industry requirements.
+        </div>
+
+        <!-- Call to Action -->
+        <div class="cta-box">
+            <div class="cta-title">Get Your Documents Professionally Reviewed</div>
+            <div class="cta-text">
+                Our legal team specializes in wellness businesses and can review, customize, and perfect your contracts to ensure maximum protection. Book a free consultation to discuss your specific needs.
+            </div>
+            <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" class="cta-link">📅 Book Free Legal Consultation</a>
+        </div>
+    </div>
+
+</body>
+
+</html>

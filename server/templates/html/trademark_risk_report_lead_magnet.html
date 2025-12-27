@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trademark Risk Snapshot - {{businessName}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            font-size: 10pt;
+            line-height: 1.5;
+            color: #1a1a1a;
+            padding: 30px 40px;
+            background: white;
+        }
+
+        .page {
+            page-break-after: always;
+            page-break-inside: avoid;
+        }
+
+        .page:last-child {
+            page-break-after: avoid;
+        }
+
+        /* Header Section */
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #14b8a6;
+            page-break-inside: avoid;
+            page-break-after: avoid;
+        }
+
+        .logo {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #14b8a6;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .document-title {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-top: 8px;
+        }
+
+        .subtitle {
+            font-size: 10pt;
+            color: #666;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        /* Risk Badge Section */
+        .risk-badge-container {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 3px solid;
+            page-break-inside: avoid;
+        }
+
+        .risk-badge-container.high {
+            background: #fef2f2;
+            border-color: #dc2626;
+        }
+
+        .risk-badge-container.moderate {
+            background: #fff7ed;
+            border-color: #ea580c;
+        }
+
+        .risk-badge-container.low {
+            background: #f0fdf4;
+            border-color: #16a34a;
+        }
+
+        .risk-icon {
+            font-size: 32pt;
+            margin-bottom: 5px;
+        }
+
+        .risk-level {
+            font-size: 20pt;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .risk-badge-container.high .risk-level {
+            color: #dc2626;
+        }
+
+        .risk-badge-container.moderate .risk-level {
+            color: #ea580c;
+        }
+
+        .risk-badge-container.low .risk-level {
+            color: #16a34a;
+        }
+
+        .urgency-message {
+            font-size: 12pt;
+            font-weight: 600;
+            color: #555;
+        }
+
+        /* USPTO Results Section */
+        .section {
+            margin: 20px 0;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            font-size: 15pt;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .conflict-count-box {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin: 12px 0;
+            page-break-inside: avoid;
+        }
+
+        .conflict-number {
+            font-size: 36pt;
+            font-weight: bold;
+            color: #dc2626;
+            line-height: 1;
+        }
+
+        .conflict-label {
+            font-size: 11pt;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* Conflicts List */
+        .conflicts-list {
+            margin: 15px 0;
+            page-break-inside: avoid;
+        }
+
+        .conflict-item {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-left: 4px solid #dc2626;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            page-break-inside: avoid;
+        }
+
+        .conflict-mark {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 3px;
+        }
+
+        .conflict-owner {
+            font-size: 9pt;
+            color: #666;
+            margin-bottom: 3px;
+        }
+
+        .conflict-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+
+        .status-live {
+            background: #fecaca;
+            color: #991b1b;
+        }
+
+        .status-dead {
+            background: #d1d5db;
+            color: #374151;
+        }
+
+        /* Verdict Box */
+        .verdict-box {
+            background: #f0f9ff;
+            border: 2px solid #14b8a6;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            page-break-inside: avoid;
+        }
+
+        .verdict-box h3 {
+            font-size: 13pt;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+        }
+
+        .verdict-box p {
+            font-size: 10pt;
+            color: #374151;
+            line-height: 1.6;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+            color: white;
+            padding: 25px 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 30px 0;
+            page-break-inside: avoid;
+        }
+
+        .cta-section h3 {
+            font-size: 16pt;
+            margin-bottom: 12px;
+            margin-top: 5px;
+        }
+
+        .cta-section p {
+            font-size: 10pt;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .cta-button-visual {
+            background: white;
+            color: #14b8a6;
+            font-size: 13pt;
+            font-weight: bold;
+            padding: 12px 25px;
+            border-radius: 8px;
+            display: inline-block;
+            margin: 8px 0;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .cta-button-visual:hover {
+            background: #f0f9ff;
+        }
+
+        .cta-url {
+            font-size: 9pt;
+            margin-top: 8px;
+            opacity: 0.95;
+            color: white;
+            text-decoration: none;
+        }
+
+        .cta-url:hover {
+            text-decoration: underline;
+        }
+
+        /* Disclaimer */
+        .disclaimer {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            margin: 20px 0;
+            font-size: 8pt;
+            color: #92400e;
+            line-height: 1.5;
+            page-break-inside: avoid;
+        }
+
+        /* Page 2 Styles */
+        .education-section {
+            margin: 15px 0;
+            page-break-inside: avoid;
+        }
+
+        .education-section h3 {
+            font-size: 13pt;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+        }
+
+        .education-section ul {
+            margin-left: 20px;
+            color: #374151;
+        }
+
+        .education-section li {
+            margin-bottom: 6px;
+            font-size: 10pt;
+            line-height: 1.5;
+        }
+
+        /* Next Steps Cards */
+        .next-steps {
+            margin: 20px 0;
+        }
+
+        .step-card {
+            display: flex;
+            gap: 12px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 12px;
+            page-break-inside: avoid;
+        }
+
+        .step-number {
+            flex-shrink: 0;
+            width: 35px;
+            height: 35px;
+            background: #14b8a6;
+            color: white;
+            font-size: 16pt;
+            font-weight: bold;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .step-content h4 {
+            font-size: 11pt;
+            color: #1a1a1a;
+            margin-bottom: 6px;
+        }
+
+        .step-content p {
+            font-size: 9pt;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        /* Final CTA Box */
+        .cta-box-final {
+            background: #f0f9ff;
+            border: 3px solid #14b8a6;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin: 25px 0;
+            page-break-inside: avoid;
+        }
+
+        .cta-box-final h3 {
+            font-size: 15pt;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .cta-box-final p {
+            font-size: 10pt;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+
+        .contact-info {
+            font-size: 10pt;
+            color: #14b8a6;
+            font-weight: bold;
+            line-height: 1.7;
+        }
+
+        .contact-info a {
+            color: #14b8a6;
+            text-decoration: none;
+        }
+
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            font-size: 8pt;
+            color: #999;
+            page-break-inside: avoid;
+        }
+
+        .footer p {
+            margin-bottom: 4px;
+        }
+
+        /* Utility Classes */
+        .text-center {
+            text-align: center;
+        }
+
+        .mb-20 {
+            margin-bottom: 20px;
+        }
+
+        .mt-20 {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- PAGE 1: Executive Summary -->
+    <div class="page">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">Conscious Counsel</div>
+            <div class="document-title">Trademark Risk Snapshot</div>
+            <div class="subtitle">Preliminary scan results for {{businessName}}</div>
+            <div class="subtitle">{{date}}</div>
+        </div>
+
+        <!-- Risk Badge (Large, Prominent) -->
+        <div class="risk-badge-container {{riskClass}}">
+            <div class="risk-icon">{{riskIcon}}</div>
+            <div class="risk-level">{{riskLevel}}</div>
+            <div class="urgency-message">{{urgencyMessage}}</div>
+        </div>
+
+        <!-- USPTO Scan Results -->
+        <div class="section">
+            <h2 class="section-title">What We Found in the USPTO Database:</h2>
+
+            <div class="conflict-count-box">
+                <div class="conflict-number">{{totalConflicts}}</div>
+                <div class="conflict-label">similar trademark(s) found</div>
+            </div>
+
+            {{conflictsSection}}
+        </div>
+
+        <!-- Verdict Box -->
+        <div class="verdict-box">
+            <h3>What This Means for {{businessName}}:</h3>
+            <p>{{verdict}}</p>
+        </div>
+
+        <!-- CTA Section (PROMINENT) -->
+        <div class="cta-section">
+            <h3>Want a Full Analysis?</h3>
+            <p>This is a preliminary scan based on USPTO database search. For a comprehensive trademark clearance search and personalized strategy session, book a free call with our trademark attorney.</p>
+            <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" class="cta-button-visual" target="_blank">
+                📅 Schedule Your Free Consultation
+            </a>
+            <p><a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" class="cta-url" target="_blank">calendly.com/chad-consciouscounsel/connection-call-with-chad</a></p>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="disclaimer">
+            <strong>Important:</strong> This is a preliminary screening based on automated USPTO database search.
+            It is not a legal opinion or comprehensive trademark clearance search. For full trademark analysis including
+            state registrations, common law usage, and domain/social media availability, consult with a trademark attorney.
+        </div>
+    </div>
+
+    <!-- PAGE 2: Next Steps & Education -->
+    <div class="page" style="padding-top: 20px;">
+        <div class="header">
+            <div class="logo">Conscious Counsel</div>
+            <div class="subtitle">Trademark Protection Guide for {{businessName}}</div>
+        </div>
+
+        <h2 class="section-title">Understanding Your Trademark Risk</h2>
+
+        <div class="education-section">
+            <h3>Why Trademark Protection Matters:</h3>
+            <ul>
+                <li><strong>Protects your brand identity</strong> as you grow and expand your business</li>
+                <li><strong>Prevents costly rebranding</strong> if trademark conflicts arise later</li>
+                <li><strong>Gives you exclusive rights</strong> to use your name in your industry nationwide</li>
+                <li><strong>Increases business value</strong> for future sale or investment opportunities</li>
+                <li><strong>Provides legal recourse</strong> against copycats and competitors</li>
+                <li><strong>Builds customer trust</strong> with the ® symbol and official registration</li>
+            </ul>
+        </div>
+
+        <div class="next-steps">
+            <h2 class="section-title mt-20">Recommended Next Steps:</h2>
+
+            <div class="step-card">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h4>Schedule Free Strategy Call</h4>
+                    <p>Our trademark attorney will review your USPTO scan results, explain what the conflicts mean for your specific situation, and recommend protection strategies tailored to your business goals.</p>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h4>Comprehensive Trademark Search</h4>
+                    <p>Go beyond the basic USPTO scan to check state trademark databases, common law usage, domain name availability, social media handles, and business name registrations across all 50 states.</p>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h4>Federal Trademark Registration (If Clear)</h4>
+                    <p>If your comprehensive search shows your name is available, secure your brand with official USPTO federal registration, giving you nationwide exclusive rights and legal enforcement power.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA Repeated -->
+        <div class="cta-box-final">
+            <h3>Ready to Protect Your Brand?</h3>
+            <p>Book your free 30-minute consultation to discuss your trademark strategy</p>
+            <div class="contact-info">
+                📅 <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" target="_blank">calendly.com/chad-consciouscounsel/connection-call-with-chad</a><br>
+                📧 <a href="mailto:chad@consciouscounsel.ca">chad@consciouscounsel.ca</a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>© {{year}} Conscious Counsel. All rights reserved.</strong></p>
+            <p>This report is for informational purposes only and does not constitute legal advice.</p>
+            <p>For personalized legal guidance, please consult with a licensed attorney.</p>
+        </div>
+    </div>
+</body>
+
+</html>

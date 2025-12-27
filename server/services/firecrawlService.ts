@@ -178,85 +178,143 @@ export class FirecrawlService {
   }
 
   /**
-   * Scrape a single page using Firecrawl
+   * Scrape a single page using Firecrawl with retry logic
    */
-  private async scrapePage(url: string, options: { onlyMainContent?: boolean } = {}): Promise<string> {
-    try {
-      const response = await fetch(`${this.baseUrl}/scrape`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          url: url,
-          formats: ["markdown"],
-          onlyMainContent: options.onlyMainContent !== undefined ? options.onlyMainContent : true,
-        }),
-      });
+  private async scrapePage(url: string, options: { onlyMainContent?: boolean } = {}, retries = 3): Promise<string> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(`${this.baseUrl}/scrape`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            url: url,
+            formats: ["markdown"],
+            onlyMainContent: options.onlyMainContent !== undefined ? options.onlyMainContent : true,
+          }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          `Firecrawl API error: ${response.status} - ${errorData.message || response.statusText}`
-        );
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = `Firecrawl API error: ${response.status} - ${errorData.message || response.statusText}`;
+          
+          // Retry on 5xx errors (server errors) or 429 (rate limit)
+          if ((response.status >= 500 && response.status < 600) || response.status === 429) {
+            if (attempt < retries) {
+              const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+              console.warn(`[Firecrawl] ${errorMessage}. Retrying in ${delay}ms... (attempt ${attempt}/${retries})`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+          
+          throw new Error(errorMessage);
+        }
+
+        const data: FirecrawlScrapeResponse = await response.json();
+
+        if (!data.success || !data.data?.markdown) {
+          throw new Error(data.error || "No content returned from Firecrawl");
+        }
+
+        return data.data.markdown;
+      } catch (error: any) {
+        // If this is the last attempt, throw the error
+        if (attempt === retries) {
+          console.error(`[Firecrawl] Error scraping page ${url} after ${retries} attempts:`, error);
+          throw error;
+        }
+        
+        // For network errors or other retryable errors, wait and retry
+        if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('timeout')) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.warn(`[Firecrawl] Network error for ${url}. Retrying in ${delay}ms... (attempt ${attempt}/${retries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // For non-retryable errors, throw immediately
+        throw error;
       }
-
-      const data: FirecrawlScrapeResponse = await response.json();
-
-      if (!data.success || !data.data?.markdown) {
-        throw new Error(data.error || "No content returned from Firecrawl");
-      }
-
-      return data.data.markdown;
-    } catch (error) {
-      console.error(`Error scraping page ${url}:`, error);
-      throw error;
     }
+    
+    // This should never be reached, but TypeScript needs it
+    throw new Error("Failed to scrape page after retries");
   }
 
   /**
    * Scrape a page with HTML to extract footer and social media
    * CRITICAL: Must use onlyMainContent: false + javascript: true to get footer/social links
    */
-  private async scrapePageWithHtml(url: string): Promise<{ markdown: string; html: string; metadata?: any }> {
-    try {
-      const response = await fetch(`${this.baseUrl}/scrape`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          url: url,
-          formats: ["html", "markdown"], // HTML first for better extraction
-          onlyMainContent: false, // CRITICAL: Must be false to get footer/header/social links
-          // Note: Firecrawl automatically handles JavaScript rendering when onlyMainContent is false
-        }),
-      });
+  private async scrapePageWithHtml(url: string, retries = 3): Promise<{ markdown: string; html: string; metadata?: any }> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(`${this.baseUrl}/scrape`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            url: url,
+            formats: ["html", "markdown"], // HTML first for better extraction
+            onlyMainContent: false, // CRITICAL: Must be false to get footer/header/social links
+            // Note: Firecrawl automatically handles JavaScript rendering when onlyMainContent is false
+          }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          `Firecrawl API error: ${response.status} - ${errorData.message || response.statusText}`
-        );
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = `Firecrawl API error: ${response.status} - ${errorData.message || response.statusText}`;
+          
+          // Retry on 5xx errors (server errors) or 429 (rate limit)
+          if ((response.status >= 500 && response.status < 600) || response.status === 429) {
+            if (attempt < retries) {
+              const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+              console.warn(`[Firecrawl] ${errorMessage}. Retrying in ${delay}ms... (attempt ${attempt}/${retries})`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+          
+          throw new Error(errorMessage);
+        }
+
+        const data: any = await response.json();
+
+        if (!data.success || !data.data) {
+          throw new Error(data.error || "No content returned from Firecrawl");
+        }
+
+        return {
+          markdown: data.data.markdown || "",
+          html: data.data.html || "",
+          metadata: data.data.metadata || {},
+        };
+      } catch (error: any) {
+        // If this is the last attempt, throw the error
+        if (attempt === retries) {
+          console.error(`[Firecrawl] Error scraping page with HTML ${url} after ${retries} attempts:`, error);
+          throw error;
+        }
+        
+        // For network errors or other retryable errors, wait and retry
+        if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('timeout')) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.warn(`[Firecrawl] Network error for ${url}. Retrying in ${delay}ms... (attempt ${attempt}/${retries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // For non-retryable errors, throw immediately
+        throw error;
       }
-
-      const data: any = await response.json();
-
-      if (!data.success || !data.data) {
-        throw new Error(data.error || "No content returned from Firecrawl");
-      }
-
-      return {
-        markdown: data.data.markdown || "",
-        html: data.data.html || "",
-        metadata: data.data.metadata || {},
-      };
-    } catch (error) {
-      console.error(`Error scraping page with HTML ${url}:`, error);
-      throw error;
     }
+    
+    // This should never be reached, but TypeScript needs it
+    throw new Error("Failed to scrape page with HTML after retries");
   }
 
   /**

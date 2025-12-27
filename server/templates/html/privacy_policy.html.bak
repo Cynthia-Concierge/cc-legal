@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #000;
+            padding: 60px 80px;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 20px;
+        }
+
+        .document-title {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        .date {
+            text-align: right;
+            font-style: italic;
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .info-box {
+            background: #f8f8f8;
+            border: 2px solid #333;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .section {
+            margin: 25px 0;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .section-content {
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            margin-left: 40px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="document-title">PRIVACY POLICY</div>
+    </div>
+
+    <!-- Date -->
+    <div class="date">Last Updated: {{date}}</div>
+
+    <!-- Business Information Box -->
+    <div class="info-box">
+        <h3>Business Information</h3>
+
+        <div class="info-row">
+            <div class="info-label">Business Name:</div>
+            <div class="info-value">{{BusinessName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Website:</div>
+            <div class="info-value">{{Website}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Contact Email:</div>
+            <div class="info-value">{{Email}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Business Address:</div>
+            <div class="info-value">{{BusinessAddress}}</div>
+        </div>
+    </div>
+
+    <!-- Introduction -->
+    <div class="section">
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> ("we," "us," or "our") is committed to protecting your privacy. This
+            Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you visit
+            our website {{Website}}, use our services, or interact with us in any way.
+        </div>
+        <div class="section-content">
+            By using our website or services, you consent to the data practices described in this Privacy Policy. If you
+            do not agree with this Privacy Policy, please do not access or use our website or services.
+        </div>
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+        <div class="section-title">1. INFORMATION WE COLLECT</div>
+        <div class="section-content">
+            We may collect the following types of information:
+        </div>
+
+        <div class="section-content">
+            <strong>A. Personal Information You Provide to Us</strong>
+        </div>
+        <ul>
+            <li><strong>Contact Information:</strong> Name, email address, phone number, mailing address</li>
+            <li><strong>Account Information:</strong> Username, password, profile information</li>
+            <li><strong>Payment Information:</strong> Credit card details, billing address (processed securely through
+                third-party payment processors)</li>
+            <li><strong>Health Information:</strong> Medical history, injuries, physical limitations, emergency contact
+                information (if you complete intake forms or waivers)</li>
+            <li><strong>Communications:</strong> Messages, emails, feedback, reviews, or other communications you send to
+                us</li>
+        </ul>
+
+        <div class="section-content">
+            <strong>B. Information Collected Automatically</strong>
+        </div>
+        <ul>
+            <li><strong>Device Information:</strong> IP address, browser type, operating system, device identifiers</li>
+            <li><strong>Usage Data:</strong> Pages visited, time spent on pages, links clicked, referring URLs</li>
+            <li><strong>Cookies and Tracking Technologies:</strong> Information collected through cookies, web beacons,
+                and similar technologies (see Section 5 for more details)</li>
+        </ul>
+
+        <div class="section-content">
+            <strong>C. Information from Third Parties</strong>
+        </div>
+        <ul>
+            <li>Social media platforms (if you connect your account or interact with us on social media)</li>
+            <li>Payment processors and financial institutions</li>
+            <li>Marketing and analytics partners</li>
+        </ul>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+        <div class="section-title">2. HOW WE USE YOUR INFORMATION</div>
+        <div class="section-content">
+            We use the information we collect for the following purposes:
+        </div>
+        <ul>
+            <li><strong>To Provide Services:</strong> Process registrations, bookings, payments, and deliver the services
+                you request</li>
+            <li><strong>To Communicate with You:</strong> Send confirmations, updates, newsletters, marketing materials,
+                and respond to inquiries</li>
+            <li><strong>To Improve Our Services:</strong> Analyze usage patterns, conduct research, and enhance user
+                experience</li>
+            <li><strong>To Ensure Safety:</strong> Monitor for fraud, security threats, and policy violations</li>
+            <li><strong>To Comply with Legal Obligations:</strong> Fulfill legal requirements, respond to legal requests,
+                and enforce our terms</li>
+            <li><strong>To Personalize Your Experience:</strong> Tailor content, recommendations, and communications based
+                on your preferences</li>
+            <li><strong>For Marketing and Advertising:</strong> Send promotional materials, special offers, and targeted
+                advertisements (you may opt out at any time)</li>
+        </ul>
+    </div>
+
+    <!-- Section 3 -->
+    <div class="section">
+        <div class="section-title">3. HOW WE SHARE YOUR INFORMATION</div>
+        <div class="section-content">
+            We do not sell your personal information. We may share your information in the following circumstances:
+        </div>
+        <ul>
+            <li><strong>Service Providers:</strong> Third-party vendors who assist with payment processing, email
+                delivery, hosting, analytics, customer support, and other business operations</li>
+            <li><strong>Business Transfers:</strong> In connection with a merger, acquisition, sale of assets, or
+                bankruptcy</li>
+            <li><strong>Legal Requirements:</strong> When required by law, court order, or government regulation, or to
+                protect the rights, property, or safety of <strong>{{BusinessName}}</strong>, our users, or others</li>
+            <li><strong>With Your Consent:</strong> When you explicitly authorize us to share your information</li>
+        </ul>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. DATA RETENTION</div>
+        <div class="section-content">
+            We retain your personal information for as long as necessary to fulfill the purposes outlined in this Privacy
+            Policy, unless a longer retention period is required or permitted by law. When we no longer need your
+            information, we will securely delete or anonymize it.
+        </div>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. COOKIES AND TRACKING TECHNOLOGIES</div>
+        <div class="section-content">
+            We use cookies, web beacons, pixels, and similar technologies to enhance your experience on our website.
+            Cookies are small data files stored on your device that help us recognize you, remember your preferences, and
+            analyze website traffic.
+        </div>
+
+        <div class="section-content">
+            <strong>Types of Cookies We Use:</strong>
+        </div>
+        <ul>
+            <li><strong>Essential Cookies:</strong> Necessary for website functionality (e.g., login, shopping cart)</li>
+            <li><strong>Performance Cookies:</strong> Collect information about how you use our website to improve
+                performance</li>
+            <li><strong>Functional Cookies:</strong> Remember your preferences and settings</li>
+            <li><strong>Marketing Cookies:</strong> Track your activity to deliver personalized advertisements</li>
+        </ul>
+
+        <div class="section-content">
+            You can control cookies through your browser settings. Note that disabling cookies may affect website
+            functionality.
+        </div>
+    </div>
+
+    <!-- Section 6 -->
+    <div class="section">
+        <div class="section-title">6. YOUR PRIVACY RIGHTS</div>
+        <div class="section-content">
+            Depending on your location, you may have the following rights regarding your personal information:
+        </div>
+        <ul>
+            <li><strong>Access:</strong> Request a copy of the personal information we hold about you</li>
+            <li><strong>Correction:</strong> Request correction of inaccurate or incomplete information</li>
+            <li><strong>Deletion:</strong> Request deletion of your personal information (subject to legal exceptions)</li>
+            <li><strong>Opt-Out:</strong> Unsubscribe from marketing communications at any time</li>
+            <li><strong>Data Portability:</strong> Request a copy of your information in a machine-readable format</li>
+            <li><strong>Object to Processing:</strong> Object to certain uses of your information</li>
+            <li><strong>Withdraw Consent:</strong> Withdraw consent where processing is based on consent</li>
+        </ul>
+
+        <div class="section-content">
+            To exercise any of these rights, please contact us at {{Email}}. We will respond to your request within a
+            reasonable timeframe as required by applicable law.
+        </div>
+    </div>
+
+    <!-- Section 7 -->
+    <div class="section">
+        <div class="section-title">7. DATA SECURITY</div>
+        <div class="section-content">
+            We implement reasonable administrative, technical, and physical safeguards to protect your personal
+            information from unauthorized access, use, disclosure, alteration, or destruction. These measures include:
+        </div>
+        <ul>
+            <li>Encryption of sensitive data (e.g., payment information)</li>
+            <li>Secure servers and firewalls</li>
+            <li>Regular security audits and updates</li>
+            <li>Access controls and authentication requirements</li>
+        </ul>
+
+        <div class="section-content">
+            However, no method of transmission over the internet or electronic storage is 100% secure. While we strive to
+            protect your information, we cannot guarantee absolute security.
+        </div>
+    </div>
+
+    <!-- Section 8 -->
+    <div class="section">
+        <div class="section-title">8. THIRD-PARTY WEBSITES AND SERVICES</div>
+        <div class="section-content">
+            Our website may contain links to third-party websites, social media platforms, and services. We are not
+            responsible for the privacy practices or content of these third parties. We encourage you to review their
+            privacy policies before providing any personal information.
+        </div>
+    </div>
+
+    <!-- Section 9 -->
+    <div class="section">
+        <div class="section-title">9. CHILDREN'S PRIVACY</div>
+        <div class="section-content">
+            Our services are not intended for individuals under the age of 18. We do not knowingly collect personal
+            information from children. If we become aware that we have collected information from a child without parental
+            consent, we will take steps to delete such information promptly.
+        </div>
+        <div class="section-content">
+            If you believe we have collected information from a child, please contact us at {{Email}}.
+        </div>
+    </div>
+
+    <!-- Section 10 -->
+    <div class="section">
+        <div class="section-title">10. INTERNATIONAL DATA TRANSFERS</div>
+        <div class="section-content">
+            Your information may be transferred to and processed in countries other than your country of residence. These
+            countries may have different data protection laws. By using our services, you consent to the transfer of your
+            information to the United States and other countries where we operate.
+        </div>
+    </div>
+
+    <!-- Section 11 -->
+    <div class="section">
+        <div class="section-title">11. CALIFORNIA PRIVACY RIGHTS (CCPA)</div>
+        <div class="section-content">
+            If you are a California resident, you have additional rights under the California Consumer Privacy Act (CCPA):
+        </div>
+        <ul>
+            <li>Right to know what personal information is collected, used, shared, or sold</li>
+            <li>Right to delete personal information (subject to exceptions)</li>
+            <li>Right to opt-out of the sale of personal information (we do not sell personal information)</li>
+            <li>Right to non-discrimination for exercising your privacy rights</li>
+        </ul>
+
+        <div class="section-content">
+            To exercise these rights, contact us at {{Email}} or call {{Phone}}.
+        </div>
+    </div>
+
+    <!-- Section 12 -->
+    <div class="section">
+        <div class="section-title">12. EUROPEAN PRIVACY RIGHTS (GDPR)</div>
+        <div class="section-content">
+            If you are located in the European Economic Area (EEA), you have rights under the General Data Protection
+            Regulation (GDPR), including the rights outlined in Section 6 above.
+        </div>
+        <div class="section-content">
+            We process your data based on:
+        </div>
+        <ul>
+            <li><strong>Consent:</strong> You have given clear consent for us to process your information</li>
+            <li><strong>Contract:</strong> Processing is necessary to fulfill our contract with you</li>
+            <li><strong>Legal Obligation:</strong> Processing is required by law</li>
+            <li><strong>Legitimate Interests:</strong> Processing is in our legitimate business interests and does not
+                override your rights</li>
+        </ul>
+    </div>
+
+    <!-- Section 13 -->
+    <div class="section">
+        <div class="section-title">13. CHANGES TO THIS PRIVACY POLICY</div>
+        <div class="section-content">
+            We may update this Privacy Policy from time to time to reflect changes in our practices, technology, legal
+            requirements, or other factors. When we make changes, we will update the "Last Updated" date at the top of
+            this policy.
+        </div>
+        <div class="section-content">
+            We encourage you to review this Privacy Policy periodically. Your continued use of our services after changes
+            are posted constitutes your acceptance of the updated policy.
+        </div>
+    </div>
+
+    <!-- Section 14 -->
+    <div class="section">
+        <div class="section-title">14. CONTACT US</div>
+        <div class="section-content">
+            If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please
+            contact us:
+        </div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong><br>
+            {{BusinessAddress}}<br>
+            Email: {{Email}}<br>
+            Phone: {{Phone}}
+        </div>
+    </div>
+
+    <!-- Acknowledgement -->
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT</div>
+        <div class="section-content">
+            By using our website and services, you acknowledge that you have read and understood this Privacy Policy and
+            consent to the collection, use, and disclosure of your personal information as described herein.
+        </div>
+    </div>
+
+</body>
+
+</html>

@@ -157,6 +157,9 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
   // Build list of recommended documents based on user's specific answers
   let recommendedDocs: DocumentItem[] = [];
 
+  console.log('[DocumentEngine] getRecommendedDocuments called with answers:', answers);
+  console.log('[DocumentEngine] ALL_TEMPLATES count:', ALL_TEMPLATES.length);
+
   // 1. Core Documents (Recommended for EVERYONE - always included)
   const coreIds = [
     'template-6', // Social Media Disclaimer
@@ -169,7 +172,9 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
     'template-cookie', // Cookie Policy
     'template-refund', // Refund Policy
   ];
-  recommendedDocs.push(...ALL_TEMPLATES.filter(t => coreIds.includes(t.id)));
+  const coreTemplates = ALL_TEMPLATES.filter(t => coreIds.includes(t.id));
+  console.log('[DocumentEngine] Core templates found:', coreTemplates.length, coreTemplates.map(t => t.id));
+  recommendedDocs.push(...coreTemplates);
 
   // 2. Dynamic Recommendations based on User's Answers
 
@@ -230,14 +235,21 @@ export function getRecommendedDocuments(answers: UserAnswers): RecommendationRes
   // Deduplicate recommended docs
   recommendedDocs = Array.from(new Set(recommendedDocs));
 
+  console.log('[DocumentEngine] Final recommendedDocs count:', recommendedDocs.length);
+  console.log('[DocumentEngine] Final recommendedDocs:', recommendedDocs.map(t => t.id));
+
   // Pick top priorities - Core Legal Documents
   // We prioritize the Waiver, Service Agreement, and Website Terms as the "Big 3"
   const priorityIds = ['template-1', 'template-2', 'template-website'];
   const topPriorities = recommendedDocs.filter(doc => priorityIds.includes(doc.id));
 
-  return {
+  const result = {
     freeTemplates: recommendedDocs, // ALL recommended documents are free and customizable
     advancedTemplates: [], // No longer any "advanced" documents - everything is free
     topPriorities
   };
+
+  console.log('[DocumentEngine] Returning result:', result);
+
+  return result;
 }

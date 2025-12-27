@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/wellness/ui/Card';
 import { Button } from '../../../components/wellness/ui/Button';
-import { Globe, AlertTriangle, CheckCircle2, FileText, ExternalLink } from 'lucide-react';
+import { Globe, AlertTriangle, CheckCircle2, FileText, ExternalLink, ChevronDown } from 'lucide-react';
 import { WebsiteScanModal } from '../../../components/wellness/WebsiteScanModal';
 import { supabase } from '../../../lib/supabase';
 
@@ -28,6 +28,8 @@ export const WebsiteCompliancePage: React.FC = () => {
   const [hasScannedWebsite, setHasScannedWebsite] = useState(false);
   const [scanResults, setScanResults] = useState<ScanResultSummary | null>(null);
   const [answers, setAnswers] = useState<any>(null);
+  const [isIssuesExpanded, setIsIssuesExpanded] = useState(false);
+  const [expandedDocuments, setExpandedDocuments] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Load saved answers to get website URL
@@ -96,6 +98,37 @@ export const WebsiteCompliancePage: React.FC = () => {
   const mediumIssues = scanResults?.issues?.filter((i) => i.severity === 'medium') || [];
   const lowIssues = scanResults?.issues?.filter((i) => i.severity === 'low') || [];
 
+  // Get website URL from scan results or answers
+  const websiteUrl = scanResults?.websiteUrl || answers?.website || '';
+
+  // Group issues by document
+  const issuesByDocument = React.useMemo(() => {
+    const allIssues = [...highIssues, ...mediumIssues, ...lowIssues];
+    const grouped: Record<string, typeof allIssues> = {};
+    
+    allIssues.forEach(issue => {
+      const docName = issue.document;
+      if (!grouped[docName]) {
+        grouped[docName] = [];
+      }
+      grouped[docName].push(issue);
+    });
+    
+    return grouped;
+  }, [highIssues, mediumIssues, lowIssues]);
+
+  const toggleDocument = (docName: string) => {
+    setExpandedDocuments(prev => {
+      const next = new Set(prev);
+      if (next.has(docName)) {
+        next.delete(docName);
+      } else {
+        next.add(docName);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -104,12 +137,30 @@ export const WebsiteCompliancePage: React.FC = () => {
           <div className="p-2 bg-brand-100 rounded-lg text-brand-600 flex-shrink-0">
             <Globe size={24} className="md:w-7 md:h-7" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
-            Website Compliance
-          </h1>
+          <div className="flex-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+              {websiteUrl ? (
+                <>
+                  Website Compliance for{' '}
+                  <a
+                    href={websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-600 hover:text-brand-700 underline"
+                  >
+                    {websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                  </a>
+                </>
+              ) : (
+                'Website Compliance'
+              )}
+            </h1>
+          </div>
         </div>
         <p className="text-slate-600 text-sm md:text-base ml-10 md:ml-14">
-          Scan your website to identify missing legal documents and compliance issues
+          {websiteUrl
+            ? 'Review your website scan results to identify missing legal documents and compliance issues'
+            : 'Scan your website to identify missing legal documents and compliance issues'}
         </p>
       </div>
 
@@ -203,6 +254,160 @@ export const WebsiteCompliancePage: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Found Documents with Issues Dropdown */}
+          {scanResults.foundDocuments && scanResults.foundDocuments.length > 0 && (
+            <Card className="border-none shadow-md">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="text-emerald-500" size={20} />
+                  Found Documents ({scanResults.foundDocuments.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Found Documents List */}
+                  <div className="space-y-2">
+                    {scanResults.foundDocuments.map((doc, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="text-emerald-600 flex-shrink-0" size={18} />
+                          <span className="text-sm font-medium text-emerald-900">{doc.name}</span>
+                        </div>
+                        {doc.url && (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                          >
+                            View
+                            <ExternalLink size={12} />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Issues Found Dropdown */}
+                  {(highIssues.length > 0 || mediumIssues.length > 0 || lowIssues.length > 0) && (
+                    <div className="border-t border-slate-200 pt-4">
+                      <button
+                        onClick={() => setIsIssuesExpanded(!isIssuesExpanded)}
+                        className="w-full flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="text-red-600 flex-shrink-0" size={18} />
+                          <span className="text-sm font-semibold text-red-900">
+                            Issues Found ({highIssues.length + mediumIssues.length + lowIssues.length})
+                          </span>
+                        </div>
+                        <ChevronDown
+                          className={`text-red-600 transition-transform ${isIssuesExpanded ? 'rotate-180' : ''}`}
+                          size={18}
+                        />
+                      </button>
+
+                      {isIssuesExpanded && (
+                        <div className="mt-3 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                          {Object.entries(issuesByDocument).map(([docName, issues]) => {
+                            const isExpanded = expandedDocuments.has(docName);
+                            const getSeverityColor = (severity: string) => {
+                              if (severity === 'high') return 'red';
+                              if (severity === 'medium') return 'orange';
+                              return 'slate';
+                            };
+                            
+                            return (
+                              <div key={docName} className="border border-slate-200 rounded-lg overflow-hidden">
+                                <button
+                                  onClick={() => toggleDocument(docName)}
+                                  className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 transition-colors"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="text-slate-600 flex-shrink-0" size={16} />
+                                    <span className="text-sm font-semibold text-slate-900">
+                                      {docName}
+                                    </span>
+                                    <span className="text-xs text-slate-500">
+                                      ({issues.length} {issues.length === 1 ? 'issue' : 'issues'})
+                                    </span>
+                                  </div>
+                                  <ChevronDown
+                                    className={`text-slate-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                    size={16}
+                                  />
+                                </button>
+                                
+                                {isExpanded && (
+                                  <div className="p-3 space-y-2 bg-white border-t border-slate-200">
+                                    {issues.map((issue, idx) => {
+                                      const severityColor = getSeverityColor(issue.severity);
+                                      const colorClasses = {
+                                        red: {
+                                          bg: 'bg-red-50',
+                                          border: 'border-red-200',
+                                          text: 'text-red-700',
+                                          textBold: 'text-red-900',
+                                          textLight: 'text-red-600'
+                                        },
+                                        orange: {
+                                          bg: 'bg-orange-50',
+                                          border: 'border-orange-200',
+                                          text: 'text-orange-700',
+                                          textBold: 'text-orange-900',
+                                          textLight: 'text-orange-600'
+                                        },
+                                        slate: {
+                                          bg: 'bg-slate-50',
+                                          border: 'border-slate-200',
+                                          text: 'text-slate-700',
+                                          textBold: 'text-slate-900',
+                                          textLight: 'text-slate-600'
+                                        }
+                                      };
+                                      const colors = colorClasses[severityColor];
+                                      
+                                      return (
+                                        <div
+                                          key={`${docName}-${idx}`}
+                                          className={`p-3 ${colors.bg} ${colors.border} border rounded-lg`}
+                                        >
+                                          <div className="flex items-start gap-2 mb-1">
+                                            <AlertTriangle className={`${colors.text} flex-shrink-0 mt-0.5`} size={14} />
+                                            <div className="flex-1">
+                                              <p className={`text-xs font-semibold ${colors.textBold} mb-1 uppercase tracking-wide`}>
+                                                {issue.severity} Priority
+                                              </p>
+                                              <p className={`text-sm ${colors.text} font-medium`}>
+                                                {issue.issue}
+                                              </p>
+                                              {issue.whyItMatters && (
+                                                <p className={`text-xs ${colors.textLight} mt-2 italic`}>
+                                                  Why it matters: {issue.whyItMatters}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Missing Documents */}
           {missingCount > 0 && (
             <Card className="border-none shadow-md">
@@ -228,154 +433,6 @@ export const WebsiteCompliancePage: React.FC = () => {
             </Card>
           )}
 
-          {/* Found Documents */}
-          {scanResults.foundDocuments && scanResults.foundDocuments.length > 0 && (
-            <Card className="border-none shadow-md">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="text-emerald-500" size={20} />
-                  Found Documents ({scanResults.foundDocuments.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {scanResults.foundDocuments.map((doc, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="text-emerald-600 flex-shrink-0" size={18} />
-                        <span className="text-sm font-medium text-emerald-900">{doc.name}</span>
-                      </div>
-                      {doc.url && (
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
-                        >
-                          View
-                          <ExternalLink size={12} />
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Issues */}
-          {(highIssues.length > 0 || mediumIssues.length > 0 || lowIssues.length > 0) && (
-            <Card className="border-none shadow-md">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="text-red-500" size={20} />
-                  Issues Found ({highIssues.length + mediumIssues.length + lowIssues.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* High Priority Issues */}
-                  {highIssues.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2">
-                        <AlertTriangle size={16} />
-                        High Priority ({highIssues.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {highIssues.map((issue, idx) => (
-                          <div
-                            key={`high-${idx}`}
-                            className="p-4 bg-red-50 border border-red-200 rounded-lg"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold text-red-900">
-                                  {issue.document}
-                                </p>
-                                <p className="text-sm text-red-700 mt-1">{issue.issue}</p>
-                                {issue.whyItMatters && (
-                                  <p className="text-xs text-red-600 mt-2 italic">
-                                    Why it matters: {issue.whyItMatters}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Medium Priority Issues */}
-                  {mediumIssues.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-orange-700 mb-2 flex items-center gap-2">
-                        <AlertTriangle size={16} />
-                        Medium Priority ({mediumIssues.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {mediumIssues.map((issue, idx) => (
-                          <div
-                            key={`med-${idx}`}
-                            className="p-4 bg-orange-50 border border-orange-200 rounded-lg"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold text-orange-900">
-                                  {issue.document}
-                                </p>
-                                <p className="text-sm text-orange-700 mt-1">{issue.issue}</p>
-                                {issue.whyItMatters && (
-                                  <p className="text-xs text-orange-600 mt-2 italic">
-                                    Why it matters: {issue.whyItMatters}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Low Priority Issues */}
-                  {lowIssues.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                        <AlertTriangle size={16} />
-                        Low Priority ({lowIssues.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {lowIssues.map((issue, idx) => (
-                          <div
-                            key={`low-${idx}`}
-                            className="p-4 bg-slate-50 border border-slate-200 rounded-lg"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {issue.document}
-                                </p>
-                                <p className="text-sm text-slate-700 mt-1">{issue.issue}</p>
-                                {issue.whyItMatters && (
-                                  <p className="text-xs text-slate-600 mt-2 italic">
-                                    Why it matters: {issue.whyItMatters}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Action Button */}
           <div className="flex justify-center">

@@ -455,6 +455,17 @@ export const BusinessProfile = () => {
                       name: userName || user.email.split('@')[0] // Use the name we determined above
                     })
                   }).catch(err => console.error('❌ Welcome email error:', err));
+
+                  // Schedule nurture sequence emails (Day 3, 5, 7, 10) via Cloud Tasks
+                  console.log('📅 Scheduling nurture sequence emails...');
+                  const serverUrl = import.meta.env.VITE_SERVER_URL || '';
+                  fetch(`${serverUrl}/api/emails/schedule-nurture-sequence`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      userId: user.id
+                    })
+                  }).catch(err => console.error('❌ Nurture sequence scheduling error:', err));
                 }
               }
             } catch (userTableErr) {

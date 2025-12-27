@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Agreement and Membership Contract</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #000;
+            padding: 60px 80px;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 20px;
+        }
+
+        .document-title {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        .date {
+            text-align: right;
+            font-style: italic;
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .info-box {
+            background: #f8f8f8;
+            border: 2px solid #333;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .section {
+            margin: 25px 0;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .section-content {
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            margin-left: 40px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        .form-row {
+            margin-top: 30px;
+            page-break-inside: avoid;
+        }
+
+        .form-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .form-line {
+            border-bottom: 1px solid #000;
+            min-height: 40px;
+            margin-bottom: 15px;
+        }
+
+        .signature-section {
+            margin-top: 40px;
+            page-break-inside: avoid;
+        }
+
+        /* Watermark/Disclaimer Styles */
+        .disclaimer-banner {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #f0ad4e;
+            border-left: 6px solid #f0ad4e;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .disclaimer-banner-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #856404;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .disclaimer-banner-text {
+            font-size: 10px;
+            color: #856404;
+            line-height: 1.4;
+        }
+
+        .footer-disclaimer {
+            margin-top: 50px;
+            padding: 25px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            page-break-inside: avoid;
+        }
+
+        .footer-disclaimer-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 8px;
+        }
+
+        .footer-disclaimer-text {
+            font-size: 10px;
+            line-height: 1.8;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+
+        .cta-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px;
+            border-radius: 5px;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .cta-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .cta-text {
+            font-size: 10px;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .cta-link {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 8px 20px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Disclaimer Banner -->
+    <div class="disclaimer-banner">
+        <div class="disclaimer-banner-title">⚠️ DRAFT DOCUMENT - NOT LEGAL ADVICE</div>
+        <div class="disclaimer-banner-text">
+            This is a template document that has not been reviewed by an attorney for your specific situation.
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="document-title">SERVICE AGREEMENT & MEMBERSHIP CONTRACT</div>
+    </div>
+
+    <!-- Date -->
+    <div class="date">Effective Date: {{date}}</div>
+
+    <!-- Business Information Box -->
+    <div class="info-box">
+        <h3>Provider Information</h3>
+
+        <div class="info-row">
+            <div class="info-label">Business Name:</div>
+            <div class="info-value">{{BusinessName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Legal Entity:</div>
+            <div class="info-value">{{LegalEntityName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Address:</div>
+            <div class="info-value">{{BusinessAddress}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Email:</div>
+            <div class="info-value">{{Email}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Phone:</div>
+            <div class="info-value">{{Phone}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Services Offered:</div>
+            <div class="info-value">{{Services}}</div>
+        </div>
+    </div>
+
+    <!-- Introduction -->
+    <div class="section">
+        <div class="section-content">
+            This Service Agreement and Membership Contract ("Agreement") is entered into between
+            <strong>{{BusinessName}}</strong> ("Provider," "we," "us," or "our") and the individual signing below
+            ("Member," "you," or "your").
+        </div>
+        <div class="section-content">
+            By signing this Agreement or purchasing a membership, you agree to be bound by the terms and conditions set
+            forth below.
+        </div>
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+        <div class="section-title">1. SERVICES PROVIDED</div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> provides wellness and fitness services, including but not limited to:
+            {{Services}}, and related activities (collectively, the "Services").
+        </div>
+        <div class="section-content">
+            The specific services available to you will depend on your membership type, package purchased, or booking
+            selections. We reserve the right to modify, add, or discontinue any Services at our discretion with reasonable
+            notice.
+        </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+        <div class="section-title">2. MEMBERSHIP TYPES AND TERMS</div>
+        <div class="section-content">
+            We offer various membership options, which may include:
+        </div>
+        <ul>
+            <li><strong>Monthly Membership:</strong> Automatically renews each month until canceled</li>
+            <li><strong>Prepaid Packages:</strong> Fixed number of classes or sessions valid for a specified period</li>
+            <li><strong>Annual Membership:</strong> 12-month commitment with discounted rates</li>
+            <li><strong>Drop-In/Single Classes:</strong> Pay-per-session without ongoing commitment</li>
+            <li><strong>Special Promotions:</strong> Limited-time offers with specific terms</li>
+        </ul>
+        <div class="section-content">
+            The specific terms, duration, pricing, and benefits of your membership will be outlined in your purchase
+            confirmation or membership agreement.
+        </div>
+    </div>
+
+    <!-- Section 3 -->
+    <div class="section">
+        <div class="section-title">3. PAYMENT TERMS</div>
+        <div class="section-content">
+            <strong>A. Pricing and Fees</strong>
+        </div>
+        <div class="section-content">
+            Membership fees, class prices, and package rates are subject to change with 30 days' notice. Current members
+            will be notified of price changes via email.
+        </div>
+
+        <div class="section-content">
+            <strong>B. Payment Methods</strong>
+        </div>
+        <div class="section-content">
+            We accept payment via credit card, debit card, bank transfer, or other methods specified at the time of
+            purchase. By providing payment information, you authorize us to charge the agreed-upon fees.
+        </div>
+
+        <div class="section-content">
+            <strong>C. Recurring Payments</strong>
+        </div>
+        <div class="section-content">
+            Monthly and annual memberships will automatically renew and your payment method will be charged on the renewal
+            date unless you cancel prior to that date. It is your responsibility to keep your payment information current.
+        </div>
+
+        <div class="section-content">
+            <strong>D. Failed Payments</strong>
+        </div>
+        <div class="section-content">
+            If a payment fails, we may suspend your membership until payment is received. A failed payment fee may apply.
+            If payment is not received within 14 days, your membership may be terminated.
+        </div>
+
+        <div class="section-content">
+            <strong>E. Late Fees</strong>
+        </div>
+        <div class="section-content">
+            Late fees may apply for overdue balances. We reserve the right to send unpaid accounts to collections.
+        </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. CANCELLATION AND REFUND POLICY</div>
+        <div class="section-content">
+            <strong>A. Monthly Memberships</strong>
+        </div>
+        <div class="section-content">
+            You may cancel your monthly membership at any time by providing written notice (email acceptable) at least 7
+            days before your next billing date. Cancellations received after this period will take effect the following
+            billing cycle. No refunds will be provided for partial months.
+        </div>
+
+        <div class="section-content">
+            <strong>B. Prepaid Packages and Annual Memberships</strong>
+        </div>
+        <div class="section-content">
+            Prepaid packages and annual memberships are generally non-refundable. Exceptions may be made for medical
+            reasons (with doctor's note), relocation more than 50 miles away, or other extenuating circumstances at our
+            sole discretion.
+        </div>
+
+        <div class="section-content">
+            <strong>C. Class Cancellations</strong>
+        </div>
+        <div class="section-content">
+            If we cancel a class or service, you will receive a credit, makeup session, or refund as appropriate. We are
+            not responsible for cancellations due to weather, emergencies, or circumstances beyond our control.
+        </div>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. CLASS BOOKING AND ATTENDANCE</div>
+        <div class="section-content">
+            <strong>A. Reservations</strong>
+        </div>
+        <div class="section-content">
+            Classes may require advance booking. We recommend booking early as space is limited. No-shows may result in
+            loss of class credit.
+        </div>
+
+        <div class="section-content">
+            <strong>B. Late Arrivals</strong>
+        </div>
+        <div class="section-content">
+            Arriving more than 10 minutes late may result in being turned away to avoid disrupting the class. Late arrivals
+            will still be charged or lose a class credit.
+        </div>
+
+        <div class="section-content">
+            <strong>C. Cancellation Policy</strong>
+        </div>
+        <div class="section-content">
+            You must cancel your class reservation at least 12 hours in advance to avoid losing your class credit.
+            Frequent late cancellations or no-shows may result in membership suspension or termination.
+        </div>
+    </div>
+
+    <!-- Section 6 -->
+    <div class="section">
+        <div class="section-title">6. MEMBER RESPONSIBILITIES</div>
+        <div class="section-content">
+            As a Member, you agree to:
+        </div>
+        <ul>
+            <li>Consult with a physician before beginning any fitness program and disclose any medical conditions or
+                injuries;</li>
+            <li>Follow all instructions from instructors and staff;</li>
+            <li>Use equipment and facilities safely and as intended;</li>
+            <li>Respect other members, instructors, and staff;</li>
+            <li>Arrive on time and prepared for classes;</li>
+            <li>Maintain personal hygiene and wear appropriate attire;</li>
+            <li>Keep personal belongings secure (we are not responsible for lost or stolen items);</li>
+            <li>Notify us immediately of any changes to your contact or payment information;</li>
+            <li>Comply with all studio policies, rules, and code of conduct.</li>
+        </ul>
+    </div>
+
+    <!-- Section 7 -->
+    <div class="section">
+        <div class="section-title">7. ASSUMPTION OF RISK AND WAIVER</div>
+        <div class="section-content">
+            You acknowledge that participation in fitness and wellness activities involves inherent risks, including the
+            risk of injury or death. By signing this Agreement, you assume all such risks and waive any claims against
+            <strong>{{BusinessName}}</strong>, its owners, employees, instructors, and agents for injuries or damages
+            arising from your participation.
+        </div>
+        <div class="section-content">
+            This waiver includes claims for negligence, premises liability, or any other legal theory. You agree to
+            indemnify and hold harmless <strong>{{BusinessName}}</strong> from any third-party claims arising from your
+            actions.
+        </div>
+    </div>
+
+    <!-- Section 8 -->
+    <div class="section">
+        <div class="section-title">8. CODE OF CONDUCT</div>
+        <div class="section-content">
+            We are committed to maintaining a safe, welcoming, and respectful environment. Unacceptable behavior includes:
+        </div>
+        <ul>
+            <li>Harassment, discrimination, or bullying of any kind;</li>
+            <li>Disruptive, rude, or aggressive behavior;</li>
+            <li>Use of drugs or alcohol on premises;</li>
+            <li>Theft, vandalism, or damage to property;</li>
+            <li>Unauthorized filming, photography, or recording;</li>
+            <li>Solicitation or promotion of outside businesses without permission.</li>
+        </ul>
+        <div class="section-content">
+            Violation of our code of conduct may result in immediate membership termination without refund.
+        </div>
+    </div>
+
+    <!-- Section 9 -->
+    <div class="section">
+        <div class="section-title">9. GUEST POLICY</div>
+        <div class="section-content">
+            Members may bring guests subject to our guest policy. Guests must sign a waiver and pay applicable fees.
+            Members are responsible for their guests' behavior and compliance with studio policies.
+        </div>
+    </div>
+
+    <!-- Section 10 -->
+    <div class="section">
+        <div class="section-title">10. SUSPENSION AND TERMINATION</div>
+        <div class="section-content">
+            We reserve the right to suspend or terminate your membership for:
+        </div>
+        <ul>
+            <li>Violation of this Agreement or studio policies;</li>
+            <li>Non-payment of fees;</li>
+            <li>Disruptive or inappropriate behavior;</li>
+            <li>Providing false information;</li>
+            <li>Any reason at our sole discretion.</li>
+        </ul>
+        <div class="section-content">
+            Termination due to misconduct will result in forfeiture of all remaining classes, credits, and fees paid.
+        </div>
+    </div>
+
+    <!-- Section 11 -->
+    <div class="section">
+        <div class="section-title">11. LIMITATION OF LIABILITY</div>
+        <div class="section-content">
+            To the fullest extent permitted by law, <strong>{{BusinessName}}</strong> shall not be liable for any
+            indirect, incidental, consequential, or punitive damages arising from your use of our Services, even if we
+            have been advised of the possibility of such damages.
+        </div>
+        <div class="section-content">
+            Our total liability shall not exceed the amount you paid for your membership or services in the 6 months prior
+            to the claim.
+        </div>
+    </div>
+
+    <!-- Section 12 -->
+    <div class="section">
+        <div class="section-title">12. GOVERNING LAW AND DISPUTE RESOLUTION</div>
+        <div class="section-content">
+            This Agreement shall be governed by the laws of the State of <strong>{{Jurisdiction}}</strong>. Any disputes
+            shall be resolved through binding arbitration or in the courts of <strong>{{Jurisdiction}}</strong>.
+        </div>
+    </div>
+
+    <!-- Section 13 -->
+    <div class="section">
+        <div class="section-title">13. ENTIRE AGREEMENT</div>
+        <div class="section-content">
+            This Agreement, together with our policies and waivers, constitutes the entire agreement between you and
+            <strong>{{BusinessName}}</strong> and supersedes all prior agreements.
+        </div>
+    </div>
+
+    <!-- Acknowledgement -->
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT</div>
+        <div class="section-content">
+            By signing below, I acknowledge that I have read, understood, and agree to be bound by this Service Agreement
+            and Membership Contract.
+        </div>
+    </div>
+
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <div class="form-row">
+            <div class="form-label">Member Name (Print):</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Signature:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Date:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Email:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Phone:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Membership Type:</div>
+            <div class="form-line"></div>
+        </div>
+    </div>
+
+
+    <!-- Footer Disclaimer -->
+    <div class="footer-disclaimer">
+        <div class="footer-disclaimer-title">⚖️ Important Legal Disclaimer</div>
+        <div class="footer-disclaimer-text">
+            <strong>This document is a template and has NOT been reviewed by a licensed attorney.</strong> It is provided for informational purposes only and does not constitute legal advice. This template may not be appropriate for your specific business, state, or legal requirements.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>This is NOT a legally binding contract</strong> until it has been reviewed, customized, and approved by a qualified attorney who understands your business and applicable laws. Using this template without proper legal review may leave you exposed to significant legal and financial risks.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>We strongly recommend</strong> having this document reviewed by an experienced attorney before using it with clients. Generic templates cannot account for your unique business model, state-specific regulations, or industry requirements.
+        </div>
+
+        <!-- Call to Action -->
+        <div class="cta-box">
+            <div class="cta-title">Get Your Documents Professionally Reviewed</div>
+            <div class="cta-text">
+                Our legal team specializes in wellness businesses and can review, customize, and perfect your contracts to ensure maximum protection. Book a free consultation to discuss your specific needs.
+            </div>
+            <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" class="cta-link">📅 Book Free Legal Consultation</a>
+        </div>
+    </div>
+
+</body>
+
+</html>

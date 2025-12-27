@@ -162,6 +162,12 @@ async function initializeRoutes() {
       const { DocumentGenerationService } = require(path.join(__dirname, "documentGenerationService.js"));
       const documentGenerationService = new DocumentGenerationService();
 
+      // Initialize CalendlyService for webhook handling
+      const { CalendlyService } = require(path.join(servicesPath, "calendlyService.js"));
+      const calendlyService = new CalendlyService(
+        (process.env.CALENDLY_WEBHOOK_SIGNING_KEY || "").trim()
+      );
+
       if (!process.env.EMAIL_FROM_ADDRESS) {
         console.warn("[Firebase Functions] WARNING: EMAIL_FROM_ADDRESS is not set. Emails may fail to send to non-test addresses.");
         console.warn("[Firebase Functions] Defaulting to 'onboarding@resend.dev' which only works for the Resend account owner.");
@@ -499,7 +505,175 @@ async function initializeRoutes() {
         }
       });
 
-      // Send Onboarding Package (3 Free Documents)
+      // Send Magic Link Email via Resend
+      app.post("/api/auth/send-magic-link", async (req, res) => {
+        try {
+          const { email, name, redirectTo } = req.body;
+
+          if (!email) {
+            return res.status(400).json({
+              error: "Email is required",
+            });
+          }
+
+          if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            return res.status(500).json({
+              error: "Configuration error",
+              message: "Supabase is not configured.",
+            });
+          }
+
+          if (!process.env.RESEND_API_KEY) {
+            return res.status(500).json({
+              error: "Configuration error",
+              message: "Email service is not configured.",
+            });
+          }
+
+          const { createClient } = require("@supabase/supabase-js");
+
+          // Create Supabase admin client
+          const supabaseAdmin = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          // Generate magic link using Supabase admin API
+          const redirectUrl = redirectTo || `${process.env.DASHBOARD_URL || 'https://free.consciouscounsel.ca'}/wellness/dashboard`;
+          
+          console.log('[Firebase Functions] [Send Magic Link] Generating magic link for:', email);
+          console.log('[Firebase Functions] [Send Magic Link] Redirect URL:', redirectUrl);
+
+          const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+            type: 'magiclink',
+            email: email.trim(),
+            options: {
+              redirectTo: redirectUrl,
+            },
+          });
+
+          if (linkError || !linkData) {
+            console.error('[Firebase Functions] [Send Magic Link] Error generating link:', linkError);
+            return res.status(500).json({
+              error: "Failed to generate magic link",
+              message: linkError?.message || "Unknown error",
+            });
+          }
+
+          // Extract the action link (the actual clickable URL)
+          const actionLink = linkData.properties?.action_link;
+          
+          if (!actionLink) {
+            console.error('[Firebase Functions] [Send Magic Link] No action_link in response:', linkData);
+            return res.status(500).json({
+              error: "Failed to extract magic link",
+              message: "Magic link generated but no URL found",
+            });
+          }
+
+          console.log('[Firebase Functions] [Send Magic Link] Magic link generated successfully:', actionLink.substring(0, 50) + '...');
+
+          // Send email via Resend with the actual magic link
+          const emailResult = await emailService.sendMagicLinkEmail(
+            email.trim(),
+            actionLink,
+            name || email.split('@')[0]
+          );
+
+          return res.json({
+            success: true,
+            data: {
+              emailSent: true,
+              message: "Magic link email sent successfully",
+            },
+          });
+        } catch (error: any) {
+          console.error("[Firebase Functions] Error sending magic link email:", error);
+          return res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to send magic link email",
+          });
+        }
+      });
+
+      // Send Onboarding Package (All Recommended Documents)
+      // Automatically generates and saves all recommended legal documents based on user's business profile
+      // Updated: Dec 23, 2024 - Fixed auto-generation for all recommended documents
+      // Document ID to template name mapping
+      const DOCUMENT_TEMPLATE_MAP: Record<string, { templateName: string; title: string; category: string }> = {
+        'template-6': { templateName: 'social_media_disclaimer', title: 'Social Media Disclaimer', category: 'marketing' },
+        'template-4': { templateName: 'media_release_form', title: 'Photo / Video Release', category: 'marketing' },
+        'template-intake': { templateName: 'client_intake_form', title: 'Client Intake Form', category: 'core' },
+        'template-1': { templateName: 'waiver_release_of_liability', title: 'Basic Waiver of Liability', category: 'core' },
+        'template-2': { templateName: 'service_agreement_membership_contract', title: 'Service Agreement & Membership Contract', category: 'core' },
+        'template-5': { templateName: 'testimonial_consent_agreement', title: 'Testimonial Consent & Use Agreement', category: 'marketing' },
+        'template-7': { templateName: 'independent_contractor_agreement', title: 'Independent Contractor Agreement', category: 'hr' },
+        'template-8': { templateName: 'employment_agreement', title: 'Employment Agreement', category: 'hr' },
+        'template-membership': { templateName: 'membership_agreement', title: 'Membership Agreement', category: 'operations' },
+        'template-studio': { templateName: 'studio_policies', title: 'Studio Policies', category: 'operations' },
+        'template-class': { templateName: 'class_terms_conditions', title: 'Class Terms & Conditions', category: 'operations' },
+        'template-privacy': { templateName: 'privacy_policy', title: 'Privacy Policy', category: 'website' },
+        'template-website': { templateName: 'website_terms_conditions', title: 'Website Terms & Conditions', category: 'website' },
+        'template-refund': { templateName: 'refund_cancellation_policy', title: 'Refund & Cancellation Policy', category: 'website' },
+        'template-disclaimer': { templateName: 'website_disclaimer', title: 'Website Disclaimer', category: 'website' },
+        'template-cookie': { templateName: 'cookie_policy', title: 'Cookie Policy', category: 'website' },
+        'template-retreat-waiver': { templateName: 'retreat_liability_waiver', title: 'Retreat Liability Waiver', category: 'core' },
+        'template-travel': { templateName: 'travel_excursion_agreement', title: 'Travel & Excursion Agreement', category: 'operations' }
+      };
+
+      // Get recommended documents based on business profile (server-side version of documentEngine)
+      function getRecommendedDocumentsForProfile(profile: any): string[] {
+        const recommendedIds = new Set<string>();
+
+        // Core documents for everyone
+        const coreIds = [
+          'template-6', 'template-4', 'template-intake', 'template-1',
+          'template-website', 'template-privacy', 'template-disclaimer',
+          'template-cookie', 'template-refund'
+        ];
+        coreIds.forEach(id => recommendedIds.add(id));
+
+        // Dynamic recommendations based on profile
+        if (profile.has_w2_employees) {
+          recommendedIds.add('template-8'); // Employment Agreement
+        } else if (profile.hires_staff) {
+          recommendedIds.add('template-7'); // Contractor Agreement
+        }
+
+        // Studio-specific documents
+        const isStudio = profile.business_type &&
+          (profile.business_type.includes('Studio') || profile.business_type.includes('Gym'));
+        if (isStudio) {
+          recommendedIds.add('template-studio');
+          recommendedIds.add('template-class');
+          recommendedIds.add('template-membership');
+          recommendedIds.add('template-2');
+        }
+
+        // Retreat-specific documents
+        if (profile.hosts_retreats || profile.is_offsite_or_international) {
+          recommendedIds.add('template-retreat-waiver');
+          recommendedIds.add('template-travel');
+        }
+
+        // Online course/coaching documents
+        if (profile.offers_online_courses) {
+          recommendedIds.add('template-refund');
+        }
+
+        // Product sales
+        if (profile.sells_products) {
+          recommendedIds.add('template-refund');
+        }
+
+        // Testimonial agreement
+        if (profile.offers_online_courses || profile.hosts_retreats) {
+          recommendedIds.add('template-5');
+        }
+
+        return Array.from(recommendedIds);
+      }
+
       app.post("/api/documents/onboarding-package", async (req, res) => {
         try {
           const { userId } = req.body;
@@ -556,30 +730,27 @@ async function initializeRoutes() {
             services: profile.services
           };
 
-          // Generate Documents & Save to Vault
-          const templates = [
-            {
-              id: 'social_media_disclaimer',
-              name: 'Social Media Disclaimer.pdf',
-              docType: 'template-6',
-              category: 'marketing',
-              title: 'Social Media Disclaimer'
-            },
-            {
-              id: 'media_release_form',
-              name: 'Photo Release Form.pdf',
-              docType: 'template-4',
-              category: 'marketing', // Checklist says 'marketing' for template-4
-              title: 'Photo / Video Release'
-            },
-            {
-              id: 'client_intake_form',
-              name: 'Client Intake Form.pdf',
-              docType: 'template-intake',
-              category: 'core',
-              title: 'Client Intake Form'
-            }
-          ];
+          // Get ALL recommended documents based on user's profile
+          const recommendedDocIds = getRecommendedDocumentsForProfile(profile);
+          console.log(`[Onboarding Package] Generating ${recommendedDocIds.length} recommended documents...`);
+
+          // Build templates array from recommended IDs
+          const templates = recommendedDocIds
+            .map(docId => {
+              const mapping = DOCUMENT_TEMPLATE_MAP[docId];
+              if (!mapping) {
+                console.warn(`[Onboarding Package] No mapping found for document ID: ${docId}`);
+                return null;
+              }
+              return {
+                id: mapping.templateName,
+                name: `${mapping.title}.pdf`,
+                docType: docId,
+                category: mapping.category,
+                title: mapping.title
+              };
+            })
+            .filter(t => t !== null);
 
           const attachments = [];
 
@@ -650,14 +821,22 @@ async function initializeRoutes() {
             return res.status(500).json({ error: "Failed to generate any documents" });
           }
 
-          // Send Email
-          await emailService.sendOnboardingPackageEmail(email, name, attachments);
+          console.log(`[Onboarding Package] Total documents generated: ${templates.length}`);
+          console.log(`[Onboarding Package] Documents successfully generated: ${attachments.length}`);
 
-          console.log(`[Onboarding Package] Successfully sent ${attachments.length} documents to ${email}`);
+          // Send notification email (no attachments - all docs are in the vault)
+          await emailService.sendOnboardingPackageEmail(
+            email,
+            name,
+            attachments.length,
+            templates.map((t: any) => t.title)
+          );
+
+          console.log(`[Onboarding Package] Successfully generated ${attachments.length} documents and sent notification to ${email}`);
 
           return res.json({
             success: true,
-            sentCount: attachments.length
+            generatedCount: attachments.length
           });
 
         } catch (error: any) {
@@ -943,6 +1122,704 @@ async function initializeRoutes() {
         }
       });
 
+      // ================================================================
+      // Schedule Nurture Sequence Emails (Cloud Tasks)
+      // ================================================================
+      // This endpoint schedules all 4 nurture sequence emails
+      // Supports both users (userId) and contacts/leads (contactId)
+      // Day 3: Case Study Email
+      // Day 5: Risk Scenario Email
+      // Day 7: Social Proof Email
+      // Day 10: Final Reminder Email
+      app.post("/api/emails/schedule-nurture-sequence", async (req, res) => {
+        try {
+          const { userId, contactId } = req.body;
+
+          if (!userId && !contactId) {
+            return res.status(400).json({ error: "userId or contactId is required" });
+          }
+
+          const recipientType = userId ? 'user' : 'contact';
+          const recipientId = userId || contactId;
+
+          const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+          const location = "us-central1";
+          const queue = "email-reminders";
+
+          if (!project) {
+            console.error("[Nurture Sequence Schedule] Project ID not found");
+            return res.status(500).json({ error: "Server configuration error: Project ID missing" });
+          }
+
+          const tasksClient = new CloudTasksClient();
+          const queuePath = tasksClient.queuePath(project, location, queue);
+
+          const baseUrl = req.get("host")?.includes("localhost")
+            ? `http://${req.get("host")}`
+            : `https://${location}-${project}.cloudfunctions.net/api`;
+
+          const emails = [
+            { day: 3, endpoint: "send-case-study-email", name: "Case Study", emailType: "case_study" },
+            { day: 5, endpoint: "send-risk-scenario-email", name: "Risk Scenario", emailType: "risk_scenario" },
+            { day: 7, endpoint: "send-social-proof-email", name: "Social Proof", emailType: "social_proof" },
+            { day: 10, endpoint: "send-final-reminder-email", name: "Final Reminder", emailType: "final_reminder" },
+          ];
+
+          const scheduledTasks = [];
+
+          for (const email of emails) {
+            const scheduleTime = new Date(Date.now() + email.day * 24 * 60 * 60 * 1000);
+            const functionUrl = `${baseUrl}/api/workers/${email.endpoint}`;
+
+            const task = {
+              httpRequest: {
+                httpMethod: "POST" as const,
+                url: functionUrl,
+                body: Buffer.from(JSON.stringify({ 
+                  recipientType,
+                  recipientId,
+                  emailType: email.emailType
+                })).toString("base64"),
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              },
+              scheduleTime: {
+                seconds: Math.floor(scheduleTime.getTime() / 1000),
+              },
+            };
+
+            try {
+              const [response] = await tasksClient.createTask({ parent: queuePath, task });
+              console.log(`[Nurture Sequence] Scheduled ${email.name} email (Day ${email.day}) for ${recipientType} ${recipientId} at ${scheduleTime.toISOString()}`);
+              scheduledTasks.push({
+                email: email.name,
+                day: email.day,
+                taskName: response.name,
+                scheduledFor: scheduleTime.toISOString(),
+              });
+            } catch (error: any) {
+              console.error(`[Nurture Sequence] Error scheduling ${email.name} email:`, error);
+              scheduledTasks.push({
+                email: email.name,
+                day: email.day,
+                error: error.message,
+              });
+            }
+          }
+
+          return res.json({
+            success: true,
+            message: "Nurture sequence emails scheduled",
+            recipientType,
+            recipientId,
+            tasks: scheduledTasks,
+          });
+        } catch (error: any) {
+          console.error("[Nurture Sequence Schedule] Error:", error);
+          return res.status(500).json({ error: "Internal server error", details: error.message });
+        }
+      });
+
+      // ================================================================
+      // Worker Endpoints for Nurture Sequence Emails
+      // ================================================================
+
+      // Worker: Send Case Study Email (Day 3)
+      // Supports both users and contacts
+      app.post("/api/workers/send-case-study-email", async (req, res) => {
+        try {
+          const { recipientType, recipientId, emailType } = req.body;
+
+          if (!recipientType || !recipientId) {
+            return res.status(400).json({ error: "recipientType and recipientId required" });
+          }
+
+          if (recipientType !== 'user' && recipientType !== 'contact') {
+            return res.status(400).json({ error: "recipientType must be 'user' or 'contact'" });
+          }
+
+          console.log(`[Case Study Worker] Processing email for ${recipientType} ${recipientId}`);
+
+          if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            return res.status(500).json({ error: "Configuration missing" });
+          }
+
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+          const { EmailService } = require(path.join(servicesPath, "emailService.js"));
+          const emailService = new EmailService(process.env.RESEND_API_KEY, process.env.EMAIL_FROM_ADDRESS);
+
+          // Check if email already sent using email_tracking table
+          const { data: existing } = await supabaseAdmin
+            .from("email_tracking")
+            .select("id")
+            .eq("recipient_type", recipientType)
+            .eq("recipient_id", recipientId)
+            .eq("email_type", emailType || "case_study")
+            .eq("status", "sent")
+            .single();
+
+          if (existing) {
+            console.log(`[Case Study Worker] Email already sent to ${recipientType} ${recipientId}`);
+            return res.json({ status: "skipped", reason: "already_sent" });
+          }
+
+          // Get recipient data (user or contact)
+          let email: string | undefined;
+          let name: string | undefined;
+          let businessName: string | undefined;
+          let businessType: string | undefined;
+
+          if (recipientType === 'user') {
+            const { data: user, error: userError } = await supabaseAdmin
+              .from("users")
+              .select("user_id, email, name")
+              .eq("user_id", recipientId)
+              .single();
+
+            if (userError || !user) {
+              console.log(`[Case Study Worker] User not found: ${recipientId}`);
+              return res.json({ status: "skipped", reason: "user_not_found" });
+            }
+
+            email = user.email;
+            name = user.name;
+
+            // Get business profile for users
+            const { data: profile } = await supabaseAdmin
+              .from("business_profiles")
+              .select("business_name, business_type")
+              .eq("user_id", recipientId)
+              .single();
+
+            businessName = profile?.business_name;
+            businessType = profile?.business_type;
+          } else {
+            // contact
+            const { data: contact, error: contactError } = await supabaseAdmin
+              .from("contacts")
+              .select("id, email, name")
+              .eq("id", recipientId)
+              .single();
+
+            if (contactError || !contact) {
+              console.log(`[Case Study Worker] Contact not found: ${recipientId}`);
+              return res.json({ status: "skipped", reason: "contact_not_found" });
+            }
+
+            email = contact.email;
+            name = contact.name;
+            businessName = contact.name; // Fallback
+            businessType = 'wellness business'; // Default
+          }
+
+          if (!email) {
+            return res.json({ status: "skipped", reason: "no_email" });
+          }
+
+          // Send email
+          await emailService.sendCaseStudyEmail(email, {
+            name: name,
+            businessName: businessName,
+            businessType: businessType,
+          });
+
+          // Record in email_tracking table
+          await supabaseAdmin
+            .from("email_tracking")
+            .insert({
+              recipient_type: recipientType,
+              recipient_id: recipientId,
+              email_type: emailType || "case_study",
+              email_address: email,
+              status: "sent",
+            });
+
+          console.log(`[Case Study Worker] Sent email to ${email} (${recipientType})`);
+          return res.json({ success: true, email, recipientType });
+        } catch (error: any) {
+          console.error("[Case Study Worker] Error:", error);
+          
+          // Try to record failure in email_tracking
+          try {
+            if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+              const { createClient } = await import("@supabase/supabase-js");
+              const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+              await supabaseAdmin
+                .from("email_tracking")
+                .insert({
+                  recipient_type: req.body.recipientType,
+                  recipient_id: req.body.recipientId,
+                  email_type: req.body.emailType || "case_study",
+                  email_address: req.body.email || "unknown",
+                  status: "failed",
+                  error_message: error.message,
+                });
+            }
+          } catch (trackingError) {
+            console.error("[Case Study Worker] Failed to record error in email_tracking:", trackingError);
+          }
+
+          return res.status(500).json({ error: error.message });
+        }
+      });
+
+      // Worker: Send Risk Scenario Email (Day 5)
+      // Supports both users and contacts
+      app.post("/api/workers/send-risk-scenario-email", async (req, res) => {
+        try {
+          const { recipientType, recipientId, emailType } = req.body;
+
+          if (!recipientType || !recipientId) {
+            return res.status(400).json({ error: "recipientType and recipientId required" });
+          }
+
+          if (recipientType !== 'user' && recipientType !== 'contact') {
+            return res.status(400).json({ error: "recipientType must be 'user' or 'contact'" });
+          }
+
+          console.log(`[Risk Scenario Worker] Processing email for ${recipientType} ${recipientId}`);
+
+          if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            return res.status(500).json({ error: "Configuration missing" });
+          }
+
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+          const { EmailService } = require(path.join(servicesPath, "emailService.js"));
+          const emailService = new EmailService(process.env.RESEND_API_KEY, process.env.EMAIL_FROM_ADDRESS);
+
+          // Check if email already sent using email_tracking table
+          const { data: existing } = await supabaseAdmin
+            .from("email_tracking")
+            .select("id")
+            .eq("recipient_type", recipientType)
+            .eq("recipient_id", recipientId)
+            .eq("email_type", emailType || "risk_scenario")
+            .eq("status", "sent")
+            .single();
+
+          if (existing) {
+            console.log(`[Risk Scenario Worker] Email already sent to ${recipientType} ${recipientId}`);
+            return res.json({ status: "skipped", reason: "already_sent" });
+          }
+
+          // Get recipient data (user or contact)
+          let email: string | undefined;
+          let name: string | undefined;
+          let businessName: string | undefined;
+          let businessType: string | undefined;
+          let hasPhysicalMovement = false;
+          let hostsRetreats = false;
+          let hiresStaff = false;
+          let collectsOnline = false;
+
+          if (recipientType === 'user') {
+            const { data: user, error: userError } = await supabaseAdmin
+              .from("users")
+              .select("user_id, email, name")
+              .eq("user_id", recipientId)
+              .single();
+
+            if (userError || !user) {
+              console.log(`[Risk Scenario Worker] User not found: ${recipientId}`);
+              return res.json({ status: "skipped", reason: "user_not_found" });
+            }
+
+            email = user.email;
+            name = user.name;
+
+            // Get business profile for users
+            const { data: profile } = await supabaseAdmin
+              .from("business_profiles")
+              .select("business_name, business_type, has_physical_movement, hosts_retreats, hires_staff, collects_online")
+              .eq("user_id", recipientId)
+              .single();
+
+            businessName = profile?.business_name;
+            businessType = profile?.business_type;
+            hasPhysicalMovement = profile?.has_physical_movement || false;
+            hostsRetreats = profile?.hosts_retreats || false;
+            hiresStaff = profile?.hires_staff || false;
+            collectsOnline = profile?.collects_online || false;
+          } else {
+            // contact
+            const { data: contact, error: contactError } = await supabaseAdmin
+              .from("contacts")
+              .select("id, email, name")
+              .eq("id", recipientId)
+              .single();
+
+            if (contactError || !contact) {
+              console.log(`[Risk Scenario Worker] Contact not found: ${recipientId}`);
+              return res.json({ status: "skipped", reason: "contact_not_found" });
+            }
+
+            email = contact.email;
+            name = contact.name;
+            businessName = contact.name; // Fallback
+            businessType = 'wellness business'; // Default
+          }
+
+          if (!email) {
+            return res.json({ status: "skipped", reason: "no_email" });
+          }
+
+          // Send email
+          await emailService.sendRiskScenarioEmail(email, {
+            name: name,
+            businessName: businessName,
+            businessType: businessType,
+            hasPhysicalMovement,
+            hostsRetreats,
+            hiresStaff,
+            collectsOnline,
+          });
+
+          // Record in email_tracking table
+          await supabaseAdmin
+            .from("email_tracking")
+            .insert({
+              recipient_type: recipientType,
+              recipient_id: recipientId,
+              email_type: emailType || "risk_scenario",
+              email_address: email,
+              status: "sent",
+            });
+
+          console.log(`[Risk Scenario Worker] Sent email to ${email} (${recipientType})`);
+          return res.json({ success: true, email, recipientType });
+        } catch (error: any) {
+          console.error("[Risk Scenario Worker] Error:", error);
+          
+          // Try to record failure in email_tracking
+          try {
+            if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+              const { createClient } = await import("@supabase/supabase-js");
+              const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+              await supabaseAdmin
+                .from("email_tracking")
+                .insert({
+                  recipient_type: req.body.recipientType,
+                  recipient_id: req.body.recipientId,
+                  email_type: req.body.emailType || "risk_scenario",
+                  email_address: req.body.email || "unknown",
+                  status: "failed",
+                  error_message: error.message,
+                });
+            }
+          } catch (trackingError) {
+            console.error("[Risk Scenario Worker] Failed to record error in email_tracking:", trackingError);
+          }
+
+          return res.status(500).json({ error: error.message });
+        }
+      });
+
+      // Worker: Send Social Proof Email (Day 7)
+      // Supports both users and contacts
+      app.post("/api/workers/send-social-proof-email", async (req, res) => {
+        try {
+          const { recipientType, recipientId, emailType } = req.body;
+
+          if (!recipientType || !recipientId) {
+            return res.status(400).json({ error: "recipientType and recipientId required" });
+          }
+
+          if (recipientType !== 'user' && recipientType !== 'contact') {
+            return res.status(400).json({ error: "recipientType must be 'user' or 'contact'" });
+          }
+
+          console.log(`[Social Proof Worker] Processing email for ${recipientType} ${recipientId}`);
+
+          if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            return res.status(500).json({ error: "Configuration missing" });
+          }
+
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+          const { EmailService } = require(path.join(servicesPath, "emailService.js"));
+          const emailService = new EmailService(process.env.RESEND_API_KEY, process.env.EMAIL_FROM_ADDRESS);
+
+          // Check if email already sent using email_tracking table
+          const { data: existing } = await supabaseAdmin
+            .from("email_tracking")
+            .select("id")
+            .eq("recipient_type", recipientType)
+            .eq("recipient_id", recipientId)
+            .eq("email_type", emailType || "social_proof")
+            .eq("status", "sent")
+            .single();
+
+          if (existing) {
+            console.log(`[Social Proof Worker] Email already sent to ${recipientType} ${recipientId}`);
+            return res.json({ status: "skipped", reason: "already_sent" });
+          }
+
+          // Get recipient data (user or contact)
+          let email: string | undefined;
+          let name: string | undefined;
+          let businessName: string | undefined;
+          let businessType: string | undefined;
+
+          if (recipientType === 'user') {
+            const { data: user, error: userError } = await supabaseAdmin
+              .from("users")
+              .select("user_id, email, name")
+              .eq("user_id", recipientId)
+              .single();
+
+            if (userError || !user) {
+              console.log(`[Social Proof Worker] User not found: ${recipientId}`);
+              return res.json({ status: "skipped", reason: "user_not_found" });
+            }
+
+            email = user.email;
+            name = user.name;
+
+            // Get business profile for users
+            const { data: profile } = await supabaseAdmin
+              .from("business_profiles")
+              .select("business_name, business_type")
+              .eq("user_id", recipientId)
+              .single();
+
+            businessName = profile?.business_name;
+            businessType = profile?.business_type;
+          } else {
+            // contact
+            const { data: contact, error: contactError } = await supabaseAdmin
+              .from("contacts")
+              .select("id, email, name")
+              .eq("id", recipientId)
+              .single();
+
+            if (contactError || !contact) {
+              console.log(`[Social Proof Worker] Contact not found: ${recipientId}`);
+              return res.json({ status: "skipped", reason: "contact_not_found" });
+            }
+
+            email = contact.email;
+            name = contact.name;
+            businessName = contact.name; // Fallback
+            businessType = 'wellness business'; // Default
+          }
+
+          if (!email) {
+            return res.json({ status: "skipped", reason: "no_email" });
+          }
+
+          // Get social proof stats (use API endpoint or calculate)
+          let totalProtected = 1247;
+          let recentSignups = 34;
+          try {
+            const baseUrl = req.get("host")?.includes("localhost")
+              ? `http://${req.get("host")}`
+              : `https://us-central1-${process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT}.cloudfunctions.net/api`;
+            const statsResponse = await fetch(`${baseUrl}/api/stats/social-proof`);
+            if (statsResponse.ok) {
+              const stats = await statsResponse.json();
+              totalProtected = stats.totalProtected || 1247;
+              recentSignups = stats.recentSignups || 34;
+            }
+          } catch (e) {
+            console.warn("[Social Proof Worker] Could not fetch stats, using defaults");
+          }
+
+          // Send email
+          await emailService.sendSocialProofEmail(email, {
+            name: name,
+            businessName: businessName,
+            businessType: businessType,
+            totalProtected,
+            recentSignups,
+          });
+
+          // Record in email_tracking table
+          await supabaseAdmin
+            .from("email_tracking")
+            .insert({
+              recipient_type: recipientType,
+              recipient_id: recipientId,
+              email_type: emailType || "social_proof",
+              email_address: email,
+              status: "sent",
+            });
+
+          console.log(`[Social Proof Worker] Sent email to ${email} (${recipientType})`);
+          return res.json({ success: true, email, recipientType });
+        } catch (error: any) {
+          console.error("[Social Proof Worker] Error:", error);
+          
+          // Try to record failure in email_tracking
+          try {
+            if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+              const { createClient } = await import("@supabase/supabase-js");
+              const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+              await supabaseAdmin
+                .from("email_tracking")
+                .insert({
+                  recipient_type: req.body.recipientType,
+                  recipient_id: req.body.recipientId,
+                  email_type: req.body.emailType || "social_proof",
+                  email_address: req.body.email || "unknown",
+                  status: "failed",
+                  error_message: error.message,
+                });
+            }
+          } catch (trackingError) {
+            console.error("[Social Proof Worker] Failed to record error in email_tracking:", trackingError);
+          }
+
+          return res.status(500).json({ error: error.message });
+        }
+      });
+
+      // Worker: Send Final Reminder Email (Day 10)
+      // Supports both users and contacts
+      app.post("/api/workers/send-final-reminder-email", async (req, res) => {
+        try {
+          const { recipientType, recipientId, emailType } = req.body;
+
+          if (!recipientType || !recipientId) {
+            return res.status(400).json({ error: "recipientType and recipientId required" });
+          }
+
+          if (recipientType !== 'user' && recipientType !== 'contact') {
+            return res.status(400).json({ error: "recipientType must be 'user' or 'contact'" });
+          }
+
+          console.log(`[Final Reminder Worker] Processing email for ${recipientType} ${recipientId}`);
+
+          if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            return res.status(500).json({ error: "Configuration missing" });
+          }
+
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+          const { EmailService } = require(path.join(servicesPath, "emailService.js"));
+          const emailService = new EmailService(process.env.RESEND_API_KEY, process.env.EMAIL_FROM_ADDRESS);
+
+          // Check if email already sent using email_tracking table
+          const { data: existing } = await supabaseAdmin
+            .from("email_tracking")
+            .select("id")
+            .eq("recipient_type", recipientType)
+            .eq("recipient_id", recipientId)
+            .eq("email_type", emailType || "final_reminder")
+            .eq("status", "sent")
+            .single();
+
+          if (existing) {
+            console.log(`[Final Reminder Worker] Email already sent to ${recipientType} ${recipientId}`);
+            return res.json({ status: "skipped", reason: "already_sent" });
+          }
+
+          // Get recipient data (user or contact)
+          let email: string | undefined;
+          let name: string | undefined;
+          let businessName: string | undefined;
+          let businessType: string | undefined;
+
+          if (recipientType === 'user') {
+            const { data: user, error: userError } = await supabaseAdmin
+              .from("users")
+              .select("user_id, email, name")
+              .eq("user_id", recipientId)
+              .single();
+
+            if (userError || !user) {
+              console.log(`[Final Reminder Worker] User not found: ${recipientId}`);
+              return res.json({ status: "skipped", reason: "user_not_found" });
+            }
+
+            email = user.email;
+            name = user.name;
+
+            // Get business profile for users
+            const { data: profile } = await supabaseAdmin
+              .from("business_profiles")
+              .select("business_name, business_type")
+              .eq("user_id", recipientId)
+              .single();
+
+            businessName = profile?.business_name;
+            businessType = profile?.business_type;
+          } else {
+            // contact
+            const { data: contact, error: contactError } = await supabaseAdmin
+              .from("contacts")
+              .select("id, email, name")
+              .eq("id", recipientId)
+              .single();
+
+            if (contactError || !contact) {
+              console.log(`[Final Reminder Worker] Contact not found: ${recipientId}`);
+              return res.json({ status: "skipped", reason: "contact_not_found" });
+            }
+
+            email = contact.email;
+            name = contact.name;
+            businessName = contact.name; // Fallback
+            businessType = 'wellness business'; // Default
+          }
+
+          if (!email) {
+            return res.json({ status: "skipped", reason: "no_email" });
+          }
+
+          // Send email
+          await emailService.sendFinalReminderEmail(email, {
+            name: name,
+            businessName: businessName,
+            businessType: businessType,
+          });
+
+          // Record in email_tracking table
+          await supabaseAdmin
+            .from("email_tracking")
+            .insert({
+              recipient_type: recipientType,
+              recipient_id: recipientId,
+              email_type: emailType || "final_reminder",
+              email_address: email,
+              status: "sent",
+            });
+
+          console.log(`[Final Reminder Worker] Sent email to ${email} (${recipientType})`);
+          return res.json({ success: true, email, recipientType });
+        } catch (error: any) {
+          console.error("[Final Reminder Worker] Error:", error);
+          
+          // Try to record failure in email_tracking
+          try {
+            if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+              const { createClient } = await import("@supabase/supabase-js");
+              const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+              await supabaseAdmin
+                .from("email_tracking")
+                .insert({
+                  recipient_type: req.body.recipientType,
+                  recipient_id: req.body.recipientId,
+                  email_type: req.body.emailType || "final_reminder",
+                  email_address: req.body.email || "unknown",
+                  status: "failed",
+                  error_message: error.message,
+                });
+            }
+          } catch (trackingError) {
+            console.error("[Final Reminder Worker] Failed to record error in email_tracking:", trackingError);
+          }
+
+          return res.status(500).json({ error: error.message });
+        }
+      });
+
       // Save contact
       app.post("/api/save-contact", async (req, res) => {
         try {
@@ -978,13 +1855,15 @@ async function initializeRoutes() {
           }
 
           // Normalize phone number to E.164 format
+          // Be lenient - if phone validation fails, just use the original value
+          // This ensures we don't reject leads due to invalid phone numbers
           const { normalizePhone } = require("./utils/phoneNormalization");
-          const normalizedPhone = phone ? normalizePhone(phone, 'US') : null;
+          let normalizedPhone = phone ? normalizePhone(phone, 'US') : null;
+
           if (phone && !normalizedPhone) {
-            return res.status(400).json({
-              success: false,
-              error: "Invalid phone number format"
-            });
+            // Log warning but don't reject - use original phone value
+            console.warn("[Save Contact] Invalid phone format, using original:", phone);
+            normalizedPhone = phone; // Use original value instead of rejecting
           }
 
           let normalizedWebsite = website?.trim() || "";
@@ -2449,6 +3328,96 @@ Keep it brief and practical. Focus on the most important problems.`;
         }
       });
 
+      // ============================================
+      // Calendly Webhook Integration
+      // ============================================
+
+      // Calendly webhook endpoint
+      app.post("/api/webhooks/calendly", async (req, res) => {
+        try {
+          console.log("[Calendly Webhook] Received webhook event");
+
+          // Get the body (already parsed by express.json middleware)
+          const event = req.body;
+          const rawBody = JSON.stringify(event);
+          const signature = req.headers['calendly-webhook-signature'] as string;
+
+          // Verify webhook signature if signing key is configured
+          if (process.env.CALENDLY_WEBHOOK_SIGNING_KEY && signature) {
+            const isValid = calendlyService.verifyWebhookSignature(rawBody, signature);
+            if (!isValid) {
+              console.error("[Calendly Webhook] ❌ Invalid webhook signature");
+              return res.status(401).json({
+                error: "Invalid webhook signature"
+              });
+            }
+            console.log("[Calendly Webhook] ✅ Webhook signature verified");
+          }
+
+          // Process the webhook event (body already parsed by express.json)
+          const result = await calendlyService.processWebhookEvent(event);
+
+          if (result.success) {
+            console.log(`[Calendly Webhook] ✅ ${result.message}`);
+            return res.status(200).json(result);
+          } else {
+            console.error(`[Calendly Webhook] ❌ ${result.message}`);
+            return res.status(400).json(result);
+          }
+        } catch (error: any) {
+          console.error("[Calendly Webhook] ❌ Error processing webhook:", error);
+          return res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to process webhook"
+          });
+        }
+      });
+
+      // Get appointments for a specific email
+      app.get("/api/appointments/:email", async (req, res) => {
+        try {
+          const email = req.params.email;
+
+          if (!email) {
+            return res.status(400).json({
+              error: "Email is required"
+            });
+          }
+
+          const appointments = await calendlyService.getAppointmentsByEmail(email);
+
+          return res.json({
+            success: true,
+            data: appointments
+          });
+        } catch (error: any) {
+          console.error("[Get Appointments] Error:", error);
+          return res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to fetch appointments"
+          });
+        }
+      });
+
+      // Get upcoming appointments
+      app.get("/api/appointments/upcoming", async (req, res) => {
+        try {
+          const limit = parseInt(req.query.limit as string) || 50;
+          const appointments = await calendlyService.getUpcomingAppointments(limit);
+
+          return res.json({
+            success: true,
+            data: appointments
+          });
+        } catch (error: any) {
+          console.error("[Get Upcoming Appointments] Error:", error);
+          return res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to fetch upcoming appointments"
+          });
+        }
+      });
+
       routesInitialized = true;
       console.log("[Firebase Functions] Routes initialized successfully");
     } catch (error) {
@@ -2492,6 +3461,7 @@ export const api = functions.https.onRequest(
       "INSTANTLY_AI_API_KEY",
       "RESEND_API_KEY",
       "EMAIL_FROM_ADDRESS",
+      "CALENDLY_API_TOKEN",
     ],
     region: "us-central1",
   },

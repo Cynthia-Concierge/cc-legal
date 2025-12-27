@@ -34,6 +34,14 @@ export interface BusinessProfileData {
   riskFactor2?: string;
   riskFactor3?: string;
   riskFactor4?: string;
+  // New lead magnet PDF fields
+  riskIcon?: string;
+  riskClass?: string;
+  urgencyMessage?: string;
+  totalConflicts?: number;
+  conflictsSection?: string;
+  verdict?: string;
+  [key: string]: any; // Allow additional dynamic fields
 }
 
 export class DocumentGenerationService {
@@ -278,6 +286,16 @@ export class DocumentGenerationService {
           day: 'numeric'
         }),
 
+        // NEW: Additional placeholders for advanced templates
+        '{{LegalEntityName}}': profileData.legalEntityName || profileData.businessName || '[Legal Entity Name]',
+        '{{EntityType}}': profileData.entityType || '[Entity Type]',
+        '{{State}}': profileData.state || '[State]',
+        '{{OwnerName}}': profileData.ownerName || '[Business Owner]',
+        '{{Phone}}': profileData.phone || '[Phone Number]',
+        '{{Website}}': profileData.website || '',
+        '{{Instagram}}': profileData.instagram || '',
+        '{{Services}}': Array.isArray(profileData.services) ? profileData.services.join(', ') : '',
+
         // Backward compatibility / extra fields if needed
         '{{businessName}}': profileData.businessName || '[Business Name]',
         '{{legalEntityName}}': profileData.legalEntityName || profileData.businessName || '[Legal Name]',
@@ -318,6 +336,14 @@ export class DocumentGenerationService {
         '{{receivedConfusion}}': profileData.receivedConfusion || 'No',
         '{{differentFromLegalName}}': profileData.differentFromLegalName || 'Not sure',
         '{{workedWithLawyer}}': profileData.workedWithLawyer || 'No',
+
+        // Lead magnet PDF placeholders (NEW)
+        '{{riskIcon}}': profileData.riskIcon || this.getRiskIconFromLevel(profileData.riskLevel),
+        '{{riskClass}}': profileData.riskClass || (profileData.riskLevel || '').toLowerCase().replace(/\s+/g, '-'),
+        '{{urgencyMessage}}': profileData.urgencyMessage || this.getUrgencyMessageFromLevel(profileData.riskLevel),
+        '{{totalConflicts}}': profileData.totalConflicts?.toString() || '0',
+        '{{conflictsSection}}': profileData.conflictsSection || '<div class="conflict-count-box"><p>No exact trademark matches found in our preliminary scan.</p></div>',
+        '{{year}}': new Date().getFullYear().toString(),
       };
 
       // Perform all replacements
@@ -364,5 +390,103 @@ export class DocumentGenerationService {
       console.error('[DocGen] Error generating from HTML:', error);
       throw error;
     }
+  }
+
+  /**
+   * Generate populated HTML (without converting to PDF)
+   * Used for the "copy as text" feature
+   */
+  async generateHtmlOnly(
+    templateName: string,
+    profileData: BusinessProfileData
+  ): Promise<string> {
+    try {
+      const htmlTemplatePath = path.join(__dirname, '../templates/html', `${templateName}.html`);
+      console.log('[DocGen] Loading HTML template for text copy:', htmlTemplatePath);
+
+      // Read HTML template
+      const htmlContent = await fs.readFile(htmlTemplatePath, 'utf-8');
+
+      // Replace placeholders (same logic as generateFromHtml)
+      let populatedHtml = htmlContent;
+
+      const replacements: Record<string, string> = {
+        '{{BusinessName}}': profileData.businessName || '[Business Name]',
+        '{{BusinessType}}': profileData.businessType || 'Business',
+        '{{BusinessAddress}}': profileData.businessAddress || '[Address]',
+        '{{Email}}': profileData.email || '',
+        '{{SocialLinks}}': `${profileData.website || ''} ${profileData.instagram ? `| IG: ${profileData.instagram}` : ''}`,
+        '{{Jurisdiction}}': profileData.state || '[Jurisdiction]',
+        '{{date}}': new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }),
+        '{{LegalEntityName}}': profileData.legalEntityName || profileData.businessName || '[Legal Entity Name]',
+        '{{EntityType}}': profileData.entityType || '[Entity Type]',
+        '{{State}}': profileData.state || '[State]',
+        '{{OwnerName}}': profileData.ownerName || '[Business Owner]',
+        '{{Phone}}': profileData.phone || '[Phone Number]',
+        '{{Website}}': profileData.website || '',
+        '{{Instagram}}': profileData.instagram || '',
+        '{{Services}}': Array.isArray(profileData.services) ? profileData.services.join(', ') : '',
+        '{{businessName}}': profileData.businessName || '[Business Name]',
+        '{{legalEntityName}}': profileData.legalEntityName || profileData.businessName || '[Legal Name]',
+        '{{entityType}}': profileData.entityType || '',
+        '{{businessAddress}}': profileData.businessAddress || '[Address]',
+        '{{ownerName}}': profileData.ownerName || '',
+        '{{phone}}': profileData.phone || '',
+        '{{email}}': profileData.email || '',
+        '{{website}}': profileData.website || '',
+        '{{instagram}}': profileData.instagram || '',
+        '{{businessType}}': profileData.businessType || '',
+
+        // Lead magnet PDF placeholders (NEW)
+        '{{riskIcon}}': profileData.riskIcon || this.getRiskIconFromLevel(profileData.riskLevel),
+        '{{riskClass}}': profileData.riskClass || (profileData.riskLevel || '').toLowerCase().replace(/\s+/g, '-'),
+        '{{urgencyMessage}}': profileData.urgencyMessage || this.getUrgencyMessageFromLevel(profileData.riskLevel),
+        '{{totalConflicts}}': profileData.totalConflicts?.toString() || '0',
+        '{{conflictsSection}}': profileData.conflictsSection || '<div class="conflict-count-box"><p>No exact trademark matches found in our preliminary scan.</p></div>',
+        '{{riskLevel}}': profileData.riskLevel || 'MODERATE RISK',
+        '{{verdict}}': profileData.verdict || 'Based on the preliminary scan, we recommend consulting with a trademark attorney to discuss your specific situation.',
+        '{{year}}': new Date().getFullYear().toString(),
+      };
+
+      // Perform all replacements
+      for (const [placeholder, value] of Object.entries(replacements)) {
+        populatedHtml = populatedHtml.split(placeholder).join(value);
+      }
+
+      console.log('[DocGen] HTML populated successfully for text copy');
+      return populatedHtml;
+
+    } catch (error: any) {
+      console.error('[DocGen] Error generating HTML:', error);
+      throw new Error(`Failed to generate HTML: ${error.message}`);
+    }
+  }
+
+  /**
+   * Helper method to get risk icon emoji from risk level
+   */
+  private getRiskIconFromLevel(riskLevel?: string): string {
+    if (!riskLevel) return '⚡';
+    const level = riskLevel.toUpperCase();
+    if (level.includes('HIGH')) return '⚠️';
+    if (level.includes('MODERATE')) return '⚡';
+    if (level.includes('LOW')) return '✅';
+    return '⚡';
+  }
+
+  /**
+   * Helper method to get urgency message from risk level
+   */
+  private getUrgencyMessageFromLevel(riskLevel?: string): string {
+    if (!riskLevel) return 'Protection advised before expansion';
+    const level = riskLevel.toUpperCase();
+    if (level.includes('HIGH')) return 'Immediate action recommended';
+    if (level.includes('MODERATE')) return 'Protection advised before expansion';
+    if (level.includes('LOW')) return 'Consider protection as you grow';
+    return 'Protection advised before expansion';
   }
 }

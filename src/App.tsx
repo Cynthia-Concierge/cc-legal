@@ -20,6 +20,7 @@ import { WebsiteCompliancePage } from "./pages/wellness/dashboard/WebsiteComplia
 import { TrademarkScanPage } from "./pages/wellness/dashboard/TrademarkScanPage";
 import { Login } from "./pages/wellness/Login";
 import { ResetPassword } from "./pages/wellness/ResetPassword";
+import { AdminDashboard } from "./pages/wellness/admin/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/wellness/login" element={<Login />} />
             <Route path="/wellness/onboarding" element={<Onboarding />} />
             <Route path="/wellness/reset-password" element={<ResetPassword />} />
+            <Route path="/wellness/admin" element={<DashboardLayout><AdminDashboard /></DashboardLayout>} />
 
             {/* New Nested Dashboard Layout */}
             <Route path="/wellness/dashboard" element={<DashboardLayout><Outlet /></DashboardLayout>}>

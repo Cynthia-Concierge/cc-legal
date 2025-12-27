@@ -38,6 +38,7 @@ export const ReviewProgressCard: React.FC<ReviewProgressCardProps> = ({
             marketing: 0,
             studio: 0,
             retreat: 0,
+            employment: 0,
             advanced: 0
         };
 
@@ -60,8 +61,6 @@ export const ReviewProgressCard: React.FC<ReviewProgressCardProps> = ({
             }
         });
 
-        // Always add Insurance to advanced
-        counts.advanced++;
 
         // Handle Website Scan Results
         let websiteScanData: { found: number; total: number } | null = null;
@@ -152,7 +151,17 @@ export const ReviewProgressCard: React.FC<ReviewProgressCardProps> = ({
             });
         }
 
-        // 6. Advanced
+        // 6. Employment
+        if (counts.employment > 0) {
+            newCategories.push({
+                id: 'employment',
+                label: 'Employment Agreements',
+                count: counts.employment,
+                message: `${counts.employment} documents for staff and contractors.`
+            });
+        }
+
+        // 7. Advanced
         if (counts.advanced > 0) {
             newCategories.push({
                 id: 'advanced',
@@ -164,7 +173,7 @@ export const ReviewProgressCard: React.FC<ReviewProgressCardProps> = ({
 
         setCategories(newCategories);
 
-        // Calculate total strictly from recommendations + insurance (consistent with Vault)
+        // Calculate total strictly from recommendations (consistent with Vault)
         let calcTotal = Object.values(counts).reduce((a, b) => a + b, 0);
         setTotalNeeded(calcTotal);
 
@@ -182,7 +191,7 @@ export const ReviewProgressCard: React.FC<ReviewProgressCardProps> = ({
                     </h2>
                 </div>
 
-                <CardContent className="p-8 space-y-8">
+                <CardContent className="p-8 pb-32 md:pb-8 space-y-8">
                     <div className="space-y-6">
                         <p className="text-lg text-slate-600 leading-relaxed text-center">
                             Based on your answers, you need a total of <span className="font-bold text-slate-900">{totalNeeded} documents</span> to be fully protected.
@@ -215,17 +224,32 @@ export const ReviewProgressCard: React.FC<ReviewProgressCardProps> = ({
                         </div>
                     </div>
 
-                    <Button
-                        fullWidth
-                        size="lg"
-                        onClick={onContinue}
-                        className="bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200"
-                    >
-                        Download my custom documents
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                    </Button>
+                    <div className="hidden md:block">
+                        <Button
+                            fullWidth
+                            size="lg"
+                            onClick={onContinue}
+                            className="bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200"
+                        >
+                            Download my custom documents
+                            <ArrowRight className="ml-2 h-5 w-5" />
+                        </Button>
+                    </div>
                 </CardContent>
             </Card>
+
+            {/* Mobile Sticky Button */}
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 md:hidden z-50">
+                <Button
+                    fullWidth
+                    size="lg"
+                    onClick={onContinue}
+                    className="bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200"
+                >
+                    Download my custom documents
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+            </div>
         </div>
     );
 };

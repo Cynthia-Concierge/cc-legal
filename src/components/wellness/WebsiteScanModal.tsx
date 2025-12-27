@@ -164,9 +164,33 @@ ${result.issues.length > 0 ? result.issues.map(i =>
           // 2. Save FOUND DOCUMENTS to vault
           if (result.foundDocuments.length > 0) {
             console.log(`[Scan] Saving ${result.foundDocuments.length} found documents to vault...`);
+            
+            // Map document names to template IDs for proper document_type assignment
+            const documentNameToTemplateId: Record<string, string> = {
+              'Privacy Policy': 'template-privacy',
+              'Terms of Service': 'template-website',
+              'Terms and Conditions': 'template-website',
+              'Website Terms': 'template-website',
+              'Refund Policy': 'template-refund',
+              'Cancellation Policy': 'template-refund',
+              'Refund / Cancellation Policy': 'template-refund',
+              'Disclaimer': 'template-disclaimer',
+              'Cookie Policy': 'template-cookie',
+            };
+            
             for (const doc of result.foundDocuments) {
               try {
                 const docFile = new File([doc.content], `${doc.name}.txt`, { type: 'text/plain' });
+
+                // Map document name to template ID
+                const documentType = documentNameToTemplateId[doc.name] || 
+                                   Object.keys(documentNameToTemplateId).find(key => 
+                                     doc.name.toLowerCase().includes(key.toLowerCase()) ||
+                                     key.toLowerCase().includes(doc.name.toLowerCase())
+                                   ) ? documentNameToTemplateId[Object.keys(documentNameToTemplateId).find(key => 
+                                     doc.name.toLowerCase().includes(key.toLowerCase()) ||
+                                     key.toLowerCase().includes(doc.name.toLowerCase())
+                                   )!] : undefined;
 
                 // Construct analysis string for this specific document
                 const docIssues = result.issues.filter(i => i.document === doc.name);
@@ -176,7 +200,7 @@ ${result.issues.length > 0 ? result.issues.map(i =>
                     `[${i.severity.toUpperCase()}] ${i.issue}\nWhy it matters: ${i.whyItMatters}`
                   ).join('\n\n');
                 } else {
-                  docAnalysis = 'No specific issues found for this document.';
+                  docAnalysis = 'Document found on website. No specific issues detected.';
                 }
 
                 await vaultService.uploadDocument(
@@ -184,9 +208,10 @@ ${result.issues.length > 0 ? result.issues.map(i =>
                   'contract', // Categorize as contract
                   `${doc.name} (Scanned)`,
                   `Scanned from ${normalizedUrl} on ${new Date().toLocaleDateString()}`,
-                  docAnalysis
+                  docAnalysis,
+                  documentType // Pass the document_type so it matches correctly
                 );
-                console.log(`[Scan] Saved ${doc.name} to vault`);
+                console.log(`[Scan] Saved ${doc.name} to vault with document_type: ${documentType || 'none'}`);
               } catch (docSaveError) {
                 console.error(`[Scan] Error saving ${doc.name}:`, docSaveError);
               }

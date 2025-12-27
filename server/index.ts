@@ -24,6 +24,7 @@ import { OnboardingPipeline } from "./services/onboardingPipeline.js";
 import { WidgetService } from "./services/widgetService.js";
 import { BookingService } from "./services/bookingService.js";
 import { MetaService } from "./services/metaService.js";
+import { CalendlyService } from "./services/calendlyService.js";
 import { getCountryFromIP, getRealIP } from "./utils/geoUtils.js";
 import { normalizePhone } from "./utils/phoneNormalization.js";
 
@@ -53,10 +54,19 @@ const instantlyService = new InstantlyService(
   process.env.INSTANTLY_AI_API_KEY || ""
 );
 // Use service_role key if available (bypasses RLS), otherwise use anon key
+// Use service_role key if available (bypasses RLS), otherwise use anon key
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "";
+
+if (!process.env.SUPABASE_URL || !supabaseKey) {
+  console.error("[Server] CRITICAL STARTUP ERROR: Missing Supabase configuration.");
+  console.error("[Server] Please check your .env file for SUPABASE_URL and SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY.");
+  console.error("[Server] Current values - URL:", !!process.env.SUPABASE_URL, "Key:", !!supabaseKey);
+  // Don't crash immediately to allow health check to pass, but services will differ
+}
+
 const supabaseService = new SupabaseService(
-  process.env.SUPABASE_URL || "",
-  supabaseKey
+  process.env.SUPABASE_URL || "https://placeholder.supabase.co", // Prevent createClient throw
+  supabaseKey || "placeholder-key"
 );
 // Use service_role key for workflowResultsService to bypass RLS (same as supabaseService)
 const workflowResultsKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "";
@@ -73,6 +83,11 @@ const coldLeadsService = new ColdLeadsService(
 const metaService = new MetaService(
   process.env.META_ACCESS_TOKEN || "",
   process.env.META_PIXEL_ID || ""
+);
+
+// Initialize Calendly service for webhook handling
+const calendlyService = new CalendlyService(
+  process.env.CALENDLY_WEBHOOK_SIGNING_KEY
 );
 
 // Initialize configuration service
@@ -150,6 +165,7 @@ const emailService = new EmailService(
 
 // Initialize Document Generation Service
 import { DocumentGenerationService } from "./services/documentGenerationService.js";
+import { usptoService } from "./services/usptoService.js";
 const documentGenerationService = new DocumentGenerationService();
 
 // Health check endpoint
@@ -413,6 +429,15 @@ app.post("/api/scan-website-compliance", async (req, res) => {
 
     console.log(`[Simple Scan] Starting compliance scan for: ${normalizedUrl}`);
 
+    // Step 3: Determine which documents are missing
+    const requiredDocuments = {
+      privacyPolicy: "Privacy Policy",
+      termsOfService: "Terms of Service",
+      refundPolicy: "Refund Policy",
+      cookiePolicy: "Cookie Policy",
+      disclaimer: "Disclaimer",
+    };
+
     // Step 1: Scrape homepage footer to get legal links
     let html = "";
     let markdown = "";
@@ -454,14 +479,8 @@ app.post("/api/scan-website-compliance", async (req, res) => {
       ? (firecrawlService as any).findLegalDocumentLinksFromHtml(html, finalUrl, markdown)
       : (firecrawlService as any).findLegalDocumentLinks(markdown, finalUrl);
 
-    // Step 3: Determine which documents are missing
-    const requiredDocuments = {
-      privacyPolicy: "Privacy Policy",
-      termsOfService: "Terms of Service",
-      refundPolicy: "Refund Policy",
-      cookiePolicy: "Cookie Policy",
-      disclaimer: "Disclaimer",
-    };
+    // requiredDocuments moved up
+
 
     const missingDocuments: string[] = [];
     const foundDocuments: Record<string, { url: string; content: string }> = {};
@@ -774,7 +793,7 @@ app.post("/api/track-onboarding-event", async (req, res) => {
 
     // Validate required fields
     if (!eventData.session_id || !eventData.step_number || !eventData.event_type) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Missing required fields",
         required: ["session_id", "step_number", "event_type"]
       });
@@ -804,9 +823,9 @@ app.post("/api/track-onboarding-event", async (req, res) => {
 
     if (error) {
       console.error('[Track Onboarding Event] Error:', error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: "Failed to track event",
-        message: error.message 
+        message: error.message
       });
     }
 
@@ -814,9 +833,9 @@ app.post("/api/track-onboarding-event", async (req, res) => {
     return res.json({ success: true, data });
   } catch (error: any) {
     console.error('[Track Onboarding Event] Exception:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: "Internal server error",
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -860,7 +879,249 @@ app.post("/api/emails/welcome", async (req, res) => {
   }
 });
 
-// Send Onboarding Package (3 Free Documents)
+// Send Contact Created Email
+app.post("/api/emails/contact-created", async (req, res) => {
+  try {
+    const { email, firstName } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required",
+      });
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      console.error("RESEND_API_KEY is not set in environment variables");
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Email service is not configured.",
+      });
+    }
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Supabase is not configured.",
+      });
+    }
+
+    // Create Supabase admin client
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // Generate magic link using Supabase admin API
+    const redirectUrl = `${process.env.DASHBOARD_URL || 'https://free.consciouscounsel.ca'}/wellness/dashboard`;
+    
+    console.log('[Contact Created Email] Generating magic link for:', email);
+    console.log('[Contact Created Email] Redirect URL:', redirectUrl);
+
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: email.trim(),
+      options: {
+        redirectTo: redirectUrl,
+      },
+    });
+
+    let magicLinkUrl = '';
+    if (linkError || !linkData) {
+      console.error('[Contact Created Email] Error generating link:', linkError);
+      // Continue without magic link - use dashboard URL as fallback
+      magicLinkUrl = redirectUrl;
+    } else {
+      // Extract the action link (the actual clickable URL)
+      magicLinkUrl = linkData.properties?.action_link || redirectUrl;
+      console.log('[Contact Created Email] Magic link generated successfully:', magicLinkUrl.substring(0, 50) + '...');
+    }
+
+    // Send email via Resend with the magic link
+    const result = await emailService.sendContactCreatedEmail(
+      email.trim(),
+      firstName || email.split('@')[0],
+      magicLinkUrl
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    console.error("Error sending contact created email:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to send contact created email",
+    });
+  }
+});
+
+// Send Magic Link Email via Resend
+app.post("/api/auth/send-magic-link", async (req, res) => {
+  try {
+    const { email, name, redirectTo } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required",
+      });
+    }
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Supabase is not configured.",
+      });
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Email service is not configured.",
+      });
+    }
+
+    // Create Supabase admin client
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // Generate magic link using Supabase admin API
+    const redirectUrl = redirectTo || `${process.env.DASHBOARD_URL || 'https://free.consciouscounsel.ca'}/wellness/dashboard`;
+    
+    console.log('[Send Magic Link] Generating magic link for:', email);
+    console.log('[Send Magic Link] Redirect URL:', redirectUrl);
+
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: email.trim(),
+      options: {
+        redirectTo: redirectUrl,
+      },
+    });
+
+    if (linkError || !linkData) {
+      console.error('[Send Magic Link] Error generating link:', linkError);
+      return res.status(500).json({
+        error: "Failed to generate magic link",
+        message: linkError?.message || "Unknown error",
+      });
+    }
+
+    // Extract the action link (the actual clickable URL)
+    const actionLink = linkData.properties?.action_link;
+    
+    if (!actionLink) {
+      console.error('[Send Magic Link] No action_link in response:', linkData);
+      return res.status(500).json({
+        error: "Failed to extract magic link",
+        message: "Magic link generated but no URL found",
+      });
+    }
+
+    console.log('[Send Magic Link] Magic link generated successfully:', actionLink.substring(0, 50) + '...');
+
+    // Send email via Resend with the actual magic link
+    const emailResult = await emailService.sendMagicLinkEmail(
+      email.trim(),
+      actionLink,
+      name || email.split('@')[0]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        emailSent: true,
+        message: "Magic link email sent successfully",
+      },
+    });
+  } catch (error: any) {
+    console.error("Error sending magic link email:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to send magic link email",
+    });
+  }
+});
+
+// Send Onboarding Package (All Recommended Documents)
+// Automatically generates and saves all recommended legal documents based on user's business profile
+// Document ID to template name mapping
+const DOCUMENT_TEMPLATE_MAP = {
+  'template-6': { templateName: 'social_media_disclaimer', title: 'Social Media Disclaimer', category: 'marketing' },
+  'template-4': { templateName: 'media_release_form', title: 'Photo / Video Release', category: 'marketing' },
+  'template-intake': { templateName: 'client_intake_form', title: 'Client Intake Form', category: 'core' },
+  'template-1': { templateName: 'waiver_release_of_liability', title: 'Basic Waiver of Liability', category: 'core' },
+  'template-2': { templateName: 'service_agreement_membership_contract', title: 'Service Agreement & Membership Contract', category: 'core' },
+  'template-5': { templateName: 'testimonial_consent_agreement', title: 'Testimonial Consent & Use Agreement', category: 'marketing' },
+  'template-7': { templateName: 'independent_contractor_agreement', title: 'Independent Contractor Agreement', category: 'hr' },
+  'template-8': { templateName: 'employment_agreement', title: 'Employment Agreement', category: 'hr' },
+  'template-membership': { templateName: 'membership_agreement', title: 'Membership Agreement', category: 'operations' },
+  'template-studio': { templateName: 'studio_policies', title: 'Studio Policies', category: 'operations' },
+  'template-class': { templateName: 'class_terms_conditions', title: 'Class Terms & Conditions', category: 'operations' },
+  'template-privacy': { templateName: 'privacy_policy', title: 'Privacy Policy', category: 'website' },
+  'template-website': { templateName: 'website_terms_conditions', title: 'Website Terms & Conditions', category: 'website' },
+  'template-refund': { templateName: 'refund_cancellation_policy', title: 'Refund & Cancellation Policy', category: 'website' },
+  'template-disclaimer': { templateName: 'website_disclaimer', title: 'Website Disclaimer', category: 'website' },
+  'template-cookie': { templateName: 'cookie_policy', title: 'Cookie Policy', category: 'website' },
+  'template-retreat-waiver': { templateName: 'retreat_liability_waiver', title: 'Retreat Liability Waiver', category: 'core' },
+  'template-travel': { templateName: 'travel_excursion_agreement', title: 'Travel & Excursion Agreement', category: 'operations' }
+};
+
+// Get recommended documents based on business profile (server-side version of documentEngine)
+function getRecommendedDocumentsForProfile(profile) {
+  const recommendedIds = new Set();
+
+  // Core documents for everyone
+  const coreIds = [
+    'template-6', 'template-4', 'template-intake', 'template-1',
+    'template-website', 'template-privacy', 'template-disclaimer',
+    'template-cookie', 'template-refund'
+  ];
+  coreIds.forEach(id => recommendedIds.add(id));
+
+  // Dynamic recommendations based on profile
+  if (profile.has_w2_employees) {
+    recommendedIds.add('template-8'); // Employment Agreement
+  } else if (profile.hires_staff) {
+    recommendedIds.add('template-7'); // Contractor Agreement
+  }
+
+  // Studio-specific documents
+  const isStudio = profile.business_type &&
+    (profile.business_type.includes('Studio') || profile.business_type.includes('Gym'));
+  if (isStudio) {
+    recommendedIds.add('template-studio');
+    recommendedIds.add('template-class');
+    recommendedIds.add('template-membership');
+    recommendedIds.add('template-2');
+  }
+
+  // Retreat-specific documents
+  if (profile.hosts_retreats || profile.is_offsite_or_international) {
+    recommendedIds.add('template-retreat-waiver');
+    recommendedIds.add('template-travel');
+  }
+
+  // Online course/coaching documents
+  if (profile.offers_online_courses) {
+    recommendedIds.add('template-refund');
+  }
+
+  // Product sales
+  if (profile.sells_products) {
+    recommendedIds.add('template-refund');
+  }
+
+  // Testimonial agreement
+  if (profile.offers_online_courses || profile.hosts_retreats) {
+    recommendedIds.add('template-5');
+  }
+
+  return Array.from(recommendedIds);
+}
+
 app.post("/api/documents/onboarding-package", async (req, res) => {
   try {
     const { userId } = req.body;
@@ -888,7 +1149,7 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
       console.error('[Onboarding Package] Error details:', error);
       console.error('[Onboarding Package] User ID searched:', userId);
       console.error('[Onboarding Package] ⚠️ This means Resend will show NO attempt because emailService.sendOnboardingPackageEmail() is never called');
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: "Profile not found",
         message: "Business profile does not exist. Email cannot be sent without profile data.",
         userId: userId
@@ -922,30 +1183,27 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
       services: profile.services
     };
 
-    // Generate Documents & Save to Vault
-    const templates = [
-      { 
-        id: 'social_media_disclaimer', 
-        name: 'Social Media Disclaimer.pdf',
-        docType: 'template-6',
-        category: 'marketing',
-        title: 'Social Media Disclaimer'
-      },
-      { 
-        id: 'media_release_form', 
-        name: 'Photo Release Form.pdf',
-        docType: 'template-4',
-        category: 'marketing',
-        title: 'Photo / Video Release'
-      },
-      { 
-        id: 'client_intake_form', 
-        name: 'Client Intake Form.pdf',
-        docType: 'template-intake',
-        category: 'core',
-        title: 'Client Intake Form'
-      }
-    ];
+    // Get ALL recommended documents based on user's profile
+    const recommendedDocIds = getRecommendedDocumentsForProfile(profile);
+    console.log(`[Onboarding Package] Generating ${recommendedDocIds.length} recommended documents...`);
+
+    // Build templates array from recommended IDs
+    const templates = recommendedDocIds
+      .map(docId => {
+        const mapping = DOCUMENT_TEMPLATE_MAP[docId];
+        if (!mapping) {
+          console.warn(`[Onboarding Package] No mapping found for document ID: ${docId}`);
+          return null;
+        }
+        return {
+          id: mapping.templateName,
+          name: `${mapping.title}.pdf`,
+          docType: docId,
+          category: mapping.category,
+          title: mapping.title
+        };
+      })
+      .filter(t => t !== null);
 
     const attachments = [];
 
@@ -953,7 +1211,7 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
       try {
         console.log(`[Onboarding Package] Generating ${tmpl.id}...`);
         const pdfBuffer = await documentGenerationService.generateDocument(tmpl.id, profileData);
-        
+
         // Add to email attachments
         attachments.push({
           filename: tmpl.name,
@@ -1011,14 +1269,22 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
       return res.status(500).json({ error: "Failed to generate any documents" });
     }
 
-    // Send Email
-    await emailService.sendOnboardingPackageEmail(email, name, attachments);
+    console.log(`[Onboarding Package] Total documents generated: ${templates.length}`);
+    console.log(`[Onboarding Package] Documents successfully generated: ${attachments.length}`);
 
-    console.log(`[Onboarding Package] Successfully sent ${attachments.length} documents to ${email}`);
+    // Send notification email (no attachments - all docs are in the vault)
+    await emailService.sendOnboardingPackageEmail(
+      email,
+      name,
+      attachments.length,
+      templates.map(t => t.title)
+    );
+
+    console.log(`[Onboarding Package] Successfully generated ${attachments.length} documents and sent notification to ${email}`);
 
     return res.json({
       success: true,
-      sentCount: attachments.length
+      generatedCount: attachments.length
     });
 
   } catch (error: any) {
@@ -1030,379 +1296,13 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
   }
 });
 
-// Send Website Scan Reminder Emails
-// This endpoint should be called daily via cron job to automatically send reminders
-// 
-// Logic: 24 hours after a user creates their business profile, if they haven't scanned
-// their website yet, send them a reminder email.
-//
-// To set up automation:
-// 1. Set up a daily cron job (e.g., using GitHub Actions, Vercel Cron, or a server cron)
-// 2. Call: POST /api/emails/send-website-scan-reminders
-// 3. Runs daily and checks all users who completed profile >24 hours ago but haven't scanned
-app.post("/api/emails/send-website-scan-reminders", async (req, res) => {
-  try {
-    if (!process.env.RESEND_API_KEY) {
-      return res.status(500).json({
-        error: "Configuration error",
-        message: "Email service is not configured.",
-      });
-    }
-
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return res.status(500).json({
-        error: "Configuration error",
-        message: "Supabase is not configured.",
-      });
-    }
-
-    // Create Supabase client with service role for admin queries
-    const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
-    // Query for eligible users:
-    // - Have completed business profile (has business_name)
-    // - Have website URL
-    // - Haven't scanned website yet
-    // - Profile was created at least 24 hours ago (24 hours after they first saved their profile)
-    // - Haven't been sent a reminder email yet (or reminder was sent more than 7 days ago - allow re-engagement)
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    // First, get all profiles that meet basic criteria
-    let query = supabaseAdmin
-      .from('business_profiles')
-      .select('user_id, business_name, website_url, created_at, website_scan_reminder_sent_at')
-      .not('business_name', 'is', null)
-      .neq('business_name', '')
-      .not('website_url', 'is', null)
-      .neq('website_url', '')
-      .or('has_scanned_website.is.null,has_scanned_website.eq.false')
-      .lt('created_at', twentyFourHoursAgo); // Profile created more than 24 hours ago
-
-    const { data: eligibleProfiles, error: queryError } = await query;
-
-    if (queryError) {
-      console.error('[Website Scan Reminders] Error querying profiles:', queryError);
-      return res.status(500).json({
-        error: "Database error",
-        message: queryError.message,
-      });
-    }
-
-    if (!eligibleProfiles || eligibleProfiles.length === 0) {
-      return res.json({
-        success: true,
-        message: "No eligible users found",
-        sent: 0,
-      });
-    }
-
-    // Filter out users who were sent a reminder less than 7 days ago
-    const profilesToEmail = eligibleProfiles.filter((profile: any) => {
-      if (!profile.website_scan_reminder_sent_at) {
-        return true; // Never sent reminder
-      }
-      const reminderSentAt = new Date(profile.website_scan_reminder_sent_at);
-      const sevenDaysAgoDate = new Date(sevenDaysAgo);
-      return reminderSentAt < sevenDaysAgoDate; // Sent more than 7 days ago
-    });
-
-    if (profilesToEmail.length === 0) {
-      return res.json({
-        success: true,
-        message: "No eligible users found (all have been sent reminders recently)",
-        sent: 0,
-        total: eligibleProfiles.length,
-      });
-    }
-
-    console.log(`[Website Scan Reminders] Found ${profilesToEmail.length} eligible profiles (out of ${eligibleProfiles.length} total)`);
-
-    // Get user emails from auth.users or users table
-    const results = [];
-    for (const profile of profilesToEmail) {
-      try {
-        // Get user email from auth.users
-        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(profile.user_id);
-
-        if (authError || !authUser?.user?.email) {
-          // Fallback: try users table
-          const { data: appUser } = await supabaseAdmin
-            .from('users')
-            .select('email, name')
-            .eq('user_id', profile.user_id)
-            .single();
-
-          if (!appUser || !appUser.email) {
-            console.warn(`[Website Scan Reminders] Skipping user ${profile.user_id} - no email found`);
-            continue;
-          }
-
-          const result = await emailService.sendWebsiteScanReminder(
-            appUser.email,
-            appUser.name
-          );
-
-          // Mark that reminder was sent to prevent duplicate emails
-          await supabaseAdmin
-            .from('business_profiles')
-            .update({ website_scan_reminder_sent_at: new Date().toISOString() })
-            .eq('user_id', profile.user_id);
-
-          results.push({
-            email: appUser.email,
-            success: true,
-            result: result,
-          });
-
-          console.log(`[Website Scan Reminders] Sent reminder to: ${appUser.email}`);
-        } else {
-          // Use email from auth.users
-          const result = await emailService.sendWebsiteScanReminder(
-            authUser.user.email,
-            authUser.user.user_metadata?.name || authUser.user.email.split('@')[0]
-          );
-
-          // Mark that reminder was sent to prevent duplicate emails
-          await supabaseAdmin
-            .from('business_profiles')
-            .update({ website_scan_reminder_sent_at: new Date().toISOString() })
-            .eq('user_id', profile.user_id);
-
-          results.push({
-            email: authUser.user.email,
-            success: true,
-            result: result,
-          });
-
-          console.log(`[Website Scan Reminders] Sent reminder to: ${authUser.user.email}`);
-        }
-      } catch (emailError: any) {
-        console.error(`[Website Scan Reminders] Error sending to user ${profile.user_id}:`, emailError);
-        results.push({
-          email: 'unknown',
-          success: false,
-          error: emailError.message,
-        });
-      }
-    }
-
-    const successCount = results.filter(r => r.success).length;
-    const failureCount = results.filter(r => !r.success).length;
-
-    res.json({
-      success: true,
-      message: `Sent ${successCount} reminder emails${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
-      sent: successCount,
-      failed: failureCount,
-      total: profilesToEmail.length,
-      results: results,
-    });
-  } catch (error: any) {
-    console.error("[Website Scan Reminders] Error:", error);
-    res.status(500).json({
-      error: "Internal server error",
-      message: error.message || "Failed to send website scan reminders",
-    });
-  }
-});
-
 // ================================================================
-// Send Legal Health Score Emails (Day 1 nurture sequence)
+// REMOVED: Cron job endpoints for email reminders
 // ================================================================
-//
-// This endpoint sends personalized Legal Health Score emails to users
-// - Pulls user data from business_profiles
-// - Calculates their risk score dynamically
-// - Sends customized email based on their risk factors
-//
-// To set up automation:
-// 1. Set up a daily cron job or schedule this for Day 1 after signup
-// 2. Call: POST /api/emails/send-legal-health-score
-// 3. Runs daily and checks all users who created password >24 hours ago but haven't received this email
-app.post("/api/emails/send-legal-health-score", async (req, res) => {
-  try {
-    if (!process.env.RESEND_API_KEY) {
-      return res.status(500).json({
-        error: "Configuration error",
-        message: "Email service is not configured.",
-      });
-    }
-
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return res.status(500).json({
-        error: "Configuration error",
-        message: "Supabase is not configured.",
-      });
-    }
-
-    // Create Supabase client with service role for admin queries
-    const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
-    // Query for eligible users:
-    // - Created password at least 24 hours ago (Day 1 of nurture sequence)
-    // - Haven't been sent the Legal Health Score email yet
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-    // Get users from users table who were created 24+ hours ago
-    const { data: eligibleUsers, error: queryError } = await supabaseAdmin
-      .from('users')
-      .select('user_id, email, name, password_created_at')
-      .lt('password_created_at', twentyFourHoursAgo)
-      .or('legal_health_score_email_sent_at.is.null');
-
-    if (queryError) {
-      console.error('[Legal Health Score Emails] Error querying users:', queryError);
-      return res.status(500).json({
-        error: "Database error",
-        message: queryError.message,
-      });
-    }
-
-    if (!eligibleUsers || eligibleUsers.length === 0) {
-      return res.json({
-        success: true,
-        message: "No eligible users found",
-        sent: 0,
-      });
-    }
-
-    console.log(`[Legal Health Score Emails] Found ${eligibleUsers.length} eligible users`);
-
-    // Helper function to calculate score from profile data
-    const calculateScoreFromProfile = (profile: any): { score: number; riskLevel: 'Low' | 'Moderate' | 'High' } => {
-      let rawScore = 0;
-
-      // Rule 1: Movement = 30 points
-      if (profile.has_physical_movement) rawScore += 30;
-
-      // Rule 2: Retreats = 25 points
-      if (profile.hosts_retreats || profile.is_offsite_or_international) rawScore += 25;
-
-      // Rule 3: Hiring = 20 points
-      if (profile.hires_staff) {
-        rawScore += 20;
-        if (profile.team_size === '4-10') rawScore += 5;
-        if (profile.team_size === '10+') rawScore += 10;
-      }
-
-      // Rule 4: Online = 15 points
-      if (profile.collects_online) rawScore += 15;
-
-      // Rule 5: Digital Programs = 10 points
-      if (profile.offers_online_courses) rawScore += 10;
-
-      // Rule 6: Photos/Video = 5 points
-      if (profile.uses_photos) rawScore += 5;
-
-      // Rule 7: Client Volume
-      if (profile.monthly_clients === '50-200') rawScore += 5;
-      if (profile.monthly_clients === '200+') rawScore += 10;
-
-      // Normalize to 0-100 scale
-      const normalizedScore = Math.min(Math.round((rawScore / 130) * 100), 100);
-
-      let riskLevel: 'Low' | 'Moderate' | 'High' = 'Low';
-      if (normalizedScore >= 70) riskLevel = 'High';
-      else if (normalizedScore >= 40) riskLevel = 'Moderate';
-
-      return { score: normalizedScore, riskLevel };
-    };
-
-    // Send emails
-    const results = [];
-    for (const user of eligibleUsers) {
-      try {
-        // Get business profile for this user
-        const { data: profile } = await supabaseAdmin
-          .from('business_profiles')
-          .select('*')
-          .eq('user_id', user.user_id)
-          .single();
-
-        // If no profile, skip (they haven't completed onboarding)
-        if (!profile) {
-          console.log(`[Legal Health Score Emails] Skipping user ${user.email} - no business profile`);
-          continue;
-        }
-
-        // STRICT CHECK: Require business_name to be filled out (indicates profile completion)
-        // This ensures we only email users who completed the full Business Profile page
-        if (!profile.business_name || profile.business_name.trim() === '' || profile.business_name === 'My Wellness Business') {
-          console.log(`[Legal Health Score Emails] Skipping user ${user.email} - profile not complete (no business name)`);
-          continue;
-        }
-
-        // Calculate their score
-        const { score, riskLevel } = calculateScoreFromProfile(profile);
-
-        // Send email with personalized data
-        const result = await emailService.sendLegalHealthScoreEmail(
-          user.email,
-          {
-            name: user.name || profile.business_name || user.email.split('@')[0],
-            businessName: profile.business_name || 'your business',
-            businessType: profile.business_type || 'wellness business',
-            score: score,
-            riskLevel: riskLevel,
-            hasPhysicalMovement: profile.has_physical_movement || false,
-            hostsRetreats: profile.hosts_retreats || false,
-            hiresStaff: profile.hires_staff || false,
-            collectsOnline: profile.collects_online || false,
-            usesPhotos: profile.uses_photos || false,
-          }
-        );
-
-        // Mark that email was sent
-        await supabaseAdmin
-          .from('users')
-          .update({ legal_health_score_email_sent_at: new Date().toISOString() })
-          .eq('user_id', user.user_id);
-
-        results.push({
-          email: user.email,
-          success: true,
-          score: score,
-          riskLevel: riskLevel,
-          result: result,
-        });
-
-        console.log(`[Legal Health Score Emails] Sent to: ${user.email} (Score: ${score}, Risk: ${riskLevel})`);
-      } catch (emailError: any) {
-        console.error(`[Legal Health Score Emails] Error sending to user ${user.email}:`, emailError);
-        results.push({
-          email: user.email,
-          success: false,
-          error: emailError.message,
-        });
-      }
-    }
-
-    const successCount = results.filter(r => r.success).length;
-    const failureCount = results.filter(r => !r.success).length;
-
-    res.json({
-      success: true,
-      message: `Sent ${successCount} Legal Health Score emails${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
-      sent: successCount,
-      failed: failureCount,
-      total: eligibleUsers.length,
-      results: results,
-    });
-  } catch (error: any) {
-    console.error("[Legal Health Score Emails] Error:", error);
-    res.status(500).json({
-      error: "Internal server error",
-      message: error.message || "Failed to send Legal Health Score emails",
-    });
-  }
-});
+// These endpoints have been removed as they were not working properly.
+// Email reminders are now handled via Cloud Tasks scheduled individually per user.
+// - /api/emails/send-website-scan-reminders (removed)
+// - /api/emails/send-legal-health-score (removed)
 
 // ================================================================
 // Get Social Proof Statistics (for dashboard widget)
@@ -1552,6 +1452,122 @@ app.get("/api/stats/social-proof", async (req, res) => {
     res.status(500).json({
       error: "Internal server error",
       message: error.message || "Failed to fetch social proof stats",
+    });
+  }
+});
+
+// ================================================================
+// Get Booking Information (for pre-booking screen)
+// ================================================================
+//
+// Returns booking statistics for social proof and scarcity
+// Shows: bookings this week, average response time, next available
+//
+app.get("/api/stats/booking-info", async (req, res) => {
+  try {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        error: "Configuration error",
+        message: "Supabase is not configured.",
+      });
+    }
+
+    // Create Supabase client with service role
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // Get bookings from this week (last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: bookingsThisWeek, error: bookingsError } = await supabaseAdmin
+      .from('contacts')
+      .select('*', { count: 'exact', head: true })
+      .gte('calendly_booked_at', sevenDaysAgo)
+      .not('calendly_booked_at', 'is', null);
+
+    if (bookingsError) {
+      console.error('[Booking Stats] Error getting bookings:', bookingsError);
+    }
+
+    // Calculate average response time (time between contact creation and booking)
+    // This is a simplified calculation - you can make it more sophisticated
+    const { data: recentBookings, error: responseTimeError } = await supabaseAdmin
+      .from('contacts')
+      .select('created_at, calendly_booked_at')
+      .not('calendly_booked_at', 'is', null)
+      .not('created_at', 'is', null)
+      .limit(100); // Sample last 100 bookings
+
+    let averageResponseTime = '1 hour'; // Default
+    if (!responseTimeError && recentBookings && recentBookings.length > 0) {
+      const responseTimes = recentBookings
+        .filter(b => b.created_at && b.calendly_booked_at)
+        .map(b => {
+          const created = new Date(b.created_at).getTime();
+          const booked = new Date(b.calendly_booked_at).getTime();
+          return booked - created; // milliseconds
+        })
+        .filter(time => time > 0 && time < 7 * 24 * 60 * 60 * 1000); // Within 7 days
+
+      if (responseTimes.length > 0) {
+        const avgMs = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
+        const avgHours = Math.round(avgMs / (1000 * 60 * 60));
+        if (avgHours < 1) {
+          const avgMinutes = Math.round(avgMs / (1000 * 60));
+          averageResponseTime = `${avgMinutes} minutes`;
+        } else if (avgHours < 24) {
+          averageResponseTime = `${avgHours} hour${avgHours !== 1 ? 's' : ''}`;
+        } else {
+          const avgDays = Math.round(avgHours / 24);
+          averageResponseTime = `${avgDays} day${avgDays !== 1 ? 's' : ''}`;
+        }
+      }
+    }
+
+    // Calculate next available time (simplified - you can integrate with Calendly API)
+    // For now, we'll use a simple heuristic
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(14, 0, 0, 0); // 2pm tomorrow
+
+    const nextAvailable = tomorrow.getTime() > now.getTime()
+      ? `Tomorrow at ${tomorrow.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+      : 'Today at 2pm';
+
+    // Boost bookings count for social proof (similar to social proof widget)
+    const BASE_BOOKINGS = 100; // Base count for social proof
+    const realBookings = bookingsThisWeek || 0;
+    const boostedBookings = BASE_BOOKINGS + realBookings;
+
+    const stats = {
+      bookingsThisWeek: boostedBookings,
+      averageResponseTime: averageResponseTime,
+      nextAvailable: nextAvailable,
+      lastUpdated: new Date().toISOString(),
+      // For debugging: include real counts (not shown to users)
+      _debug: {
+        realBookings: realBookings,
+        baseBookings: BASE_BOOKINGS,
+      }
+    };
+
+    console.log('[Booking Stats] Real bookings this week:', realBookings);
+    console.log('[Booking Stats] Boosted bookings:', boostedBookings);
+    console.log('[Booking Stats] Stats sent to frontend:', stats);
+
+    // Cache this response for 30 minutes (1800 seconds)
+    res.set('Cache-Control', 'public, max-age=1800');
+    res.json(stats);
+  } catch (error: any) {
+    console.error("[Booking Stats] Error:", error);
+    // Return default stats if there's an error
+    res.json({
+      bookingsThisWeek: 127,
+      averageResponseTime: '1 hour',
+      nextAvailable: 'Tomorrow at 2pm',
+      lastUpdated: new Date().toISOString(),
     });
   }
 });
@@ -1895,12 +1911,14 @@ app.post("/api/save-contact", async (req, res) => {
     }
 
     // Normalize phone number to E.164 format
-    const normalizedPhone = phone ? normalizePhone(phone, 'US') : null;
+    // Be lenient - if phone validation fails, just use the original value
+    // This ensures we don't reject leads due to invalid phone numbers
+    let normalizedPhone = phone ? normalizePhone(phone, 'US') : null;
+
     if (phone && !normalizedPhone) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid phone number format"
-      });
+      // Log warning but don't reject - use original phone value
+      console.warn("[Save Contact] Invalid phone format, using original:", phone);
+      normalizedPhone = phone; // Use original value instead of rejecting
     }
 
     // Normalize website URL
@@ -1920,6 +1938,67 @@ app.post("/api/save-contact", async (req, res) => {
     console.log("[Save Contact] Attempting to save:", contactData);
     const supabaseResult = await supabaseService.saveContact(contactData);
     console.log("[Save Contact] Successfully saved to Supabase:", supabaseResult);
+
+    // Send contact created email immediately (fire and forget - don't block response)
+    // Only send if this is a new contact (not a duplicate)
+    if (supabaseResult && Array.isArray(supabaseResult) && supabaseResult.length > 0) {
+      const contact = supabaseResult[0];
+      // Check if this contact was just created (not an existing one)
+      // We'll send the email regardless, but the email service will handle gracefully
+      const nameParts = name.trim().split(/\s+/);
+      const firstName = nameParts[0] || "";
+      
+      // Send email asynchronously (fire and forget)
+      (async () => {
+        try {
+          console.log("[Save Contact] Sending contact created email to:", email);
+          
+          // Generate magic link using Supabase admin API
+          if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.RESEND_API_KEY) {
+            const supabaseAdmin = createClient(
+              process.env.SUPABASE_URL,
+              process.env.SUPABASE_SERVICE_ROLE_KEY
+            );
+
+            const redirectUrl = `${process.env.DASHBOARD_URL || 'https://free.consciouscounsel.ca'}/wellness/dashboard`;
+            
+            let magicLinkUrl = redirectUrl; // Default fallback
+            try {
+              const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+                type: 'magiclink',
+                email: email.trim(),
+                options: {
+                  redirectTo: redirectUrl,
+                },
+              });
+
+              if (!linkError && linkData?.properties?.action_link) {
+                magicLinkUrl = linkData.properties.action_link;
+                console.log("[Save Contact] Magic link generated successfully");
+              } else {
+                console.warn("[Save Contact] Magic link generation failed, using dashboard URL:", linkError?.message);
+              }
+            } catch (linkErr: any) {
+              console.warn("[Save Contact] Error generating magic link, using dashboard URL:", linkErr.message);
+            }
+
+            // Send email via email service
+            await emailService.sendContactCreatedEmail(
+              email.trim(),
+              firstName,
+              magicLinkUrl
+            );
+            
+            console.log("[Save Contact] ✅ Contact created email sent successfully");
+          } else {
+            console.warn("[Save Contact] ⚠️ Missing required env vars for email (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or RESEND_API_KEY)");
+          }
+        } catch (emailError: any) {
+          console.error("[Save Contact] ❌ Error sending contact created email:", emailError);
+          // Don't throw - we don't want to break the contact save
+        }
+      })();
+    }
 
     // STEP 1: Supabase ✅ (Complete)
     // STEP 2: GoHighLevel (PRIORITY - Must complete before Instantly.ai)
@@ -2154,6 +2233,11 @@ app.post("/api/save-contact", async (req, res) => {
                         email_subject: workflowResult.email.subject,
                         email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
                         email_body: cleanEmailBody, // Cleaned version as backup
+
+                        // Uppercase to match UI columns explicitly
+                        EMAIL_SUBJECT: workflowResult.email.subject,
+                        EMAIL_BODY_HTML: workflowResult.email.body,
+                        EMAIL_BODY: cleanEmailBody
                       },
                     };
 
@@ -3042,6 +3126,94 @@ app.post("/api/contacts/update-calendly-booking", async (req, res) => {
   }
 });
 
+// Calendly webhook endpoint
+app.post("/api/webhooks/calendly", express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    console.log("[Calendly Webhook] Received webhook event");
+
+    // Get the raw body for signature verification
+    const rawBody = req.body.toString('utf8');
+    const signature = req.headers['calendly-webhook-signature'] as string;
+
+    // Verify webhook signature if signing key is configured
+    if (process.env.CALENDLY_WEBHOOK_SIGNING_KEY && signature) {
+      const isValid = calendlyService.verifyWebhookSignature(rawBody, signature);
+      if (!isValid) {
+        console.error("[Calendly Webhook] ❌ Invalid webhook signature");
+        return res.status(401).json({
+          error: "Invalid webhook signature"
+        });
+      }
+      console.log("[Calendly Webhook] ✅ Webhook signature verified");
+    }
+
+    // Parse the JSON payload
+    const event = JSON.parse(rawBody);
+
+    // Process the webhook event
+    const result = await calendlyService.processWebhookEvent(event);
+
+    if (result.success) {
+      console.log(`[Calendly Webhook] ✅ ${result.message}`);
+      return res.status(200).json(result);
+    } else {
+      console.error(`[Calendly Webhook] ❌ ${result.message}`);
+      return res.status(400).json(result);
+    }
+  } catch (error: any) {
+    console.error("[Calendly Webhook] ❌ Error processing webhook:", error);
+    return res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to process webhook"
+    });
+  }
+});
+
+// Get appointments for a specific email
+app.get("/api/appointments/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required"
+      });
+    }
+
+    const appointments = await calendlyService.getAppointmentsByEmail(email);
+
+    return res.json({
+      success: true,
+      data: appointments
+    });
+  } catch (error: any) {
+    console.error("[Get Appointments] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to fetch appointments"
+    });
+  }
+});
+
+// Get upcoming appointments
+app.get("/api/appointments/upcoming", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const appointments = await calendlyService.getUpcomingAppointments(limit);
+
+    return res.json({
+      success: true,
+      data: appointments
+    });
+  } catch (error: any) {
+    console.error("[Get Upcoming Appointments] Error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to fetch upcoming appointments"
+    });
+  }
+});
+
 // Get workflow results endpoint
 app.get("/api/workflow-results", async (req, res) => {
   try {
@@ -3079,130 +3251,184 @@ app.get("/api/workflow-results", async (req, res) => {
 // Trademark Risk Report API Endpoint
 // ============================================
 
-// Trademark Risk Report Request Endpoint
+// Helper functions for trademark lead magnet flow
+function getRiskIcon(riskLevel: string): string {
+  if (riskLevel === 'HIGH') return '⚠️';
+  if (riskLevel === 'MODERATE') return '⚡';
+  return '✅';
+}
+
+function getUrgencyMessage(riskLevel: string): string {
+  if (riskLevel === 'HIGH') return 'Immediate action recommended';
+  if (riskLevel === 'MODERATE') return 'Protection advised before expansion';
+  return 'Consider protection as you grow';
+}
+
+function generateVerdictFromUSPTO(usptoResults: any, businessName: string): string {
+  const { riskLevel, totalResults, recommendation } = usptoResults;
+
+  if (riskLevel === 'HIGH') {
+    return `We found ${totalResults} registered trademark(s) that could conflict with "${businessName}". ${recommendation} Using this name without clearance could lead to legal challenges, cease and desist letters, and costly rebranding down the line. It's critical to address these conflicts before investing heavily in branding or expansion.`;
+  } else if (riskLevel === 'MODERATE') {
+    return `Our USPTO database search found ${totalResults} similar trademark(s) that warrant attention. ${recommendation} While these may not be exact matches, they could create marketplace confusion as you grow your business. We recommend a comprehensive trademark search and consultation to assess your specific risk level and protection options.`;
+  } else {
+    return `Good news! Our initial USPTO database search found no exact matches for "${businessName}". ${recommendation || 'This is a positive first step.'} However, this is a preliminary automated scan and doesn't guarantee availability. Before making significant branding investments, we recommend a comprehensive search covering state registrations, common law usage, and domain availability.`;
+  }
+}
+
+function formatConflictsForPDF(topConflicts: any[]): string {
+  if (!topConflicts || topConflicts.length === 0) {
+    return `
+      <div style="text-align: center; padding: 20px; background: #f0fdf4; border-radius: 8px; margin: 15px 0;">
+        <p style="color: #16a34a; font-size: 11pt; font-weight: bold;">No exact trademark matches found in our USPTO database search.</p>
+        <p style="color: #374151; font-size: 10pt; margin-top: 8px;">This is a good sign! However, a comprehensive search is still recommended.</p>
+      </div>
+    `;
+  }
+
+  const conflictsList = topConflicts.map(conflict => `
+    <div class="conflict-item">
+      <div class="conflict-mark">${conflict.markText || 'N/A'}</div>
+      <div class="conflict-owner">Owner: ${conflict.owner || 'Unknown'}</div>
+      <div class="conflict-status ${conflict.statusClass || 'status-live'}">${conflict.status || 'LIVE'}</div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="conflicts-list">
+      <h4 style="font-size: 12pt; margin-bottom: 12px; color: #1a1a1a;">Top Conflicting Trademarks:</h4>
+      ${conflictsList}
+      ${topConflicts.length >= 5 ? '<p style="font-size: 9pt; color: #666; margin-top: 10px; font-style: italic;">Note: Additional conflicts may exist. Full list available in comprehensive search.</p>' : ''}
+    </div>
+  `;
+}
+
+// USPTO Trademark Search Endpoint
+app.post("/api/trademarks/uspto-search", async (req, res) => {
+  try {
+    const { businessName } = req.body;
+
+    if (!businessName || typeof businessName !== 'string' || businessName.trim().length === 0) {
+      return res.status(400).json({ error: "Business name is required" });
+    }
+
+    console.log(`[USPTO] Searching trademarks for: "${businessName}"`);
+
+    // Perform USPTO trademark search
+    const searchResults = await usptoService.searchTrademarks(businessName.trim());
+
+    console.log(`[USPTO] Search complete. Found: ${searchResults.totalResults} results`);
+    console.log(`[USPTO] Risk level: ${searchResults.riskLevel}`);
+
+    // Return the search results
+    return res.json(searchResults);
+  } catch (error: any) {
+    console.error('[USPTO] Error in trademark search:', error);
+    return res.status(500).json({
+      error: 'Failed to search USPTO database',
+      message: error.message
+    });
+  }
+});
+
+// Trademark Risk Report Request Endpoint (Lead Magnet Flow - Simplified)
 app.post("/api/trademarks/request", async (req, res) => {
   try {
-    const { user_id, businessName, score, riskLevel, email, name, answers, answerDetails } = req.body;
+    const { user_id, businessName, email, name, usptoResults } = req.body;
 
+    // Validation
     if (!businessName || !email) {
       return res.status(400).json({ error: "Missing required fields: businessName, email" });
     }
 
-    console.log(`[Trademark] Received request for: ${businessName} (${email})`);
-    console.log(`[Trademark] Request body keys:`, Object.keys(req.body));
-    console.log(`[Trademark] user_id:`, user_id ? `${user_id.substring(0, 8)}...` : 'MISSING');
-    console.log(`[Trademark] answers:`, answers ? `Array(${answers.length})` : 'MISSING');
-    console.log(`[Trademark] answerDetails:`, answerDetails ? `Array(${answerDetails.length})` : 'MISSING');
+    if (!usptoResults) {
+      return res.status(400).json({ error: "USPTO search results required" });
+    }
 
-    // Generate risk factors based on quiz answers
-    const riskFactors = generateRiskFactors(answers, score, riskLevel);
+    console.log(`[Trademark] Lead magnet request for: ${businessName} (${email})`);
+    console.log(`[Trademark] USPTO results:`, usptoResults ? `${usptoResults.totalResults} conflicts found, risk: ${usptoResults.riskLevel}` : 'NOT PROVIDED');
 
-    // Extract answer details for PDF (use provided answerDetails if available, otherwise extract from answers)
-    const extractedDetails = answerDetails ? extractAnswerDetailsFromDetails(answerDetails) : extractAnswerDetails(answers);
+    // Calculate risk score from USPTO results (simplified - no quiz needed)
+    const riskLevel = usptoResults.riskLevel;
+    const riskScore = Math.min(40, usptoResults.totalResults * 2); // Simple scoring: 2 points per conflict, max 40
 
-    // Generate verdict text based on risk level
-    const verdict = generateVerdict(riskLevel, score);
+    // Generate verdict from USPTO data
+    const verdict = generateVerdictFromUSPTO(usptoResults, businessName);
 
-    // Generate translation text
-    const translationText = generateTranslationText(riskLevel, score);
+    // Prepare top conflicts for PDF (top 5)
+    const topConflicts = (usptoResults.trademarks || []).slice(0, 5).map((tm: any) => ({
+      markText: tm.markText,
+      owner: tm.owner,
+      status: tm.liveOrDead || 'LIVE',
+      statusClass: (tm.liveOrDead === 'LIVE') ? 'status-live' : 'status-dead'
+    }));
 
-    // 1. Generate PDF Report
+    // 1. Generate PDF Report using NEW LEAD MAGNET TEMPLATE
     let pdfBuffer: Buffer | undefined;
     try {
-      const reportData = {
+      const pdfData = {
         businessName: businessName,
-        businessType: 'Wellness Business', // Could be passed from frontend if available
-        riskLevel: riskLevel || 'MODERATE RISK',
-        score: score || 0,
-        riskFactor1: riskFactors[0] || 'No federal trademark registration',
-        riskFactor2: riskFactors[1] || 'Similar name search not fully completed',
-        riskFactor3: riskFactors[2] || 'Expansion beyond current location planned',
-        riskFactor4: riskFactors[3] || 'Domain availability uncertain',
-        email: email,
-        // New fields for improved PDF
+        riskLevel: riskLevel,
+        riskClass: riskLevel.toLowerCase(),
+        riskIcon: getRiskIcon(riskLevel),
+        urgencyMessage: getUrgencyMessage(riskLevel),
+        totalConflicts: usptoResults.totalResults,
+        conflictsSection: formatConflictsForPDF(topConflicts),
         verdict: verdict,
-        trademarkRegistered: extractedDetails.trademarkRegistered,
-        trademarkRegisteredIcon: extractedDetails.trademarkRegisteredIcon,
-        expansionPlanned: extractedDetails.expansionPlanned,
-        expansionPlannedIcon: extractedDetails.expansionPlannedIcon,
-        similarNameSearch: extractedDetails.similarNameSearch,
-        similarNameSearchIcon: extractedDetails.similarNameSearchIcon,
-        domainOwnership: extractedDetails.domainOwnership,
-        translationText: translationText,
-        // New question answers
-        brandNameOrigin: extractedDetails.brandNameOrigin || 'Not specified',
-        includesLocation: extractedDetails.includesLocation || 'No',
-        brandUsageDuration: extractedDetails.brandUsageDuration || 'Not specified',
-        brandUsageLocations: extractedDetails.brandUsageLocations || 'Not specified',
-        expansionPlans: extractedDetails.expansionPlans || 'Not specified',
-        brandingInvestments: extractedDetails.brandingInvestments || 'Not specified',
-        receivedConfusion: extractedDetails.receivedConfusion || 'No',
-        differentFromLegalName: extractedDetails.differentFromLegalName || 'Not sure',
-        workedWithLawyer: extractedDetails.workedWithLawyer || 'No',
+        date: new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }),
+        year: new Date().getFullYear()
       };
 
       pdfBuffer = await documentGenerationService.generateDocument(
-        'trademark_risk_report',
-        reportData
+        'trademark_risk_report_lead_magnet',  // NEW TEMPLATE
+        pdfData
       );
-      console.log('[Trademark] PDF generated successfully, size:', pdfBuffer.length);
+      console.log('[Trademark] Lead magnet PDF generated successfully, size:', pdfBuffer.length);
     } catch (pdfError: any) {
       console.error('[Trademark] Error generating PDF:', pdfError);
       // Continue without PDF - email will still be sent
     }
 
-    // 2. Insert into Supabase trademark_requests
+    // 2. Insert into Supabase trademark_requests (simplified)
     let dbSaveSuccess = false;
     let dbError: any = null;
-    
+
     if (user_id) {
-      console.log('[Trademark] Attempting to save to database with user_id:', user_id);
-      console.log('[Trademark] Answers provided:', answers ? `Yes (${answers.length} items)` : 'No');
-      console.log('[Trademark] Answer details provided:', answerDetails ? `Yes (${answerDetails.length} items)` : 'No');
-      
+      console.log('[Trademark] Saving lead to database with user_id:', user_id);
+
       try {
         const insertData: any = {
           user_id: user_id,
           business_name: businessName,
-          quiz_score: score,
+          quiz_score: riskScore,
           risk_level: riskLevel,
-          status: 'completed' // Changed from 'pending' since we're sending the report immediately
+          status: 'completed',
+          email_sent_at: new Date().toISOString(),
+          uspto_total_conflicts: usptoResults.totalResults,
+          uspto_risk_level: usptoResults.riskLevel
         };
 
-        // Add quiz answers if provided
-        if (answers && Array.isArray(answers)) {
-          insertData.quiz_answers = answers;
-          console.log('[Trademark] Adding quiz_answers to insert:', answers);
-        }
-
-        // Add answer details if provided
-        if (answerDetails && Array.isArray(answerDetails)) {
-          insertData.answer_details = answerDetails;
-          console.log('[Trademark] Adding answer_details to insert:', answerDetails.length, 'items');
-        }
-
         console.log('[Trademark] Insert data keys:', Object.keys(insertData));
-        
+
         const { data, error: insertError } = await supabaseService.client
           .from('trademark_requests')
           .insert(insertData)
           .select();
-        
+
         dbError = insertError;
 
         if (dbError) {
           console.error('[Trademark] ❌ Database insert error:', dbError);
-          console.error('[Trademark] Error details:', JSON.stringify(dbError, null, 2));
-          console.error('[Trademark] Error code:', dbError.code);
           console.error('[Trademark] Error message:', dbError.message);
-          console.error('[Trademark] Error hint:', dbError.hint);
           dbSaveSuccess = false;
           // Log but don't fail the request - email was still sent
         } else {
-          console.log('[Trademark] ✅ Successfully saved to database');
+          console.log('[Trademark] ✅ Successfully saved lead to database');
           console.log('[Trademark] Record ID:', data?.[0]?.id);
-          console.log('[Trademark] Saved with quiz_answers:', answers ? `Yes (${answers.length} answers)` : 'No');
-          console.log('[Trademark] Saved with answer_details:', answerDetails ? `Yes (${answerDetails.length} details)` : 'No');
           dbSaveSuccess = true;
 
           // Log event: trademark_risk_report_sent (if legal_timeline table exists)
@@ -3215,7 +3441,8 @@ app.post("/api/trademarks/request", async (req, res) => {
                 event_data: {
                   business_name: businessName,
                   risk_level: riskLevel,
-                  score: score
+                  score: riskScore,
+                  total_conflicts: usptoResults.totalResults
                 },
                 created_at: new Date().toISOString()
               });
@@ -3234,8 +3461,6 @@ app.post("/api/trademarks/request", async (req, res) => {
       }
     } else {
       console.warn('[Trademark] ⚠️ No user_id provided, skipping DB save');
-      console.warn('[Trademark] Request body keys:', Object.keys(req.body));
-      console.warn('[Trademark] Full request body:', JSON.stringify(req.body, null, 2));
       dbSaveSuccess = false;
       dbError = { message: 'No user_id provided in request' };
     }
@@ -3243,15 +3468,15 @@ app.post("/api/trademarks/request", async (req, res) => {
     // 3. Send Risk Report Email with PDF attachment
     await emailService.sendTrademarkRiskReport(
       email,
-      name,
+      name || 'there',
       businessName,
       riskLevel,
-      score,
+      riskScore,
       pdfBuffer
     );
 
     // 4. Send Admin Alert
-    await emailService.sendAdminTrademarkAlert(email, businessName, riskLevel, score);
+    await emailService.sendAdminTrademarkAlert(email, businessName, riskLevel, riskScore);
 
     // 5. Add "completed IP scan" tag to GoHighLevel
     try {
@@ -3304,14 +3529,70 @@ app.post("/api/trademarks/request", async (req, res) => {
       console.error(`[Trademark] Error adding GHL tag:`, ghlError);
     }
 
-    return res.json({ 
-      success: true, 
-      message: "Risk report processed and sent",
-      dbSaved: dbSaveSuccess,
-      dbError: dbError ? dbError.message : null
+    return res.json({
+      success: true,
+      message: "Risk report sent to your email",
+      riskLevel: riskLevel,
+      riskScore: riskScore,
+      totalConflicts: usptoResults.totalResults,
+      dbSaved: dbSaveSuccess
     });
   } catch (error: any) {
     console.error('[Trademark] Error processing request:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Direct PDF Download endpoint (Lead Magnet - simplified)
+app.post("/api/trademarks/download-report", async (req, res) => {
+  try {
+    const { businessName, usptoResults } = req.body;
+
+    if (!businessName || !usptoResults) {
+      return res.status(400).json({ error: "Missing required fields: businessName, usptoResults" });
+    }
+
+    console.log(`[Trademark Download] Generating PDF for: ${businessName}`);
+
+    const riskLevel = usptoResults.riskLevel;
+    const verdict = generateVerdictFromUSPTO(usptoResults, businessName);
+    const topConflicts = (usptoResults.trademarks || []).slice(0, 5).map((tm: any) => ({
+      markText: tm.markText,
+      owner: tm.owner,
+      status: tm.liveOrDead || 'LIVE',
+      statusClass: (tm.liveOrDead === 'LIVE') ? 'status-live' : 'status-dead'
+    }));
+
+    const pdfData = {
+      businessName: businessName,
+      riskLevel: riskLevel,
+      riskClass: riskLevel.toLowerCase(),
+      riskIcon: getRiskIcon(riskLevel),
+      urgencyMessage: getUrgencyMessage(riskLevel),
+      totalConflicts: usptoResults.totalResults,
+      conflictsSection: formatConflictsForPDF(topConflicts),
+      verdict: verdict,
+      date: new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }),
+      year: new Date().getFullYear()
+    };
+
+    const pdfBuffer = await documentGenerationService.generateDocument(
+      'trademark_risk_report_lead_magnet',
+      pdfData
+    );
+
+    console.log('[Trademark Download] PDF generated successfully, size:', pdfBuffer.length);
+
+    // Send PDF as download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Trademark-Risk-Report-${businessName.replace(/[^a-zA-Z0-9]/g, '-')}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error: any) {
+    console.error('[Trademark Download] Error:', error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -3746,6 +4027,87 @@ app.post("/api/documents/generate", async (req, res) => {
   }
 });
 
+// Generate HTML version of document (for copy-as-text feature)
+app.post("/api/documents/generate-html", async (req, res) => {
+  try {
+    const { templateName, userId } = req.body;
+
+    if (!templateName) {
+      return res.status(400).json({
+        error: "templateName is required",
+      });
+    }
+
+    console.log(`[API] Generating HTML for: ${templateName} for user: ${userId || 'anonymous'}`);
+
+    // Get user's business profile data
+    let profileData: any = {};
+
+    if (userId && process.env.SUPABASE_URL) {
+      try {
+        const { data: profile, error: profileError } = await createClient(
+          process.env.SUPABASE_URL || "",
+          process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+        )
+          .from('business_profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        if (!profileError && profile) {
+          console.log('[API] Loaded business profile from database');
+          profileData = {
+            businessName: profile.business_name,
+            legalEntityName: profile.legal_entity_name,
+            entityType: profile.entity_type,
+            state: profile.state,
+            businessAddress: profile.business_address,
+            ownerName: profile.owner_name,
+            phone: profile.phone,
+            website: profile.website_url,
+            instagram: profile.instagram,
+            businessType: profile.business_type,
+            services: profile.services || [],
+          };
+
+          // Also get user's email
+          const { data: { user } } = await createClient(
+            process.env.SUPABASE_URL || "",
+            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+          ).auth.admin.getUserById(userId);
+
+          if (user) {
+            profileData.email = user.email;
+          }
+        } else {
+          console.log('[API] No business profile found for user, using empty data');
+        }
+      } catch (err) {
+        console.error('[API] Error loading business profile:', err);
+        // Continue with empty profile data
+      }
+    }
+
+    // Generate the HTML
+    const html = await documentGenerationService.generateHtmlOnly(
+      templateName,
+      profileData
+    );
+
+    // Set response headers for HTML
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error: any) {
+    console.error("[API] Error generating HTML:", error);
+    console.error("[API] Error stack:", error.stack);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message || "Failed to generate HTML",
+      stack: error.stack,
+    });
+  }
+});
+
 // ============================================
 // Business Widget API Endpoints
 // ============================================
@@ -3794,7 +4156,7 @@ app.post("/api/admin/impersonate-user", async (req, res) => {
     const supabaseUrl = process.env.SUPABASE_URL || "";
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const anonKey = process.env.SUPABASE_ANON_KEY || "";
-    
+
     if (!supabaseUrl || !serviceRoleKey || !anonKey) {
       return res.status(500).json({
         error: "Server configuration error",
@@ -3829,7 +4191,7 @@ app.post("/api/admin/impersonate-user", async (req, res) => {
       }
 
       const adminUserData = await userResponse.json();
-      
+
       if (!adminUserData || !adminUserData.id) {
         return res.status(401).json({
           error: "Invalid admin token",
@@ -3863,7 +4225,7 @@ app.post("/api/admin/impersonate-user", async (req, res) => {
 
     // Get the target user's auth record
     const { data: targetUser, error: targetError } = await supabaseAdmin.auth.admin.getUserById(targetUserId);
-    
+
     if (targetError || !targetUser) {
       return res.status(404).json({
         error: "Target user not found",
@@ -3889,13 +4251,13 @@ app.post("/api/admin/impersonate-user", async (req, res) => {
     // Supabase's generateLink returns properties with hashed_token and action_link
     const actionLink = linkData.properties.action_link;
     const hashedToken = linkData.properties.hashed_token;
-    
+
     console.log('[Admin Impersonate] Generated link data:', {
       hasActionLink: !!actionLink,
       hasHashedToken: !!hashedToken,
       properties: Object.keys(linkData.properties || {}),
     });
-    
+
     // First, try to get token_hash from properties (this is the most reliable)
     let tokenHash: string | null = hashedToken || null;
     let token: string | null = null;
@@ -3905,12 +4267,12 @@ app.post("/api/admin/impersonate-user", async (req, res) => {
     if (actionLink) {
       try {
         const linkUrl = new URL(actionLink);
-        
+
         // Try query params first
         token = linkUrl.searchParams.get('token');
         const urlTokenHash = linkUrl.searchParams.get('token_hash');
         const urlType = linkUrl.searchParams.get('type');
-        
+
         if (urlTokenHash) tokenHash = urlTokenHash;
         if (urlType) type = urlType;
 
@@ -3920,7 +4282,7 @@ app.post("/api/admin/impersonate-user", async (req, res) => {
           token = hashParams.get('access_token') || hashParams.get('token');
           const hashTokenHash = hashParams.get('token_hash');
           const hashType = hashParams.get('type');
-          
+
           if (hashTokenHash) tokenHash = hashTokenHash;
           if (hashType) type = hashType;
         }
@@ -3946,7 +4308,7 @@ app.post("/api/admin/impersonate-user", async (req, res) => {
         hasActionLink: !!actionLink,
         properties: linkData.properties,
       });
-      
+
       // Fallback: return the full action link and let the frontend handle it
       if (actionLink) {
         return res.json({
@@ -3959,7 +4321,7 @@ app.post("/api/admin/impersonate-user", async (req, res) => {
           },
         });
       }
-      
+
       return res.status(500).json({
         error: "Failed to extract token from magic link",
         details: "No token hash or action link available",

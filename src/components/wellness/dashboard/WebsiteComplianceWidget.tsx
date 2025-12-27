@@ -28,6 +28,7 @@ export const WebsiteComplianceWidget: React.FC<WebsiteComplianceWidgetProps> = (
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const missingCount = scanResults?.missingDocuments?.length || 0;
+  const foundCount = scanResults?.foundDocuments?.length || 0;
   const highIssues = scanResults?.issues?.filter((i) => i.severity === 'high') || [];
   const mediumIssues = scanResults?.issues?.filter((i) => i.severity === 'medium') || [];
 
@@ -39,8 +40,8 @@ export const WebsiteComplianceWidget: React.FC<WebsiteComplianceWidgetProps> = (
       >
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-slate-900 text-sm font-semibold">
-            <Globe className="text-brand-600" size={18} />
-            Website Compliance
+            <div className="flex items-center justify-center w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold">2</div>
+            Website Legal Check
           </CardTitle>
           <div className="flex items-center gap-2">
             {hasScannedWebsite && (
@@ -54,8 +55,8 @@ export const WebsiteComplianceWidget: React.FC<WebsiteComplianceWidgetProps> = (
             />
           </div>
         </div>
-        <p className="text-xs text-slate-500 mt-1">
-          See at a glance which legal pages are missing and what needs attention.
+        <p className="text-xs text-slate-500 mt-1 pl-7">
+          We’ll scan your website to see which legal pages are live, what’s missing, and whether anything needs updating.
         </p>
       </div>
       {isOpen && (
@@ -96,6 +97,27 @@ export const WebsiteComplianceWidget: React.FC<WebsiteComplianceWidgetProps> = (
                   )}
                 </div>
               </div>
+
+              {/* Found docs */}
+              {foundCount > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-500 mb-1">Found documents</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {scanResults!.foundDocuments.slice(0, 5).map((doc, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        {doc.name}
+                      </span>
+                    ))}
+                    {foundCount > 5 && (
+                      <span className="text-[11px] text-slate-400">+{foundCount - 5} more</span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Missing docs */}
               {missingCount > 0 && (

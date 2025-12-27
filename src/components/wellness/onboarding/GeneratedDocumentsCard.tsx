@@ -168,8 +168,8 @@ export const GeneratedDocumentsCard: React.FC<GeneratedDocumentsCardProps> = ({
                                 </div>
                             ))}
                             <div className="pt-2 text-center text-xs text-emerald-700 font-medium">
-                                These {stats.total} documents have been emailed to you.<br />
-                                You can customize and download them from inside the dashboard.
+                                All {stats.total} documents have been generated and saved to your vault.<br />
+                                You can access, customize, and download them from your dashboard.
                             </div>
                         </div>
 

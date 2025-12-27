@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waiver and Release of Liability</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #000;
+            padding: 60px 80px;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 20px;
+        }
+
+        .document-title {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        .date {
+            text-align: right;
+            font-style: italic;
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .info-box {
+            background: #f8f8f8;
+            border: 2px solid #333;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .section {
+            margin: 25px 0;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .section-content {
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            margin-left: 40px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        .form-row {
+            margin-top: 30px;
+            page-break-inside: avoid;
+        }
+
+        .form-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .form-line {
+            border-bottom: 1px solid #000;
+            min-height: 40px;
+            margin-bottom: 15px;
+        }
+
+        .signature-section {
+            margin-top: 40px;
+            page-break-inside: avoid;
+        }
+
+        .warning-box {
+            background: #fff9e6;
+            border: 2px solid #d4a900;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .warning-box strong {
+            display: block;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        /* Watermark/Disclaimer Styles */
+        .disclaimer-banner {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #f0ad4e;
+            border-left: 6px solid #f0ad4e;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .disclaimer-banner-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #856404;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .disclaimer-banner-text {
+            font-size: 10px;
+            color: #856404;
+            line-height: 1.4;
+        }
+
+        .footer-disclaimer {
+            margin-top: 50px;
+            padding: 25px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            page-break-inside: avoid;
+        }
+
+        .footer-disclaimer-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 8px;
+        }
+
+        .footer-disclaimer-text {
+            font-size: 10px;
+            line-height: 1.8;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+
+        .cta-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px;
+            border-radius: 5px;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .cta-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .cta-text {
+            font-size: 10px;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .cta-link {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 8px 20px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Disclaimer Banner -->
+    <div class="disclaimer-banner">
+        <div class="disclaimer-banner-title">⚠️ DRAFT DOCUMENT - NOT LEGAL ADVICE</div>
+        <div class="disclaimer-banner-text">
+            This is a template document that has not been reviewed by an attorney for your specific situation.
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="document-title">WAIVER AND RELEASE OF LIABILITY</div>
+    </div>
+
+    <!-- Date -->
+    <div class="date">Last Updated: {{date}}</div>
+
+    <!-- Business Information Box -->
+    <div class="info-box">
+        <h3>Business Information</h3>
+
+        <div class="info-row">
+            <div class="info-label">Business Name:</div>
+            <div class="info-value">{{BusinessName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Legal Entity Name:</div>
+            <div class="info-value">{{LegalEntityName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Business Type:</div>
+            <div class="info-value">{{BusinessType}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Address:</div>
+            <div class="info-value">{{BusinessAddress}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Contact Email:</div>
+            <div class="info-value">{{Email}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Phone:</div>
+            <div class="info-value">{{Phone}}</div>
+        </div>
+    </div>
+
+    <!-- Warning Box -->
+    <div class="warning-box">
+        <strong>PLEASE READ CAREFULLY BEFORE PARTICIPATING</strong>
+        This is a legal document that affects your rights. By signing this document, you waive certain legal rights,
+        including the right to sue. Please read carefully and consult with an attorney if you have questions.
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+        <div class="section-title">1. ACKNOWLEDGMENT OF RISK</div>
+        <div class="section-content">
+            I acknowledge that participating in activities offered by <strong>{{BusinessName}}</strong>, including but
+            not limited to yoga, pilates, fitness classes, personal training, wellness coaching, workshops, retreats,
+            online programs, and related physical activities (collectively, the "Activities"), involves inherent risks.
+        </div>
+        <div class="section-content">
+            I understand that these risks include, but are not limited to:
+        </div>
+        <ul>
+            <li>Physical injury, including strains, sprains, fractures, or other musculoskeletal injuries;</li>
+            <li>Cardiovascular complications, including heart attack or stroke;</li>
+            <li>Exacerbation of pre-existing medical conditions;</li>
+            <li>Injuries from equipment, props, or facility conditions;</li>
+            <li>Injuries from interactions with other participants; and</li>
+            <li>In rare cases, permanent disability or death.</li>
+        </ul>
+        <div class="section-content">
+            I acknowledge that these risks exist regardless of the care taken by <strong>{{BusinessName}}</strong>, its
+            owners, instructors, employees, contractors, or agents.
+        </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+        <div class="section-title">2. ASSUMPTION OF RISK</div>
+        <div class="section-content">
+            I voluntarily choose to participate in the Activities with full knowledge of the risks involved. I
+            expressly assume all risks associated with my participation, whether known or unknown, foreseen or
+            unforeseen.
+        </div>
+        <div class="section-content">
+            I understand that it is my responsibility to:
+        </div>
+        <ul>
+            <li>Consult with a physician before beginning any fitness or wellness program;</li>
+            <li>Disclose any medical conditions, injuries, or physical limitations that may affect my ability to safely
+                participate;</li>
+            <li>Listen to my body and stop any activity that causes pain or discomfort;</li>
+            <li>Follow all instructions provided by instructors and staff; and</li>
+            <li>Use equipment and facilities safely and as intended.</li>
+        </ul>
+    </div>
+
+    <!-- Section 3 -->
+    <div class="section">
+        <div class="section-title">3. RELEASE AND WAIVER OF LIABILITY</div>
+        <div class="section-content">
+            In consideration for being permitted to participate in the Activities, I hereby release, waive, discharge,
+            and covenant not to sue <strong>{{BusinessName}}</strong>, <strong>{{LegalEntityName}}</strong>, its
+            owners, officers, directors, employees, instructors, contractors, agents, representatives, successors, and
+            assigns (collectively, the "Released Parties") from any and all liability, claims, demands, actions, or
+            causes of action arising out of or related to any loss, damage, injury, or death that may be sustained by
+            me while participating in the Activities, whether caused by the negligence of the Released Parties or
+            otherwise.
+        </div>
+        <div class="section-content">
+            This release applies to all claims, whether based on negligence, breach of contract, premises liability, or
+            any other legal theory, and includes claims for personal injury, property damage, wrongful death, loss of
+            consortium, and any other losses.
+        </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. INDEMNIFICATION</div>
+        <div class="section-content">
+            I agree to indemnify, defend, and hold harmless the Released Parties from any and all claims, liabilities,
+            damages, costs, and expenses (including attorney's fees) arising from my participation in the Activities,
+            including but not limited to claims brought by third parties for injuries or damages I may cause.
+        </div>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. MEDICAL TREATMENT AUTHORIZATION</div>
+        <div class="section-content">
+            In the event of a medical emergency, I authorize <strong>{{BusinessName}}</strong> and its staff to obtain
+            or provide emergency medical treatment for me. I understand that I am solely responsible for all costs
+            associated with such medical treatment.
+        </div>
+        <div class="section-content">
+            I acknowledge that <strong>{{BusinessName}}</strong> does not provide medical or health care services and
+            that all Activities are for general wellness and fitness purposes only.
+        </div>
+    </div>
+
+    <!-- Section 6 -->
+    <div class="section">
+        <div class="section-title">6. PHOTO AND VIDEO CONSENT</div>
+        <div class="section-content">
+            I understand that <strong>{{BusinessName}}</strong> may take photographs or videos during classes, events,
+            or Activities. I consent to the use of my image and likeness in promotional materials, social media, and
+            marketing, unless I notify <strong>{{BusinessName}}</strong> in writing of my objection.
+        </div>
+    </div>
+
+    <!-- Section 7 -->
+    <div class="section">
+        <div class="section-title">7. PERSONAL PROPERTY</div>
+        <div class="section-content">
+            I understand that <strong>{{BusinessName}}</strong> is not responsible for lost, stolen, or damaged
+            personal property. I agree to keep my belongings secure and assume all risk of loss or damage to my
+            personal items.
+        </div>
+    </div>
+
+    <!-- Section 8 -->
+    <div class="section">
+        <div class="section-title">8. SEVERABILITY</div>
+        <div class="section-content">
+            If any provision of this Waiver is found to be invalid or unenforceable, the remaining provisions shall
+            continue in full force and effect.
+        </div>
+    </div>
+
+    <!-- Section 9 -->
+    <div class="section">
+        <div class="section-title">9. GOVERNING LAW AND JURISDICTION</div>
+        <div class="section-content">
+            This Waiver shall be governed by and construed in accordance with the laws of the State of
+            <strong>{{Jurisdiction}}</strong>, without regard to conflict of law principles. Any disputes arising from
+            this Waiver or my participation in the Activities shall be resolved exclusively in the courts located in
+            <strong>{{Jurisdiction}}</strong>, and I consent to the personal jurisdiction of such courts.
+        </div>
+    </div>
+
+    <!-- Section 10 -->
+    <div class="section">
+        <div class="section-title">10. ENTIRE AGREEMENT</div>
+        <div class="section-content">
+            This Waiver constitutes the entire agreement between me and <strong>{{BusinessName}}</strong> regarding
+            participation in the Activities and supersedes all prior agreements, whether written or oral.
+        </div>
+    </div>
+
+    <!-- Acknowledgement -->
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT AND SIGNATURE</div>
+        <div class="section-content">
+            <strong>I HAVE READ THIS WAIVER AND RELEASE OF LIABILITY, FULLY UNDERSTAND ITS TERMS, AND UNDERSTAND THAT I
+                AM GIVING UP SUBSTANTIAL RIGHTS, INCLUDING MY RIGHT TO SUE. I ACKNOWLEDGE THAT I AM SIGNING THIS
+                AGREEMENT FREELY AND VOLUNTARILY, AND INTEND MY SIGNATURE TO BE A COMPLETE AND UNCONDITIONAL RELEASE OF
+                ALL LIABILITY TO THE GREATEST EXTENT ALLOWED BY LAW.</strong>
+        </div>
+    </div>
+
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <div class="form-row">
+            <div class="form-label">Participant Name (Print):</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Participant Signature:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Date:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Email Address:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Phone Number:</div>
+            <div class="form-line"></div>
+        </div>
+    </div>
+
+    <!-- Parent/Guardian Section (if applicable) -->
+    <div class="section" style="margin-top: 40px;">
+        <div class="section-title">FOR PARTICIPANTS UNDER 18 YEARS OF AGE</div>
+        <div class="section-content">
+            If the participant is under 18 years of age, a parent or legal guardian must sign below.
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Parent/Guardian Name (Print):</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Parent/Guardian Signature:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Date:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Relationship to Participant:</div>
+            <div class="form-line"></div>
+        </div>
+    </div>
+
+    <!-- Footer Disclaimer -->
+    <div class="footer-disclaimer">
+        <div class="footer-disclaimer-title">⚖️ Important Legal Disclaimer</div>
+        <div class="footer-disclaimer-text">
+            <strong>This document is a template and has NOT been reviewed by a licensed attorney.</strong> It is provided for informational purposes only and does not constitute legal advice. This template may not be appropriate for your specific business, state, or legal requirements.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>This is NOT a legally binding contract</strong> until it has been reviewed, customized, and approved by a qualified attorney who understands your business and applicable laws. Using this template without proper legal review may leave you exposed to significant legal and financial risks.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>We strongly recommend</strong> having this document reviewed by an experienced attorney before using it with clients. Generic templates cannot account for your unique business model, state-specific regulations, or industry requirements.
+        </div>
+
+        <!-- Call to Action -->
+        <div class="cta-box">
+            <div class="cta-title">Get Your Documents Professionally Reviewed</div>
+            <div class="cta-text">
+                Our legal team specializes in wellness businesses and can review, customize, and perfect your contracts to ensure maximum protection. Book a free consultation to discuss your specific needs.
+            </div>
+            <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" class="cta-link">📅 Book Free Legal Consultation</a>
+        </div>
+    </div>
+
+</body>
+
+</html>

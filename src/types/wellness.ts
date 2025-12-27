@@ -70,6 +70,7 @@ export interface UserAnswers {
   businessAddress?: string;
   ownerName?: string;
   phone?: string;
+  role?: 'user' | 'admin';
 }
 
 export interface ScoreResult {

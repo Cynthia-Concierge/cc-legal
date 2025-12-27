@@ -17,9 +17,11 @@ export interface ContactData {
 
 export class SupabaseService {
   private supabase: SupabaseClient;
+  public client: SupabaseClient; // Expose client for direct database access
 
   constructor(supabaseUrl: string, supabaseKey: string) {
     this.supabase = createClient(supabaseUrl, supabaseKey);
+    this.client = this.supabase; // Expose as client for backward compatibility
   }
 
   /**

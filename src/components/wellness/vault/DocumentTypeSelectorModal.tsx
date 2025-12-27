@@ -46,13 +46,6 @@ export const DocumentTypeSelectorModal: React.FC<DocumentTypeSelectorModalProps>
       }
     });
 
-    // Add insurance (not in templates but should be available)
-    types.push({
-      id: 'insurance',
-      label: 'Insurance Certificates',
-      category: 'advanced',
-    });
-
     // Remove duplicates
     const unique = Array.from(new Map(types.map(t => [t.id, t])).values());
     return unique.sort((a, b) => a.label.localeCompare(b.label));
@@ -86,6 +79,7 @@ export const DocumentTypeSelectorModal: React.FC<DocumentTypeSelectorModalProps>
     marketing: 'Marketing & Media',
     studio: 'Studio-Specific',
     retreat: 'Retreat-Specific',
+    employment: 'Employment Agreements',
     advanced: 'Advanced / Situational',
   };
 

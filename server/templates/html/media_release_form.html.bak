@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Release Form</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #000;
+            padding: 60px 80px;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .document-title {
+            font-size: 18pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .last-updated {
+            font-size: 10pt;
+            color: #333;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .content-block {
+            text-align: justify;
+            margin-bottom: 15px;
+        }
+
+        .parties-block {
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        .party-line {
+            margin-bottom: 12px;
+        }
+
+        ul {
+            margin-left: 30px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        .signatures {
+            margin-top: 50px;
+            page-break-inside: avoid;
+        }
+
+        .sig-block {
+            margin-bottom: 30px;
+        }
+
+        .sig-line {
+            border-bottom: 1px solid #000;
+            width: 350px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="document-title">MEDIA RELEASE FORM</div>
+        <div class="last-updated">Last Updated: {{date}}</div>
+    </div>
+
+    <!-- Parties -->
+    <div class="section">
+        <div class="section-title">Parties</div>
+        <div class="content-block">
+            This Media Release Form (the “Agreement”) is made between:
+        </div>
+
+        <div class="parties-block">
+            <div class="party-line"><strong>Business Name:</strong> {{BusinessName}}</div>
+            <div class="party-line"><strong>Business Type:</strong> {{BusinessType}}</div>
+            <div class="party-line"><strong>Address:</strong> {{BusinessAddress}}</div>
+            <div class="party-line"><strong>Contact Email:</strong> {{Email}}</div>
+        </div>
+
+        <div class="content-block">
+            and
+        </div>
+
+        <div class="parties-block">
+            <div class="party-line"><strong>Participant Name:</strong> __________________________________________</div>
+            <div class="party-line"><strong>Address:</strong> _________________________________________________</div>
+            <div class="party-line"><strong>Phone / Email:</strong> ____________________________________________</div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #ccc; margin: 20px 0;">
+    </div>
+
+    <!-- 1. PURPOSE -->
+    <div class="section">
+        <div class="section-title">1. PURPOSE</div>
+        <div class="content-block">
+            The Participant hereby grants permission to <strong>{{BusinessName}}</strong>, its representatives,
+            employees, agents,
+            and assigns (collectively, the “Company”) to record, photograph, or capture their likeness, voice, image,
+            and statements (collectively, the “Media”) for use in the Company’s marketing, advertising, educational,
+            and promotional materials.
+        </div>
+    </div>
+
+    <!-- 2. SCOPE OF USE -->
+    <div class="section">
+        <div class="section-title">2. SCOPE OF USE</div>
+        <div class="content-block">
+            The Participant grants the Company a perpetual, worldwide, royalty-free license to use, reproduce,
+            publish, and distribute the Media in all forms and formats, including but not limited to:
+        </div>
+        <ul>
+            <li>Websites and online platforms;</li>
+            <li>Print and digital advertisements;</li>
+            <li>Social media content (Instagram, TikTok, Facebook, YouTube, etc.);</li>
+            <li>Presentations, brochures, and internal materials.</li>
+        </ul>
+    </div>
+
+    <!-- 3. NO COMPENSATION -->
+    <div class="section">
+        <div class="section-title">3. NO COMPENSATION</div>
+        <div class="content-block">
+            The Participant understands and agrees that they will not receive financial compensation for
+            participation or for use of their image, likeness, or testimonials.
+            The Participant releases <strong>{{BusinessName}}</strong> from any expectation of payment now or in the
+            future.
+        </div>
+    </div>
+
+    <!-- 4. OWNERSHIP AND COPYRIGHT -->
+    <div class="section">
+        <div class="section-title">4. OWNERSHIP AND COPYRIGHT</div>
+        <div class="content-block">
+            All Media created by or on behalf of <strong>{{BusinessName}}</strong> shall be the sole property of the
+            Company.
+            The Participant waives any rights to inspect or approve the finished product, advertising copy, or other
+            materials that may include their likeness or statements.
+        </div>
+    </div>
+
+    <!-- 5. TESTIMONIALS AND STATEMENTS -->
+    <div class="section">
+        <div class="section-title">5. TESTIMONIALS AND STATEMENTS</div>
+        <div class="content-block">
+            If the Participant provides written, verbal, or video testimonials, they grant
+            <strong>{{BusinessName}}</strong> permission
+            to edit, shorten, or adapt those statements for marketing and educational purposes — provided the edits
+            do not distort their meaning.
+        </div>
+    </div>
+
+    <!-- 6. RELEASE AND WAIVER -->
+    <div class="section">
+        <div class="section-title">6. RELEASE AND WAIVER</div>
+        <div class="content-block">
+            The Participant releases and holds harmless <strong>{{BusinessName}}</strong>, its employees, contractors,
+            representatives, and affiliates from any and all claims, demands, or causes of action arising out of or
+            related to the use of the Media, including without limitation claims for defamation, invasion of privacy, or
+            violation of publicity rights.
+        </div>
+    </div>
+
+    <!-- 7. DURATION OF CONSENT -->
+    <div class="section">
+        <div class="section-title">7. DURATION OF CONSENT</div>
+        <div class="content-block">
+            This consent is irrevocable and perpetual, unless withdrawn in writing.
+            Requests for withdrawal should be sent to <strong>{{Email}}</strong> and will apply prospectively only.
+        </div>
+    </div>
+
+    <!-- 8. MINORS -->
+    <div class="section">
+        <div class="section-title">8. MINORS</div>
+        <div class="content-block">
+            If the Participant is under 18 years of age, a parent or legal guardian must sign below on their behalf.
+        </div>
+    </div>
+
+    <!-- 9. GOVERNING LAW -->
+    <div class="section">
+        <div class="section-title">9. GOVERNING LAW</div>
+        <div class="content-block">
+            This Agreement shall be governed by and construed in accordance with the laws of the {{Jurisdiction}},
+            without regard to conflict-of-law principles.
+        </div>
+    </div>
+
+    <!-- SIGNATURES -->
+    <div class="signatures">
+        <div class="section-title">SIGNATURES</div>
+
+        <div class="sig-block">
+            <div><strong>Participant Name:</strong> __________________________________________</div>
+            <div style="margin-top: 10px;"><strong>Signature:</strong> ________________________________________________
+            </div>
+            <div style="margin-top: 10px;"><strong>Date:</strong> ___________</div>
+        </div>
+
+        <div class="sig-block">
+            <div><strong>If under 18 – Parent/Guardian Name:</strong> ___________________________</div>
+            <div style="margin-top: 10px;"><strong>Signature:</strong> ________________________________________________
+            </div>
+            <div style="margin-top: 10px;"><strong>Date:</strong> ___________</div>
+        </div>
+
+        <div class="sig-block">
+            <div><strong>Business Representative:</strong> _________________________________</div>
+            <div style="margin-top: 10px;"><strong>Signature:</strong> ________________________________________________
+            </div>
+            <div style="margin-top: 10px;"><strong>Date:</strong> ___________</div>
+        </div>
+    </div>
+
+</body>
+
+</html>

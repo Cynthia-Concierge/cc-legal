@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Testimonial Consent and Use Agreement</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #000;
+            padding: 60px 80px;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 20px;
+        }
+
+        .document-title {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        .date {
+            text-align: right;
+            font-style: italic;
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .info-box {
+            background: #f8f8f8;
+            border: 2px solid #333;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .section {
+            margin: 25px 0;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .section-content {
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            margin-left: 40px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        .form-row {
+            margin-top: 30px;
+            page-break-inside: avoid;
+        }
+
+        .form-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .form-line {
+            border-bottom: 1px solid #000;
+            min-height: 40px;
+            margin-bottom: 15px;
+        }
+
+        .signature-section {
+            margin-top: 40px;
+            page-break-inside: avoid;
+        }
+
+        /* Watermark/Disclaimer Styles */
+        .disclaimer-banner {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #f0ad4e;
+            border-left: 6px solid #f0ad4e;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .disclaimer-banner-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #856404;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .disclaimer-banner-text {
+            font-size: 10px;
+            color: #856404;
+            line-height: 1.4;
+        }
+
+        .footer-disclaimer {
+            margin-top: 50px;
+            padding: 25px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            page-break-inside: avoid;
+        }
+
+        .footer-disclaimer-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 8px;
+        }
+
+        .footer-disclaimer-text {
+            font-size: 10px;
+            line-height: 1.8;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+
+        .cta-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px;
+            border-radius: 5px;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .cta-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .cta-text {
+            font-size: 10px;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .cta-link {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 8px 20px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Disclaimer Banner -->
+    <div class="disclaimer-banner">
+        <div class="disclaimer-banner-title">⚠️ DRAFT DOCUMENT - NOT LEGAL ADVICE</div>
+        <div class="disclaimer-banner-text">
+            This is a template document that has not been reviewed by an attorney for your specific situation.
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="document-title">TESTIMONIAL CONSENT AND USE AGREEMENT</div>
+    </div>
+
+    <!-- Date -->
+    <div class="date">Last Updated: {{date}}</div>
+
+    <!-- Business Information Box -->
+    <div class="info-box">
+        <h3>Business Information</h3>
+
+        <div class="info-row">
+            <div class="info-label">Business Name:</div>
+            <div class="info-value">{{BusinessName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Business Type:</div>
+            <div class="info-value">{{BusinessType}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Contact Email:</div>
+            <div class="info-value">{{Email}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Website / Social Media:</div>
+            <div class="info-value">{{SocialLinks}}</div>
+        </div>
+    </div>
+
+    <!-- Introduction -->
+    <div class="section">
+        <div class="section-content">
+            This Testimonial Consent and Use Agreement ("Agreement") governs your permission for
+            <strong>{{BusinessName}}</strong> to use your testimonial, review, feedback, and related content for
+            marketing and promotional purposes.
+        </div>
+        <div class="section-content">
+            By providing a testimonial or signing this Agreement, you grant <strong>{{BusinessName}}</strong> the rights
+            outlined below.
+        </div>
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+        <div class="section-title">1. GRANT OF RIGHTS</div>
+        <div class="section-content">
+            I hereby grant <strong>{{BusinessName}}</strong> and its affiliates, successors, and assigns a perpetual,
+            worldwide, royalty-free, non-exclusive, irrevocable license to use, reproduce, modify, adapt, publish,
+            translate, create derivative works from, distribute, and display my testimonial, review, feedback, and
+            related content (collectively, "Testimonial Content") in any and all media, now known or hereafter devised.
+        </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+        <div class="section-title">2. PERMITTED USES</div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> may use my Testimonial Content for the following purposes:
+        </div>
+        <ul>
+            <li><strong>Marketing and Advertising:</strong> On websites, social media, email campaigns, brochures, flyers,
+                and other marketing materials;</li>
+            <li><strong>Social Media:</strong> On Instagram, Facebook, TikTok, YouTube, LinkedIn, and other social
+                platforms;</li>
+            <li><strong>Promotional Materials:</strong> In presentations, case studies, success stories, and promotional
+                videos;</li>
+            <li><strong>Public Display:</strong> In studios, offices, events, and other public or private spaces;</li>
+            <li><strong>Third-Party Platforms:</strong> On third-party websites, review sites, and advertising platforms
+                (e.g., Google Ads, Facebook Ads);</li>
+            <li><strong>Press and Media:</strong> In press releases, interviews, articles, and other media coverage.</li>
+        </ul>
+        <div class="section-content">
+            I understand that my Testimonial Content may be edited, shortened, or modified for clarity, length, or
+            context, provided the meaning and intent are not materially altered.
+        </div>
+    </div>
+
+    <!-- Section 3 -->
+    <div class="section">
+        <div class="section-title">3. USE OF NAME, IMAGE, AND LIKENESS</div>
+        <div class="section-content">
+            I consent to <strong>{{BusinessName}}</strong> using my:
+        </div>
+        <ul>
+            <li>Full name, first name, initials, or a pseudonym;</li>
+            <li>Photograph, image, or likeness (if applicable);</li>
+            <li>Voice or video recording (if applicable);</li>
+            <li>Biographical information, including location, occupation, or other identifying details (as provided by
+                me).</li>
+        </ul>
+        <div class="section-content">
+            I may request that <strong>{{BusinessName}}</strong> use only my first name and last initial (e.g., "Sarah
+            M.") or a pseudonym if I prefer to remain partially anonymous. However, I acknowledge that full anonymity
+            cannot be guaranteed if my image or other identifying information is included.
+        </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. TRUTHFULNESS AND ACCURACY</div>
+        <div class="section-content">
+            I represent and warrant that:
+        </div>
+        <ul>
+            <li>My Testimonial Content is truthful, accurate, and based on my genuine experience with
+                <strong>{{BusinessName}}</strong>;</li>
+            <li>I have not been promised any compensation or incentive in exchange for providing a positive review (other
+                than the services I received as a client);</li>
+            <li>My Testimonial Content does not violate any third-party rights, including copyrights, trademarks,
+                publicity rights, or privacy rights;</li>
+            <li>I am legally authorized to provide this consent and enter into this Agreement.</li>
+        </ul>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. NO COMPENSATION</div>
+        <div class="section-content">
+            I acknowledge that I will not receive any monetary compensation, royalties, or other payment for the use of my
+            Testimonial Content. My consent is provided voluntarily as a gesture of support for
+            <strong>{{BusinessName}}</strong>.
+        </div>
+        <div class="section-content">
+            I understand that <strong>{{BusinessName}}</strong> may provide me with incentives such as discounts, free
+            classes, or other non-monetary benefits, but these are not contingent upon providing a positive testimonial.
+        </div>
+    </div>
+
+    <!-- Section 6 -->
+    <div class="section">
+        <div class="section-title">6. NO ENDORSEMENT OF RESULTS</div>
+        <div class="section-content">
+            I acknowledge that my Testimonial Content reflects my personal experience and results, which may not be
+            typical or representative of the experiences of others.
+        </div>
+        <div class="section-content">
+            I understand that <strong>{{BusinessName}}</strong> may include a disclaimer such as "Results may vary" or
+            "Individual results not guaranteed" alongside my testimonial to comply with advertising regulations.
+        </div>
+    </div>
+
+    <!-- Section 7 -->
+    <div class="section">
+        <div class="section-title">7. WAIVER OF RIGHTS</div>
+        <div class="section-content">
+            I waive any right to inspect or approve the final use of my Testimonial Content, including how it is edited,
+            combined with other materials, or presented in marketing campaigns.
+        </div>
+        <div class="section-content">
+            I also waive any claims related to:
+        </div>
+        <ul>
+            <li>Defamation, libel, or invasion of privacy;</li>
+            <li>Copyright or trademark infringement;</li>
+            <li>Publicity or personality rights;</li>
+            <li>Any other claims arising from the use of my Testimonial Content.</li>
+        </ul>
+    </div>
+
+    <!-- Section 8 -->
+    <div class="section">
+        <div class="section-title">8. RIGHT TO WITHDRAW CONSENT</div>
+        <div class="section-content">
+            I understand that this consent is perpetual and irrevocable. However, I may request that
+            <strong>{{BusinessName}}</strong> stop using my Testimonial Content in future marketing materials by providing
+            written notice to {{Email}}.
+        </div>
+        <div class="section-content">
+            I acknowledge that:
+        </div>
+        <ul>
+            <li><strong>{{BusinessName}}</strong> is not obligated to remove previously published content from archived
+                materials, third-party websites, or cached search engine results;</li>
+            <li>It may take reasonable time (up to 30 days) to remove my Testimonial Content from active marketing
+                materials;</li>
+            <li>Withdrawal of consent does not apply retroactively to materials already distributed or published.</li>
+        </ul>
+    </div>
+
+    <!-- Section 9 -->
+    <div class="section">
+        <div class="section-title">9. RELEASE AND INDEMNIFICATION</div>
+        <div class="section-content">
+            I release and discharge <strong>{{BusinessName}}</strong>, its owners, officers, employees, agents, and
+            affiliates from any and all claims, liabilities, damages, or expenses arising from the use of my Testimonial
+            Content as permitted under this Agreement.
+        </div>
+        <div class="section-content">
+            I agree to indemnify and hold harmless <strong>{{BusinessName}}</strong> from any third-party claims arising
+            from my Testimonial Content, including claims that it infringes on intellectual property rights or violates
+            applicable laws.
+        </div>
+    </div>
+
+    <!-- Section 10 -->
+    <div class="section">
+        <div class="section-title">10. GOVERNING LAW</div>
+        <div class="section-content">
+            This Agreement shall be governed by and construed in accordance with the laws of the State of
+            <strong>{{Jurisdiction}}</strong>, without regard to conflict of law principles.
+        </div>
+    </div>
+
+    <!-- Section 11 -->
+    <div class="section">
+        <div class="section-title">11. ENTIRE AGREEMENT</div>
+        <div class="section-content">
+            This Agreement constitutes the entire agreement between me and <strong>{{BusinessName}}</strong> regarding the
+            use of my Testimonial Content and supersedes all prior agreements or understandings, whether written or oral.
+        </div>
+    </div>
+
+    <!-- Acknowledgement -->
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT AND CONSENT</div>
+        <div class="section-content">
+            By signing below, I acknowledge that I have read and understood this Agreement and voluntarily consent to the
+            use of my Testimonial Content as described above.
+        </div>
+    </div>
+
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <div class="form-row">
+            <div class="form-label">Full Name (Print):</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Signature:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Date:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Email Address:</div>
+            <div class="form-line"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-label">Preferred Name for Publication (if different from above):</div>
+            <div class="form-line"></div>
+        </div>
+    </div>
+
+    <!-- Optional Testimonial Section -->
+    <div class="section" style="margin-top: 40px;">
+        <div class="section-title">OPTIONAL: YOUR TESTIMONIAL</div>
+        <div class="section-content">
+            Please provide your testimonial below (or attach separately):
+        </div>
+
+        <div class="form-row">
+            <div class="form-line" style="min-height: 150px;"></div>
+        </div>
+    </div>
+
+
+    <!-- Footer Disclaimer -->
+    <div class="footer-disclaimer">
+        <div class="footer-disclaimer-title">⚖️ Important Legal Disclaimer</div>
+        <div class="footer-disclaimer-text">
+            <strong>This document is a template and has NOT been reviewed by a licensed attorney.</strong> It is provided for informational purposes only and does not constitute legal advice. This template may not be appropriate for your specific business, state, or legal requirements.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>This is NOT a legally binding contract</strong> until it has been reviewed, customized, and approved by a qualified attorney who understands your business and applicable laws. Using this template without proper legal review may leave you exposed to significant legal and financial risks.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>We strongly recommend</strong> having this document reviewed by an experienced attorney before using it with clients. Generic templates cannot account for your unique business model, state-specific regulations, or industry requirements.
+        </div>
+
+        <!-- Call to Action -->
+        <div class="cta-box">
+            <div class="cta-title">Get Your Documents Professionally Reviewed</div>
+            <div class="cta-text">
+                Our legal team specializes in wellness businesses and can review, customize, and perfect your contracts to ensure maximum protection. Book a free consultation to discuss your specific needs.
+            </div>
+            <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" class="cta-link">📅 Book Free Legal Consultation</a>
+        </div>
+    </div>
+
+</body>
+
+</html>

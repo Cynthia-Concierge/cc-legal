@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserAnswers } from '../../types/wellness';
 import { ProgressBar } from '../../components/wellness/ui/ProgressBar';
@@ -9,12 +9,10 @@ import { useToast } from '../../components/ui/use-toast';
 import { RecommendationSummary } from '../../components/wellness/onboarding/RecommendationSummary';
 import { IdentityForm } from '../../components/wellness/onboarding/IdentityForm';
 import { ContactDetailsForm } from '../../components/wellness/onboarding/ContactDetailsForm';
-import { CustomizationTransition } from '../../components/wellness/onboarding/CustomizationTransition';
-import { WebsiteInputForm } from '../../components/wellness/onboarding/WebsiteInputForm';
-import { ReviewProgressCard } from '../../components/wellness/onboarding/ReviewProgressCard';
 import { GeneratedDocumentsCard } from '../../components/wellness/onboarding/GeneratedDocumentsCard';
 import { LawyerBookingCard } from '../../components/wellness/onboarding/LawyerBookingCard';
 import { getRecommendedDocuments } from '../../lib/wellness/documentEngine';
+import { trackOnboardingEvent, trackOnboardingAbandonment } from '../../lib/onboardingAnalytics';
 
 const INITIAL_ANSWERS: UserAnswers = {
   services: [],
@@ -33,10 +31,7 @@ export const Onboarding: React.FC = () => {
   const [searchParams] = useSearchParams();
   // Initialize step to 1 if skipWelcome is true, otherwise 0
   // Check URL directly to avoid hook dependency in initializer
-  const [step, setStep] = useState(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('skipWelcome') === 'true' ? 1 : 0;
-  });
+  const [step, setStep] = useState(1); // Default to 1 (Email capture) to skip welcome screen
   const [answers, setAnswers] = useState<UserAnswers>(INITIAL_ANSWERS);
   // Email step state - must be at top level (Rules of Hooks)
   const [emailInput, setEmailInput] = useState('');
@@ -54,19 +49,9 @@ export const Onboarding: React.FC = () => {
   // Auto-advance state
   const [hasAutoSubmittedEmail, setHasAutoSubmittedEmail] = useState(false);
 
-  // Track Lead pixel event if eventId is provided (redundancy/fail-safe)
-  useEffect(() => {
-    const eventId = searchParams.get('eventId');
-    if (eventId && typeof window !== 'undefined' && (window as any).fbq) {
-      console.log('[Onboarding] Tracking Lead with eventId:', eventId);
-      (window as any).fbq('track', 'Lead', {
-        content_name: 'Flow Continuation',
-        content_category: 'Lead Generation'
-      }, {
-        eventID: eventId
-      });
-    }
-  }, [searchParams]);
+  // Analytics tracking: track when each step started (for time calculation)
+  const stepStartTimeRef = useRef<number>(Date.now());
+  const previousStepRef = useRef<number>(-1); // Initialize to -1 so first step gets tracked
 
   // Helper function to create business profile (called both when password is set and when skipped)
   const createBusinessProfile = async (user: any) => {
@@ -110,7 +95,7 @@ export const Onboarding: React.FC = () => {
         user_id: user.id,
         website_url: answers.website || '',
 
-        // If they have a website URL at this stage, they passed the scan step
+        // Website scan step removed - these fields will be empty/false for new onboarding users
         has_scanned_website: !!(answers.website && answers.website.length > 3),
         website_scan_completed_at: answers.website ? new Date().toISOString() : null,
 
@@ -164,6 +149,32 @@ export const Onboarding: React.FC = () => {
         } else {
           console.log('✅ Initial Business Profile created successfully');
 
+          // Also update the contact table with additional info collected during onboarding
+          if (user.email && (answers.website || answers.phone || answers.ownerName)) {
+            try {
+              const contactUpdate: any = {
+                updated_at: new Date().toISOString()
+              };
+
+              if (answers.website) contactUpdate.website = answers.website;
+              if (answers.phone) contactUpdate.phone = answers.phone;
+              if (answers.ownerName) contactUpdate.name = answers.ownerName;
+
+              const { error: contactError } = await supabase
+                .from('contacts')
+                .update(contactUpdate)
+                .eq('email', user.email);
+
+              if (contactError) {
+                console.warn('⚠️ Failed to update contact info:', contactError);
+              } else {
+                console.log('✅ Contact updated with:', contactUpdate);
+              }
+            } catch (contactUpdateError) {
+              console.error('Error updating contact info:', contactUpdateError);
+            }
+          }
+
           // If they scanned, also save progress to localStorage for Dashboard strictly
           if (answers.website) {
             const progress = {
@@ -172,6 +183,15 @@ export const Onboarding: React.FC = () => {
             };
             localStorage.setItem('wellness_onboarding_progress', JSON.stringify(progress));
           }
+
+          // Mark profile as complete in localStorage for document generation
+          // This allows users to generate personalized documents immediately after onboarding
+          const updatedAnswers: UserAnswers = {
+            ...answers,
+            isProfileComplete: true
+          };
+          localStorage.setItem('wellness_onboarding_answers', JSON.stringify(updatedAnswers));
+          console.log('✅ Profile marked as complete in localStorage');
         }
       }
     } catch (profileErr) {
@@ -200,12 +220,64 @@ export const Onboarding: React.FC = () => {
 
     if (supabase) {
       try {
+        // CRITICAL FIX: Check if user has an active session first
+        let session = (await supabase.auth.getSession()).data.session;
+
+        if (!session) {
+          console.error('❌ No active session found when trying to update password');
+
+          // Try to get the user's email and temp password from storage
+          const userEmail = answers.email;
+          const tempPassword = sessionStorage.getItem('wellness_temp_password');
+
+          if (!userEmail) {
+            throw new Error('Session expired. Please refresh the page and start again.');
+          }
+
+          if (!tempPassword) {
+            console.error('❌ No temp password found in storage');
+            throw new Error('Session expired. Please refresh the page and start again.');
+          }
+
+          // Try to sign in with the temp password to establish a session
+          console.log('🔐 Attempting to sign in with temp password to establish session...');
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: userEmail,
+            password: tempPassword
+          });
+
+          if (signInError) {
+            console.error('❌ Failed to sign in with temp password:', signInError);
+
+            // Check if this is an email confirmation issue
+            if (signInError.message?.toLowerCase().includes('email') &&
+              (signInError.message?.toLowerCase().includes('confirm') ||
+                signInError.message?.toLowerCase().includes('verif'))) {
+              throw new Error('Please check your email and confirm your account before setting a password.');
+            }
+
+            throw new Error('Could not establish session. Please refresh the page and try again.');
+          }
+
+          if (!signInData.session) {
+            throw new Error('Sign in succeeded but no session created. Please refresh the page.');
+          }
+
+          session = signInData.session;
+          console.log('✅ Session established successfully');
+        }
+
+        // User has a session, proceed with password update
         const { error } = await supabase.auth.updateUser({
           password: password,
           data: { temp_password: false } // Mark as no longer temp
         });
 
         if (error) throw error;
+
+        // Clear temp password from storage since user has set their real password
+        sessionStorage.removeItem('wellness_temp_password');
+        console.log('🗑️ Temp password removed from sessionStorage');
 
         // Post-password operations: Email, Users Table, & Business Profile
         try {
@@ -222,93 +294,56 @@ export const Onboarding: React.FC = () => {
           });
 
           if (user) {
-            // 1. Add user to users table (track authenticated users with passwords)
-            try {
-              console.log('👤 Adding user to users table...');
-              const userName = user.user_metadata?.name ||
-                user.user_metadata?.full_name ||
-                user.email?.split('@')[0] ||
-                'User';
+            // Database trigger automatically handles:
+            // - Adding user to users table
+            // - Linking contact record to user
+            console.log('✅ Password set successfully. Database trigger will handle user creation.');
 
-              console.log('📝 Attempting upsert with data:', {
-                user_id: user.id,
-                email: user.email,
-                name: userName
-              });
+            const userName = user.user_metadata?.name ||
+              user.user_metadata?.full_name ||
+              user.email?.split('@')[0] ||
+              'User';
 
-              const { data: insertData, error: userTableError } = await supabase
-                .from('users')
-                .upsert({
-                  user_id: user.id,
-                  email: user.email || '',
-                  name: userName,
-                  password_created_at: new Date().toISOString(),
-                  onboarding_completed: false,
-                  profile_completed: false,
-                  updated_at: new Date().toISOString()
-                }, {
-                  onConflict: 'user_id'
-                })
-                .select();
-
-              if (userTableError) {
-                console.error('❌ CRITICAL: Error adding user to users table:', {
-                  error: userTableError,
-                  message: userTableError.message,
-                  details: userTableError.details,
-                  hint: userTableError.hint,
-                  code: userTableError.code
-                });
-                console.log('⚠️ Note: Database trigger should still add user to users table as fallback');
-                toast({
-                  variant: "destructive",
-                  title: "Profile setup incomplete",
-                  description: "Your account was created, but we couldn't finish setting up your profile. Please contact support if this continues.",
-                });
-              } else {
-                console.log('✅ User added to users table successfully', insertData);
-
-                // Send welcome email when user sets password
-                if (user.email) {
-                  console.log('📧 Triggering welcome email after password creation...');
-                  fetch('/api/emails/welcome', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      email: user.email,
-                      name: userName || user.email.split('@')[0]
-                    })
-                  }).catch(err => console.error('❌ Welcome email error:', err));
-                }
-              }
-            } catch (userTableErr) {
-              console.error('❌ CRITICAL: Exception in users table insertion:', userTableErr);
-            }
-
-            // 2. Link contact record to user when password is created
+            // Send welcome email when user sets password
             if (user.email) {
-              try {
-                const { error: contactError } = await supabase
-                  .from('contacts')
-                  .update({
-                    user_id: user.id,
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('email', user.email.trim().toLowerCase());
+              console.log('📧 Triggering welcome email after password creation...');
+              fetch('/api/emails/welcome', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: user.email,
+                  name: userName || user.email.split('@')[0]
+                })
+              }).catch(err => console.error('❌ Welcome email error:', err));
 
-                if (contactError) {
-                  console.error('Error linking contact to user:', contactError);
-                } else {
-                  console.log('✅ Linked contact record to user:', user.id);
-                }
-              } catch (contactErr) {
-                console.error('Error updating contact:', contactErr);
-              }
+              // Schedule nurture sequence emails (Day 3, 5, 7, 10) via Cloud Tasks
+              console.log('📅 Scheduling nurture sequence emails...');
+              const serverUrl = import.meta.env.VITE_SERVER_URL || '';
+              fetch(`${serverUrl}/api/emails/schedule-nurture-sequence`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: user.id
+                })
+              }).catch(err => console.error('❌ Nurture sequence scheduling error:', err));
             }
 
-            // 3. CREATE BUSINESS PROFILE IMMEDIATELY
+            // Wait a moment for trigger to complete
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // CREATE BUSINESS PROFILE
             // Ensure all onboarding data (including website scan) is persisted so the Dashboard is ready.
             await createBusinessProfile(user);
+
+            // Track onboarding completion (step 19 - password creation)
+            const timeSpent = Math.floor((Date.now() - stepStartTimeRef.current) / 1000);
+            trackOnboardingEvent(19, 'completed', {
+              email: user.email || answers.email,
+              userId: user.id,
+              timeSpentSeconds: timeSpent > 0 ? timeSpent : null,
+              entryPoint: searchParams.get('eventId') ? 'landing_page' : 'onboarding_direct',
+              source: searchParams.get('eventId') ? 'wellness' : 'onboarding_direct',
+            });
 
             // Navigate to Dashboard as this is now the final step
             navigate('/wellness/dashboard');
@@ -326,8 +361,15 @@ export const Onboarding: React.FC = () => {
         // Success - Move to Review Card (Step 17)
         setStep(17);
       } catch (err: any) {
-        console.error('Error setting password:', err);
-        setPasswordError(err.message || 'Failed to update password');
+        console.error('❌ Error setting password:', err);
+        console.error('❌ Error details:', {
+          message: err.message,
+          code: err.code,
+          status: err.status,
+          details: err.details,
+          hint: err.hint
+        });
+        setPasswordError(err.message || 'Failed to update password. Please try again.');
       } finally {
         setIsSubmitting(false);
       }
@@ -342,6 +384,9 @@ export const Onboarding: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // Keep temp password in sessionStorage since they might come back later
+      // We'll only clear it when they actually set a real password
+
       // Get current user (should have temp password from email step)
       if (supabase) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -350,6 +395,16 @@ export const Onboarding: React.FC = () => {
           console.log('⏭️ User skipping password, saving business profile anyway...');
           // Create business profile even though they skipped password
           await createBusinessProfile(user);
+
+          // Track onboarding completion (step 19 - password skipped)
+          const timeSpent = Math.floor((Date.now() - stepStartTimeRef.current) / 1000);
+          trackOnboardingEvent(19, 'completed', {
+            email: user.email || answers.email,
+            userId: user.id,
+            timeSpentSeconds: timeSpent > 0 ? timeSpent : null,
+            entryPoint: searchParams.get('eventId') ? 'landing_page' : 'onboarding_direct',
+            source: searchParams.get('eventId') ? 'wellness' : 'onboarding_direct',
+          });
         } else {
           console.warn('⚠️ No user found when skipping password');
         }
@@ -500,6 +555,65 @@ export const Onboarding: React.FC = () => {
     }
   }, [answers, isCheckingExistingUser]);
 
+  // Track step changes for analytics
+  useEffect(() => {
+    if (isCheckingExistingUser) {
+      console.log('[Onboarding Analytics] ⏳ Waiting for user check to complete before tracking...');
+      return; // Don't track during initial load
+    }
+
+    const currentTime = Date.now();
+    const previousStep = previousStepRef.current;
+
+    // If step changed, track completion of previous step and start of new step
+    if (previousStep !== step && previousStep >= 0) {
+      // Calculate time spent on previous step
+      const timeSpent = Math.floor((currentTime - stepStartTimeRef.current) / 1000);
+
+      // Track completion of previous step (if it was a real step, not initial load)
+      if (previousStep >= 0) {
+        console.log(`[Onboarding Analytics] 📊 Step ${previousStep} completed, moving to step ${step}`);
+        trackOnboardingEvent(previousStep, 'completed', {
+          email: answers.email,
+          timeSpentSeconds: timeSpent > 0 ? timeSpent : null,
+          entryPoint: searchParams.get('eventId') ? 'landing_page' : 'onboarding_direct',
+          source: searchParams.get('eventId') ? 'wellness' : 'onboarding_direct',
+        }).catch(err => {
+          console.error(`[Onboarding Analytics] ❌ Failed to track step ${previousStep} completion:`, err);
+        });
+      }
+    }
+
+    // Track start of current step
+    const entryPoint = searchParams.get('eventId') ? 'landing_page' : 'onboarding_direct';
+    const source = searchParams.get('eventId') ? 'wellness' : 'onboarding_direct';
+
+    console.log(`[Onboarding Analytics] 📊 Tracking step ${step} started (entry: ${entryPoint})`);
+    trackOnboardingEvent(step, 'started', {
+      email: answers.email,
+      entryPoint: entryPoint,
+      source: source,
+    }).catch(err => {
+      console.error(`[Onboarding Analytics] ❌ Failed to track step ${step} started:`, err);
+    });
+
+    // Update refs
+    previousStepRef.current = step;
+    stepStartTimeRef.current = currentTime;
+  }, [step, answers.email, searchParams, isCheckingExistingUser]);
+
+  // Track abandonment when user leaves page
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      trackOnboardingAbandonment(step, answers.email);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [step, answers.email]);
+
   // Auto-submit email if provided in session or URL (and skipping welcome)
   // This must be AFTER the initial checkExistingUser effect which populates emailInput
   useEffect(() => {
@@ -543,6 +657,47 @@ export const Onboarding: React.FC = () => {
 
     // Save email to answers
     updateAnswer('email', trimmedEmail);
+
+    // Get API base URL and check if user came from landing page
+    const API_BASE_URL =
+      import.meta.env.VITE_API_URL ||
+      (import.meta.env.DEV ? "" : "");
+    const eventIdFromUrl = searchParams.get('eventId');
+
+    // Save email to contacts table (only for direct onboarding visitors)
+    // If they came from landing page, contact is already saved
+    if (!eventIdFromUrl) {
+      // Direct visitor - save to contacts table
+      try {
+        const emailPrefix = trimmedEmail.split('@')[0] || 'Onboarding User';
+        const contactResponse = await fetch(`${API_BASE_URL}/api/save-contact`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: emailPrefix, // Use email prefix as name placeholder
+            email: trimmedEmail,
+            phone: "",
+            website: "",
+            source: 'onboarding_direct' // Mark as direct onboarding visitor
+          }),
+        });
+
+        if (contactResponse.ok) {
+          console.log('✅ Contact saved to Supabase from onboarding email submit');
+        } else {
+          const errorText = await contactResponse.text();
+          console.warn('⚠️ Failed to save contact to Supabase (non-blocking):', errorText);
+          // Continue anyway - don't block the user experience
+        }
+      } catch (contactError) {
+        console.error('Error saving contact from onboarding:', contactError);
+        // Continue anyway - don't block the user experience
+      }
+    } else {
+      console.log('ℹ️ Contact already saved from landing page, skipping duplicate save');
+    }
 
     // Create Supabase user if configured
     if (supabase) {
@@ -630,6 +785,11 @@ export const Onboarding: React.FC = () => {
           console.log('✅ User created successfully:', data.user.id);
           console.log('📧 Email confirmation required:', data.user.email_confirmed_at ? 'No' : 'Yes');
 
+          // Store temp password in sessionStorage since we successfully created a new user
+          // This allows us to re-establish session later if needed
+          sessionStorage.setItem('wellness_temp_password', tempPassword);
+          console.log('💾 Temp password stored in sessionStorage for new user');
+
           // User created - try to auto-sign in
           try {
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -653,21 +813,75 @@ export const Onboarding: React.FC = () => {
       }
     }
 
+    // Track Lead event ONLY if user came directly to onboarding (no eventId in URL)
+    // If eventId exists, the Lead was already tracked on the landing page
+    if (!eventIdFromUrl) {
+      // User came directly to onboarding - track Lead event
+      const eventId = `lead_${crypto.randomUUID()}`;
+
+      // Track Lead event via Meta Conversions API (server-side)
+      try {
+        const metaResponse = await fetch(`${API_BASE_URL}/api/track-meta-lead`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: trimmedEmail,
+            firstName: trimmedEmail.split('@')[0] || "",
+            eventSourceUrl: window.location.href,
+            eventId: eventId,
+          }),
+        });
+
+        if (!metaResponse.ok) {
+          console.error("Failed to track lead in Meta Conversions API");
+        } else {
+          console.log("Lead tracked in Meta Conversions API successfully");
+        }
+      } catch (metaError) {
+        console.error("Error tracking lead in Meta:", metaError);
+      }
+
+      // Track Lead event via client-side pixel
+      if (typeof window !== 'undefined' && (window as any).fbq) {
+        console.log('[Onboarding] Tracking Lead event on email submit (direct visitor)');
+        (window as any).fbq('track', 'Lead', {
+          content_name: 'Onboarding Email Submit',
+          content_category: 'Lead Generation'
+        }, {
+          eventID: eventId
+        });
+      }
+    } else {
+      console.log('[Onboarding] Skipping Lead tracking - already tracked on landing page');
+    }
+
+    // Track email step completion
+    const timeSpent = Math.floor((Date.now() - stepStartTimeRef.current) / 1000);
+    trackOnboardingEvent(1, 'completed', {
+      email: trimmedEmail,
+      timeSpentSeconds: timeSpent > 0 ? timeSpent : null,
+      entryPoint: eventIdFromUrl ? 'landing_page' : 'onboarding_direct',
+      source: eventIdFromUrl ? 'wellness' : 'onboarding_direct',
+    });
+
     setIsSubmitting(false);
     // Move to next step (questions)
     setStep(2);
   };
 
   const nextStep = () => {
-    // Step 0: Welcome
-    // Step 1: Email collection (handled separately)
-    // Steps 2-7: Questions (6 questions)
-    // Step 8: Recommendation Summary
-    // Step 9: Identity Form (Step A)
-    // Step 10: Contact Details Form (Step B)
-    // Step 11: Confirmation / Transition (Step C)
-    // Step 12: Website Input Form
-    // Step 13: Password Creation
+    // Step 0: Welcome (optional, can be skipped)
+    // Step 1: Email collection
+    // Steps 2-10: Questions (9 questions)
+    // Step 11: Recommendation Summary
+    // Step 12: Identity Form (Legal Entity)
+    // Step 13: Contact Details Form → Creates Business Profile → Jumps to Step 17
+    // Steps 14-16: REMOVED (CustomizationTransition, WebsiteInputForm, ReviewProgressCard)
+    // Step 17: Generated Documents Card
+    // Step 18: Lawyer Booking Card
+    // Step 19: Password Creation → Dashboard
     if (step === 0) {
       // Move to email collection
       setStep(1);
@@ -749,7 +963,7 @@ export const Onboarding: React.FC = () => {
               <Mail size={24} />
             </div>
             <h2 className="text-2xl font-semibold text-slate-900">
-              {hasAutoSubmittedEmail ? 'Setting Up Your Profile...' : "Answer 5 Quick Questions"}
+              {hasAutoSubmittedEmail ? 'Setting Up Your Profile...' : "Answer 9 Quick Questions"}
             </h2>
             <p className="text-slate-600">
               {hasAutoSubmittedEmail ? 'Please wait while we prepare your questions.' : (
@@ -793,7 +1007,7 @@ export const Onboarding: React.FC = () => {
                   disabled={!emailInput || isSubmitting}
                   className="w-full h-12 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? 'Creating account...' : 'Start the 45-Second Assessment'}
+                  {isSubmitting ? 'Creating account...' : 'Get your customized documents in 45 seconds.'}
                 </button>
               </div>
             </div>
@@ -819,15 +1033,23 @@ export const Onboarding: React.FC = () => {
 
   // Step 11: Recommendation Summary
   if (step === 11) {
-    const { advancedTemplates } = getRecommendedDocuments(answers);
+    console.log('[Onboarding] Step 11 - Recommendation Summary');
+    console.log('[Onboarding] Current answers:', answers);
+
+    const { freeTemplates } = getRecommendedDocuments(answers);
+
+    console.log('[Onboarding] freeTemplates received:', freeTemplates);
+    console.log('[Onboarding] freeTemplates count:', freeTemplates.length);
 
     // Sort logic: Core (Waiver, Terms) first
     const priorities = ['template-1', 'template-2', 'template-3'];
-    const sorted = [...advancedTemplates].sort((a, b) => {
+    const sorted = [...freeTemplates].sort((a, b) => {
       const aP = priorities.includes(a.id) ? 1 : 0;
       const bP = priorities.includes(b.id) ? 1 : 0;
       return bP - aP;
     });
+
+    console.log('[Onboarding] Sorted recommendations:', sorted);
 
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -860,49 +1082,30 @@ export const Onboarding: React.FC = () => {
         <ContactDetailsForm
           answers={answers}
           onUpdate={updateAnswer}
-          onNext={nextStep}
+          onNext={async () => {
+            // Create profile before moving to docs card specifically to ensure email trigger works
+            // The GeneratedDocumentsCard (Step 17) calls an API that requires this profile to exist
+            if (supabase) {
+              try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                  await createBusinessProfile(user);
+                }
+              } catch (e) {
+                console.error('Error saving profile before docs:', e);
+              }
+            }
+            // Skip steps 14, 15, 16 and go directly to Generated Documents
+            setStep(17);
+          }}
           onBack={() => setStep(step - 1)}
         />
       </div>
     );
   }
 
-  // Step 14: Confirmation / Transition (Step C)
-  if (step === 14) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <CustomizationTransition
-          onNext={nextStep}
-        />
-      </div>
-    );
-  }
-
-  // Step 15: Website Input Form
-  if (step === 15) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <WebsiteInputForm
-          answers={answers}
-          onUpdate={updateAnswer}
-          onNext={nextStep}
-          onBack={() => setStep(step - 1)}
-        />
-      </div>
-    );
-  }
-
-  // Step 16: Review Progress / Final Card
-  if (step === 16) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <ReviewProgressCard
-          answers={answers}
-          onContinue={() => setStep(17)}
-        />
-      </div>
-    );
-  }
+  // Steps 14, 15, 16 removed: CustomizationTransition, WebsiteInputForm, ReviewProgressCard
+  // Flow now goes directly from Contact Details (13) to Generated Documents (17)
 
   // Step 17: Generated Documents Breakdown
   if (step === 17) {
@@ -929,6 +1132,7 @@ export const Onboarding: React.FC = () => {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <LawyerBookingCard
           onComplete={() => setStep(19)}
+          email={answers.email}
         />
       </div>
     );
@@ -947,12 +1151,12 @@ export const Onboarding: React.FC = () => {
                 <ShieldCheck size={24} />
               </div>
               <h2 className="text-2xl font-semibold text-slate-900 mb-2">
-                {!isTempPassword ? 'Account Secured' : 'Secure Your Account'}
+                {!isTempPassword ? 'Account Secured' : 'Save Your Custom Documents'}
               </h2>
               <p className="text-slate-600">
                 {!isTempPassword
                   ? 'Your account is already password protected. Your legal documents will save automatically.'
-                  : 'If you want your customized legal documents to save, create a password.'
+                  : 'Create a password so you can access, edit, and download your documents anytime.'
                 }
               </p>
             </div>
@@ -1189,7 +1393,7 @@ export const Onboarding: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       <div className="flex-1 flex flex-col items-center pt-4 md:pt-12 p-4">
         {currentQuestionIndex === 0 && (
           <div className="w-full max-w-lg text-center mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">

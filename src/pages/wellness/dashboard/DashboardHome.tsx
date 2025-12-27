@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { LegalInventoryChecklist } from '../../../components/wellness/vault/LegalInventoryChecklist';
 import { supabase } from '../../../lib/supabase';
-import { UserAnswers, ScoreResult, RecommendationResult, DocumentItem, DashboardState } from '../../../types/wellness';
+import { UserAnswers, ScoreResult, RecommendationResult, DocumentItem, DashboardState, UserDocument } from '../../../types/wellness';
 import { calculateScore } from '../../../lib/wellness/scoring';
 import { getRecommendedDocuments } from '../../../lib/wellness/documentEngine';
+import { getCompletedDocumentsCount, getCompletedDocumentsList } from '../../../lib/wellness/documentCountUtils';
 import { calculateLegalHealth, getNextBestAction, NextAction } from '../../../lib/wellness/dashboardLogic';
 import { vaultService } from '../../../lib/wellness/vaultService';
 import { Card, CardContent } from '../../../components/wellness/ui/Card';
@@ -31,6 +33,7 @@ export const DashboardHome: React.FC = () => {
     const [answers, setAnswers] = useState<UserAnswers | null>(null);
     const [scoreData, setScoreData] = useState<ScoreResult | null>(null);
     const [recommendations, setRecommendations] = useState<RecommendationResult | null>(null);
+    const [documents, setDocuments] = useState<UserDocument[]>([]);
 
     // Modal States
     const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
@@ -87,11 +90,14 @@ export const DashboardHome: React.FC = () => {
                                 isProfileComplete: true,
                                 // Infer basics
                                 hasPhysicalMovement: ['Yoga Studio', 'Pilates Studio', 'Gym / Fitness Studio', 'Personal Trainer'].includes(profile.business_type),
-                                services: [], // Will default to empty
-                                collectsOnline: true, // Default
-                                hiresStaff: profile.team_size !== '0',
-                                isOffsiteOrInternational: ['Retreat Leader'].includes(profile.business_type),
-                                hostsRetreats: ['Retreat Leader'].includes(profile.business_type),
+                                services: profile.services || [], // Load from profile if available
+                                collectsOnline: profile.collects_online ?? true, // Default
+                                hiresStaff: profile.hires_staff ?? (profile.team_size !== '0'), // Load from profile, fallback to team_size
+                                hasEmployees: profile.has_w2_employees ?? false, // CRITICAL: Load W2 employees flag
+                                isOffsiteOrInternational: profile.is_offsite_or_international ?? (['Retreat Leader'].includes(profile.business_type)),
+                                hostsRetreats: profile.hosts_retreats ?? (['Retreat Leader'].includes(profile.business_type)),
+                                offersOnlineCourses: profile.offers_online_courses ?? false,
+                                sellsProducts: profile.sells_products ?? false,
                             };
                             // Save back to local storage for speed next time
                             localStorage.setItem('wellness_onboarding_answers', JSON.stringify(parsedAnswers));
@@ -161,6 +167,13 @@ export const DashboardHome: React.FC = () => {
             }
 
 
+            // Load user documents
+            try {
+                const docs = await vaultService.getUserDocuments();
+                setDocuments(docs);
+            } catch (e) {
+                console.error('Error loading documents:', e);
+            }
         };
 
         loadData();
@@ -390,16 +403,36 @@ export const DashboardHome: React.FC = () => {
                             */}
                             {(() => {
                                 if (!recommendations) return null;
-                                const total = (recommendations.freeTemplates?.length || 0) + (recommendations.advancedTemplates?.length || 0) + 1; // +1 for Insurance
-                                const completed = 0; // We define completed as fully finalized
+                                const { completed, total } = getCompletedDocumentsCount(documents, answers);
                                 return (
-                                    <div className="flex flex-col items-center gap-2">
+                                    <div className="flex flex-col items-center gap-3">
                                         <span>
                                             <span className="font-bold">{completed}</span> out of <span className="font-bold">{total}</span> Documents Completed
                                         </span>
+
+                                        {/* List Completed Documents */}
+                                        {completed > 0 && (() => {
+                                            const completedDocs = getCompletedDocumentsList(documents, answers);
+                                            return (
+                                                <div className="flex flex-col gap-1.5 w-full max-w-[240px]">
+                                                    {completedDocs.slice(0, 3).map((doc, index) => (
+                                                        <div key={`${doc.label}-${index}`} className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md border border-emerald-100">
+                                                            <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                                                            <span className="truncate font-medium">{doc.label}</span>
+                                                        </div>
+                                                    ))}
+                                                    {completed > 3 && (
+                                                        <div className="text-[10px] text-slate-500 text-center">
+                                                            +{completed - 3} more
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
                                         <Button
                                             variant="ghost"
-                                            className="text-xs text-current underline opacity-90 hover:opacity-100 hover:bg-transparent h-auto p-0 whitespace-normal text-center max-w-[200px]"
+                                            className="text-xs text-slate-500 underline opacity-90 hover:opacity-100 hover:bg-transparent h-auto p-0 whitespace-normal text-center max-w-[200px] mt-1"
                                             onClick={() => navigate('/wellness/dashboard/documents')}
                                         >
                                             Upload your documents now for review and analysis
@@ -472,144 +505,45 @@ export const DashboardHome: React.FC = () => {
                     <div ref={documentsSectionRef} className="scroll-mt-6">
                         <Card className="border-none shadow-md bg-white overflow-hidden transition-all duration-300">
                             <div
-                                className="p-4 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
+                                className="p-4 border-b border-slate-100 flex justify-between items-center bg-white cursor-pointer hover:bg-slate-50 transition-colors"
                                 onClick={() => setIsDocListOpen(!isDocListOpen)}
                             >
-                                <div>
+                                <div className="flex-1 pr-4">
                                     <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                        <FileText className="text-brand-600" size={18} />
-                                        All the Legal Documents Your Business Needs
+                                        <div className="flex items-center justify-center w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold">1</div>
+                                        Your Required Legal Documents
                                     </h2>
-                                    <p className="text-xs text-slate-500 mt-1">
-                                        Based on your business profile, these are the exact agreements, waivers, and policies recommended for your protection.
+                                    <p className="text-xs text-slate-500 mt-1 pl-7">
+                                        Here are all the agreements, waivers, and policies your business needs — including what you already have and what may be missing.
                                     </p>
                                 </div>
-                                <ChevronDown
-                                    className={`text-slate-400 transition-transform duration-300 ${isDocListOpen ? 'rotate-180' : ''}`}
-                                    size={18}
-                                />
+                                <div className="flex items-center gap-3 flex-shrink-0">
+                                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
+                                        {(() => {
+                                            const { completed, total } = getCompletedDocumentsCount(documents, answers);
+                                            return `${completed} / ${total} Docs`;
+                                        })()}
+                                    </span>
+                                    <ChevronDown
+                                        className={`text-slate-400 transition-transform duration-300 ${isDocListOpen ? 'rotate-180' : ''}`}
+                                        size={18}
+                                    />
+                                </div>
                             </div>
 
                             {isDocListOpen && (
-                                <div className="divide-y divide-slate-100 animate-in slide-in-from-top-2 duration-300">
-                                    {/* Combine lists: Free templates first, then Advanced */}
-                                    {[...recommendations.freeTemplates, ...recommendations.advancedTemplates].map((doc) => {
-                                        const isFree = doc.category === 'free'; // Assuming 'free' is the category for unlocked docs
-                                        const isLocked = !isFree;
-
-                                        return (
-                                            <div key={doc.id} className={`p-4 hover:bg-slate-50 transition-colors group ${isLocked ? 'opacity-90' : ''}`}>
-                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                    {/* Left: Icon & Text */}
-                                                    <div className="flex items-start gap-3 flex-1">
-                                                        <div className={`
-                                                        w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-1
-                                                        ${isFree ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}
-                                                    `}>
-                                                            {isFree ? <Unlock size={20} /> : <Lock size={20} />}
-                                                        </div>
-                                                        <div>
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <h3 className={`font-semibold text-slate-900 ${isLocked ? 'text-slate-700' : ''}`}>
-                                                                    {doc.title}
-                                                                </h3>
-                                                                {isFree && (
-                                                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded uppercase">
-                                                                        Ready
-                                                                    </span>
-                                                                )}
-                                                                {isLocked && (
-                                                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase flex items-center gap-1">
-                                                                        <Lock size={10} /> Lawyer Review
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <p className="text-sm text-slate-500 mt-0.5 max-w-2xl line-clamp-2 md:line-clamp-none">
-                                                                {doc.description}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Right: Actions */}
-                                                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center w-full sm:w-auto mt-2 sm:mt-0">
-                                                        {isFree ? (
-                                                            // Unlocked Actions
-                                                            <>
-                                                                <div className="flex gap-2 w-full sm:w-auto">
-                                                                    {['template-6', 'template-4', 'template-intake'].includes(doc.id) && (
-                                                                        <Button
-                                                                            variant="primary"
-                                                                            size="sm"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleGenerateDocument(doc);
-                                                                            }}
-                                                                            className="bg-brand-600 hover:bg-brand-700 text-white w-full sm:w-auto whitespace-nowrap"
-                                                                        >
-                                                                            Generate Personalized
-                                                                        </Button>
-                                                                    )}
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            // Locked Actions
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setIsCalendlyModalOpen(true);
-                                                                }}
-                                                                className="text-slate-400 hover:text-brand-600 hover:bg-brand-50 w-full sm:w-auto"
-                                                            >
-                                                                <Phone size={14} className="mr-2" />
-                                                                Schedule Review
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-
-                                    {/* Add Insurance Item (Hardcoded to match LegalInventoryChecklist) */}
-                                    <div className="p-4 hover:bg-slate-50 transition-colors group opacity-90">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            {/* Left: Icon & Text */}
-                                            <div className="flex items-start gap-3 flex-1">
-                                                <div className="bg-slate-100 p-2 rounded-lg text-slate-500">
-                                                    <FileText size={18} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                                                        Insurance Certificates
-                                                        <span className="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
-                                                            Advanced
-                                                        </span>
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                                                        Upload your valid business insurance certificates.
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            {/* Right: Action */}
-                                            <div className="flex-shrink-0">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="w-full sm:w-auto text-xs h-8 border-slate-200 text-slate-600 hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50"
-                                                    onClick={() => navigate('/wellness/dashboard/documents')}
-                                                >
-                                                    Upload
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div className="p-0 animate-in slide-in-from-top-2 duration-300">
+                                    <LegalInventoryChecklist
+                                        documents={documents}
+                                        userAnswers={answers}
+                                        onUploadClick={() => navigate('/wellness/dashboard/documents')}
+                                        onUploadWithType={(type, label) => navigate('/wellness/dashboard/documents')}
+                                        onViewDocument={(doc) => navigate('/wellness/dashboard/documents')}
+                                    />
                                 </div>
                             )}
-                        </Card></div>
-
+                        </Card>
+                    </div>
                     {/* Website Compliance - Collapsible */}
                     <div className="mt-6">
                         <WebsiteComplianceWidget
@@ -647,16 +581,36 @@ export const DashboardHome: React.FC = () => {
                             <div className="text-sm font-medium opacity-90 text-center">
                                 {(() => {
                                     if (!recommendations) return null;
-                                    const total = (recommendations.freeTemplates?.length || 0) + (recommendations.advancedTemplates?.length || 0) + 1; // +1 for Insurance
-                                    const completed = 0;
+                                    const { completed, total } = getCompletedDocumentsCount(documents, answers);
                                     return (
-                                        <div className="flex flex-col items-center gap-2">
+                                        <div className="flex flex-col items-center gap-3">
                                             <span>
                                                 <span className="font-bold">{completed}</span> out of <span className="font-bold">{total}</span> Documents Completed
                                             </span>
+
+                                            {/* List Completed Documents */}
+                                            {completed > 0 && (() => {
+                                                const completedDocs = getCompletedDocumentsList(documents, answers);
+                                                return (
+                                                    <div className="flex flex-col gap-1.5 w-full">
+                                                        {completedDocs.slice(0, 3).map((doc, index) => (
+                                                            <div key={`${doc.label}-${index}`} className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md border border-emerald-100 text-left">
+                                                                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                                                                <span className="truncate font-medium">{doc.label}</span>
+                                                            </div>
+                                                        ))}
+                                                        {completed > 3 && (
+                                                            <div className="text-[10px] text-slate-500 text-center">
+                                                                +{completed - 3} more
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+
                                             <Button
                                                 variant="ghost"
-                                                className="text-xs text-current underline opacity-90 hover:opacity-100 hover:bg-transparent h-auto p-0 whitespace-normal text-center max-w-[200px]"
+                                                className="text-xs text-slate-500 underline opacity-90 hover:opacity-100 hover:bg-transparent h-auto p-0 whitespace-normal text-center max-w-[200px] mt-1"
                                                 onClick={() => navigate('/wellness/dashboard/documents')}
                                             >
                                                 Upload your documents now for review and analysis

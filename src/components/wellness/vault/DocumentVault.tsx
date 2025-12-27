@@ -1,22 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Upload, FileText, Trash2, Download, Eye, FileSearch, Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { FileText, Trash2, Download, Eye, Loader2 } from 'lucide-react';
 import { UserDocument, UserAnswers } from '../../../types/wellness';
 import { vaultService } from '../../../lib/wellness/vaultService';
 import { Button } from '../../wellness/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../wellness/ui/Card';
-import { AnalysisModal } from './AnalysisModal';
 import { DocumentViewerModal } from './DocumentViewerModal';
+import { CopyableDocumentModal } from './CopyableDocumentModal';
 import { LegalInventoryChecklist } from './LegalInventoryChecklist';
-import { classifyDocument } from './documentClassifier';
-import { DocumentTypeSelectorModal } from './DocumentTypeSelectorModal';
-import { ContractReviewModal } from '../../wellness/ContractReviewModal';
 import { toast } from '../../../hooks/use-toast';
 
 export const DocumentVault: React.FC = () => {
     const [documents, setDocuments] = useState<UserDocument[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isUploading, setIsUploading] = useState(false);
-    const [viewAnalysisDoc, setViewAnalysisDoc] = useState<UserDocument | null>(null);
     const [userAnswers, setUserAnswers] = useState<UserAnswers | null>(null);
 
     // Viewer State
@@ -26,21 +20,30 @@ export const DocumentVault: React.FC = () => {
     // Delete confirmation state
     const [docToDelete, setDocToDelete] = useState<UserDocument | null>(null);
 
-    // Document type selection state
-    const [pendingFile, setPendingFile] = useState<File | null>(null);
-    const [showTypeSelector, setShowTypeSelector] = useState(false);
-    
-    // Contract Review Modal state (for "Missing" clicks)
-    const [showContractReview, setShowContractReview] = useState(false);
-    const [preSelectedDocType, setPreSelectedDocType] = useState<string | undefined>();
-    const [preSelectedDocLabel, setPreSelectedDocLabel] = useState<string | undefined>();
-
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    // Copyable Document Modal state
+    const [copyableDoc, setCopyableDoc] = useState<UserDocument | null>(null);
+    const [copyableHtmlContent, setCopyableHtmlContent] = useState<string>('');
+    const [isLoadingHtml, setIsLoadingHtml] = useState(false);
 
     // Fetch documents and user answers on mount
     useEffect(() => {
         fetchDocuments();
         loadUserAnswers();
+    }, []);
+
+    // Listen for document updates (e.g., after generation)
+    useEffect(() => {
+        const handleDocumentsUpdated = () => {
+            // Small delay to ensure database has updated
+            setTimeout(() => {
+                fetchDocuments();
+            }, 500);
+        };
+
+        window.addEventListener('documents-updated', handleDocumentsUpdated);
+        return () => {
+            window.removeEventListener('documents-updated', handleDocumentsUpdated);
+        };
     }, []);
 
     const loadUserAnswers = () => {
@@ -66,161 +69,9 @@ export const DocumentVault: React.FC = () => {
         }
     };
 
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        // Simple validation
-        if (file.size > 10 * 1024 * 1024) { // 10MB limit
-            toast({
-                variant: "destructive",
-                title: "File too large",
-                description: "Please upload a file smaller than 10MB.",
-            });
-            return;
-        }
-
-        // Try to auto-classify
-        const classification = classifyDocument(file.name);
-        
-        // If confidence is low or we couldn't identify the document type, ask user
-        if (classification.confidence === 'low' || !classification.documentType) {
-            setPendingFile(file);
-            setShowTypeSelector(true);
-            // Reset input so they can select the same file again if needed
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            return;
-        }
-
-        // High/medium confidence - proceed with upload
-        await uploadDocumentWithType(file, classification.category, classification.documentType);
-    };
-
-    const uploadDocumentWithType = async (
-        file: File,
-        category: UserDocument['category'],
-        documentType?: string
-    ) => {
-        setIsUploading(true);
-        try {
-            const newDoc = await vaultService.uploadDocument(file, category, undefined, undefined, undefined, documentType);
-            if (newDoc) {
-                setDocuments(prev => [newDoc, ...prev]);
-                toast({
-                    title: "Document uploaded",
-                    description: `"${newDoc.title}" has been added. We'll analyze it for gaps and risks.`,
-                });
-            } else {
-                toast({
-                    variant: "destructive",
-                    title: "Upload failed",
-                    description: "We couldn't upload that document. Please try again.",
-                });
-            }
-        } catch (error) {
-            console.error('Upload failed', error);
-            toast({
-                variant: "destructive",
-                title: "Upload failed",
-                description: "Something went wrong while uploading. Please try again.",
-            });
-        } finally {
-            setIsUploading(false);
-            // Reset input
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-    };
-
-    const handleDocumentTypeSelected = async (documentType: string | null) => {
-        setShowTypeSelector(false);
-        
-        if (!pendingFile) return;
-
-        // Determine category from document type
-        let category: UserDocument['category'] = 'other';
-        if (documentType === 'insurance') {
-            category = 'insurance';
-        } else if (documentType?.startsWith('template-')) {
-            category = 'contract'; // Most templates are contracts
-        }
-
-        await uploadDocumentWithType(pendingFile, category, documentType || undefined);
-        setPendingFile(null);
-    };
-
-    const handleDocumentTypeCancel = () => {
-        setShowTypeSelector(false);
-        setPendingFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
-    // Handle upload with pre-selected document type (from checklist click)
-    const handleUploadWithType = (documentType: string, documentLabel: string) => {
-        // Show Contract Review Modal instead of file picker
-        setPreSelectedDocType(documentType);
-        setPreSelectedDocLabel(documentLabel);
-        setShowContractReview(true);
-    };
-
-    // Handle when contract review completes - refresh documents
-    const handleContractReviewComplete = () => {
-        fetchDocuments(); // Refresh the document list
-    };
-
-    // Updated file upload handler to check for pre-selected type
-    const handleFileUploadWithPreSelectedType = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        // Check if we have a pre-selected document type
-        const preSelectedType = (event.target as any).dataset.preSelectedType;
-        const preSelectedLabel = (event.target as any).dataset.preSelectedLabel;
-
-        // Clear the dataset
-        delete (event.target as any).dataset.preSelectedType;
-        delete (event.target as any).dataset.preSelectedLabel;
-
-        // Simple validation
-        if (file.size > 10 * 1024 * 1024) {
-            toast({
-                variant: "destructive",
-                title: "File too large",
-                description: "Please upload a file smaller than 10MB.",
-            });
-            return;
-        }
-
-        if (preSelectedType) {
-            // We have a pre-selected type - upload directly with that type
-            let category: UserDocument['category'] = 'other';
-            if (preSelectedType === 'insurance') {
-                category = 'insurance';
-            } else if (preSelectedType.startsWith('template-')) {
-                category = 'contract';
-            }
-
-            await uploadDocumentWithType(file, category, preSelectedType);
-            toast({
-                title: "Document uploaded",
-                description: `"${file.name}" has been added as ${preSelectedLabel || 'your document'}.`,
-            });
-        } else {
-            // No pre-selected type - use normal classification flow
-            const classification = classifyDocument(file.name);
-            
-            // If confidence is low or we couldn't identify the document type, ask user
-            if (classification.confidence === 'low' || !classification.documentType) {
-                setPendingFile(file);
-                setShowTypeSelector(true);
-                // Reset input so they can select the same file again if needed
-                if (fileInputRef.current) fileInputRef.current.value = '';
-                return;
-            }
-
-            // High/medium confidence - proceed with upload
-            await uploadDocumentWithType(file, classification.category, classification.documentType);
-        }
-    };
+    // UPLOAD FUNCTIONALITY REMOVED
+    // All documents are now auto-generated during onboarding
+    // Users no longer need to upload their own documents
 
     const handleViewDocument = async (doc: UserDocument) => {
         try {
@@ -295,35 +146,127 @@ export const DocumentVault: React.FC = () => {
         });
     };
 
+    const handleCopyAsText = async (doc: UserDocument) => {
+        try {
+            setIsLoadingHtml(true);
+            setCopyableDoc(doc);
+
+            // Get the download URL for the document
+            const url = await vaultService.getDownloadUrl(doc.file_path);
+            if (!url) {
+                toast({
+                    variant: "destructive",
+                    title: "Could not load document",
+                    description: "We couldn't generate a link for this file. Please try again.",
+                });
+                setIsLoadingHtml(false);
+                setCopyableDoc(null);
+                return;
+            }
+
+            // For PDFs, we can't extract HTML directly
+            // We need to check if this is an HTML-generated document
+            const isPdf = doc.file_type === 'pdf' || doc.file_path.endsWith('.pdf');
+
+            if (isPdf) {
+                // For PDF documents generated from HTML templates, we need to regenerate the HTML
+                // Check if this document has a document_type that maps to a template
+                if (doc.document_type && doc.document_type.startsWith('template-')) {
+                    // Fetch the HTML version from the server
+                    const serverUrl = import.meta.env.VITE_SERVER_URL || '';
+                    const response = await fetch(`${serverUrl}/api/documents/generate-html`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            templateName: getTemplateFileName(doc.document_type),
+                        }),
+                    });
+
+                    if (response.ok) {
+                        const html = await response.text();
+                        setCopyableHtmlContent(html);
+                    } else {
+                        throw new Error('Failed to generate HTML version');
+                    }
+                } else {
+                    toast({
+                        variant: "destructive",
+                        title: "Cannot copy this document",
+                        description: "This document format doesn't support text copying. Please download the PDF instead.",
+                    });
+                    setIsLoadingHtml(false);
+                    setCopyableDoc(null);
+                    return;
+                }
+            } else {
+                // For non-PDF documents, fetch the content directly
+                const response = await fetch(url);
+                const text = await response.text();
+                setCopyableHtmlContent(text);
+            }
+
+            setIsLoadingHtml(false);
+        } catch (error) {
+            console.error('Failed to load document for copying:', error);
+            toast({
+                variant: "destructive",
+                title: "Failed to load document",
+                description: "Something went wrong while preparing the document. Please try again.",
+            });
+            setIsLoadingHtml(false);
+            setCopyableDoc(null);
+        }
+    };
+
+    // Helper function to map document_type to template file name
+    const getTemplateFileName = (documentType: string): string => {
+        const mapping: Record<string, string> = {
+            'template-6': 'social_media_disclaimer',
+            'template-4': 'media_release_form',
+            'template-intake': 'client_intake_form',
+            'template-1': 'waiver_release_of_liability',
+            'template-2': 'service_agreement_membership_contract',
+            'template-3': 'terms_privacy_disclaimer',
+            'template-5': 'testimonial_consent_agreement',
+            'template-7': 'independent_contractor_agreement',
+            'template-8': 'employment_agreement',
+            'template-9': 'influencer_collaboration_agreement',
+            'template-10': 'trademark_ip_protection_guide',
+            'template-membership': 'membership_agreement',
+            'template-studio': 'studio_policies',
+            'template-class': 'class_terms_conditions',
+            'template-privacy': 'privacy_policy',
+            'template-website': 'website_terms_conditions',
+            'template-refund': 'refund_cancellation_policy',
+            'template-disclaimer': 'website_disclaimer',
+            'template-cookie': 'cookie_policy',
+            'template-retreat-waiver': 'retreat_liability_waiver',
+            'template-travel': 'travel_excursion_agreement',
+        };
+        return mapping[documentType] || documentType;
+    };
 
     return (
         <>
             <div className="space-y-6">
                 {/* Legal Inventory Checklist */}
                 {!isLoading && (
-                    <LegalInventoryChecklist 
+                    <LegalInventoryChecklist
                         documents={documents}
                         userAnswers={userAnswers}
-                        onUploadClick={() => fileInputRef.current?.click()}
-                        onUploadWithType={handleUploadWithType}
                         onViewDocument={handleViewDocument}
-                        onViewAnalysis={(doc) => setViewAnalysisDoc(doc)}
                         onDeleteDocument={handleDelete}
                         onDownloadDocument={async (doc) => {
                             const url = await vaultService.getDownloadUrl(doc.file_path);
                             if (url) window.open(url, '_blank');
                         }}
+                        onCopyAsText={handleCopyAsText}
                         formatDate={formatDate}
                     />
                 )}
             </div>
-
-            <AnalysisModal
-                isOpen={!!viewAnalysisDoc}
-                onClose={() => setViewAnalysisDoc(null)}
-                title={viewAnalysisDoc?.title || ''}
-                analysis={viewAnalysisDoc?.analysis || ''}
-            />
 
             <DocumentViewerModal
                 isOpen={!!viewerDoc}
@@ -339,6 +282,16 @@ export const DocumentVault: React.FC = () => {
                         if (url) window.open(url, '_blank');
                     }
                 }}
+            />
+
+            <CopyableDocumentModal
+                isOpen={!!copyableDoc && !isLoadingHtml}
+                onClose={() => {
+                    setCopyableDoc(null);
+                    setCopyableHtmlContent('');
+                }}
+                title={copyableDoc?.title || 'Copy Document Text'}
+                htmlContent={copyableHtmlContent}
             />
 
             {/* Delete Confirmation Modal */}
@@ -377,27 +330,7 @@ export const DocumentVault: React.FC = () => {
                 </div>
             )}
 
-            {/* Document Type Selector Modal */}
-            <DocumentTypeSelectorModal
-                isOpen={showTypeSelector}
-                fileName={pendingFile?.name || ''}
-                userAnswers={userAnswers}
-                onSelect={handleDocumentTypeSelected}
-                onCancel={handleDocumentTypeCancel}
-            />
-
-            {/* Contract Review Modal (for "Missing" document clicks) */}
-            <ContractReviewModal
-                isOpen={showContractReview}
-                onClose={() => {
-                    setShowContractReview(false);
-                    setPreSelectedDocType(undefined);
-                    setPreSelectedDocLabel(undefined);
-                }}
-                onComplete={handleContractReviewComplete}
-                preSelectedDocumentType={preSelectedDocType}
-                preSelectedDocumentLabel={preSelectedDocLabel}
-            />
+            {/* Upload modals removed - all documents are auto-generated */}
         </>
     );
 };

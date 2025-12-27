@@ -1,7 +1,13 @@
 import React from 'react';
 
-export const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <div className={`rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm ${className}`}>
+export const Card: React.FC<{ 
+  children: React.ReactNode; 
+  className?: string;
+} & React.HTMLAttributes<HTMLDivElement>> = ({ children, className = '', ...props }) => (
+  <div 
+    className={`rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm ${className}`}
+    {...props}
+  >
     {children}
   </div>
 );

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cookie Policy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #000;
+            padding: 60px 80px;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 20px;
+        }
+
+        .document-title {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        .date {
+            text-align: right;
+            font-style: italic;
+            margin-bottom: 20px;
+            color: #555;
+        }
+
+        .info-box {
+            background: #f8f8f8;
+            border: 2px solid #333;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .section {
+            margin: 25px 0;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .section-content {
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            margin-left: 40px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        table, th, td {
+            border: 1px solid #333;
+        }
+
+        th {
+            background: #f0f0f0;
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        td {
+            padding: 10px;
+            vertical-align: top;
+        }
+
+        /* Watermark/Disclaimer Styles */
+        .disclaimer-banner {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #f0ad4e;
+            border-left: 6px solid #f0ad4e;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .disclaimer-banner-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #856404;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .disclaimer-banner-text {
+            font-size: 10px;
+            color: #856404;
+            line-height: 1.4;
+        }
+
+        .footer-disclaimer {
+            margin-top: 50px;
+            padding: 25px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            page-break-inside: avoid;
+        }
+
+        .footer-disclaimer-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 8px;
+        }
+
+        .footer-disclaimer-text {
+            font-size: 10px;
+            line-height: 1.8;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+
+        .cta-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px;
+            border-radius: 5px;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .cta-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .cta-text {
+            font-size: 10px;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .cta-link {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 8px 20px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Disclaimer Banner -->
+    <div class="disclaimer-banner">
+        <div class="disclaimer-banner-title">⚠️ DRAFT DOCUMENT - NOT LEGAL ADVICE</div>
+        <div class="disclaimer-banner-text">
+            This is a template document that has not been reviewed by an attorney for your specific situation.
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="document-title">COOKIE POLICY</div>
+    </div>
+
+    <!-- Date -->
+    <div class="date">Last Updated: {{date}}</div>
+
+    <!-- Business Information Box -->
+    <div class="info-box">
+        <h3>Business Information</h3>
+
+        <div class="info-row">
+            <div class="info-label">Business Name:</div>
+            <div class="info-value">{{BusinessName}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Website:</div>
+            <div class="info-value">{{Website}}</div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">Contact Email:</div>
+            <div class="info-value">{{Email}}</div>
+        </div>
+    </div>
+
+    <!-- Introduction -->
+    <div class="section">
+        <div class="section-content">
+            This Cookie Policy explains how <strong>{{BusinessName}}</strong> ("we," "us," or "our") uses cookies and
+            similar tracking technologies on our website {{Website}} (the "Website").
+        </div>
+        <div class="section-content">
+            By continuing to use our Website, you consent to our use of cookies as described in this policy. If you do not
+            agree, please adjust your browser settings or discontinue use of the Website.
+        </div>
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+        <div class="section-title">1. WHAT ARE COOKIES?</div>
+        <div class="section-content">
+            Cookies are small text files that are placed on your device (computer, smartphone, tablet) when you visit a
+            website. They are widely used to make websites work more efficiently, provide a better user experience, and
+            deliver information to website owners.
+        </div>
+        <div class="section-content">
+            Cookies can be "session cookies" (deleted when you close your browser) or "persistent cookies" (remain on your
+            device until they expire or you delete them).
+        </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+        <div class="section-title">2. TYPES OF COOKIES WE USE</div>
+        <div class="section-content">
+            We use the following types of cookies on our Website:
+        </div>
+
+        <table>
+            <tr>
+                <th>Cookie Type</th>
+                <th>Purpose</th>
+                <th>Examples</th>
+            </tr>
+            <tr>
+                <td><strong>Essential Cookies</strong></td>
+                <td>Necessary for the Website to function properly. These cookies enable core features like security,
+                    network management, and accessibility. You cannot opt out of these cookies.</td>
+                <td>Session management, authentication, load balancing, shopping cart functionality</td>
+            </tr>
+            <tr>
+                <td><strong>Performance Cookies</strong></td>
+                <td>Collect information about how visitors use the Website, such as which pages are visited most often. This
+                    helps us improve the Website's performance and user experience.</td>
+                <td>Google Analytics, website traffic analysis, page load times</td>
+            </tr>
+            <tr>
+                <td><strong>Functional Cookies</strong></td>
+                <td>Remember your preferences and settings to provide a personalized experience (e.g., language, region,
+                    login details).</td>
+                <td>Saved preferences, remember me functionality, customized content</td>
+            </tr>
+            <tr>
+                <td><strong>Marketing/Advertising Cookies</strong></td>
+                <td>Track your browsing activity to deliver targeted advertisements on our Website and third-party
+                    platforms. These cookies may be set by us or our advertising partners.</td>
+                <td>Facebook Pixel, Google Ads, retargeting campaigns, social media ads</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Section 3 -->
+    <div class="section">
+        <div class="section-title">3. FIRST-PARTY VS. THIRD-PARTY COOKIES</div>
+        <div class="section-content">
+            <strong>First-Party Cookies:</strong> Set directly by <strong>{{BusinessName}}</strong> to enable Website
+            functionality and collect analytics.
+        </div>
+        <div class="section-content">
+            <strong>Third-Party Cookies:</strong> Set by external services we use, such as:
+        </div>
+        <ul>
+            <li><strong>Google Analytics:</strong> Tracks website usage and traffic patterns</li>
+            <li><strong>Facebook Pixel:</strong> Tracks conversions and enables targeted ads on Facebook and Instagram</li>
+            <li><strong>Payment Processors:</strong> Stripe, PayPal, or other payment gateways for secure transactions</li>
+            <li><strong>Social Media Platforms:</strong> Instagram, YouTube, TikTok embeds and sharing features</li>
+            <li><strong>Email Marketing Tools:</strong> Mailchimp, ConvertKit, or similar services for email campaigns</li>
+        </ul>
+        <div class="section-content">
+            These third parties may use cookies to collect information about your online activities across different
+            websites. We do not control third-party cookies. Please review their privacy policies for more information.
+        </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="section">
+        <div class="section-title">4. WHY WE USE COOKIES</div>
+        <div class="section-content">
+            We use cookies for the following purposes:
+        </div>
+        <ul>
+            <li><strong>Website Functionality:</strong> Enable essential features like login, registration, and shopping
+                cart</li>
+            <li><strong>Analytics:</strong> Understand how visitors use the Website and identify areas for improvement</li>
+            <li><strong>Personalization:</strong> Remember your preferences, settings, and past interactions</li>
+            <li><strong>Marketing:</strong> Deliver relevant advertisements and measure the effectiveness of our marketing
+                campaigns</li>
+            <li><strong>Security:</strong> Detect and prevent fraudulent activity, abuse, and security threats</li>
+            <li><strong>Performance:</strong> Optimize page load times and improve overall user experience</li>
+        </ul>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="section">
+        <div class="section-title">5. HOW TO MANAGE COOKIES</div>
+        <div class="section-content">
+            You have several options to manage or disable cookies:
+        </div>
+
+        <div class="section-content">
+            <strong>A. Browser Settings</strong>
+        </div>
+        <div class="section-content">
+            Most web browsers allow you to control cookies through their settings. You can:
+        </div>
+        <ul>
+            <li>Block all cookies</li>
+            <li>Accept only first-party cookies</li>
+            <li>Delete cookies after each browsing session</li>
+            <li>Receive a notification before a cookie is set</li>
+        </ul>
+        <div class="section-content">
+            To manage cookies, visit your browser's help section:
+        </div>
+        <ul>
+            <li><strong>Google Chrome:</strong> Settings > Privacy and Security > Cookies and other site data</li>
+            <li><strong>Safari:</strong> Preferences > Privacy > Manage Website Data</li>
+            <li><strong>Firefox:</strong> Options > Privacy & Security > Cookies and Site Data</li>
+            <li><strong>Microsoft Edge:</strong> Settings > Cookies and site permissions</li>
+        </ul>
+
+        <div class="section-content">
+            <strong>B. Opt-Out Tools</strong>
+        </div>
+        <div class="section-content">
+            You can opt out of targeted advertising cookies through these tools:
+        </div>
+        <ul>
+            <li><strong>Network Advertising Initiative (NAI):</strong> optout.networkadvertising.org</li>
+            <li><strong>Digital Advertising Alliance (DAA):</strong> optout.aboutads.info</li>
+            <li><strong>Google Ads Settings:</strong> adssettings.google.com</li>
+            <li><strong>Facebook Ad Preferences:</strong> facebook.com/adpreferences</li>
+        </ul>
+
+        <div class="section-content">
+            <strong>C. Do Not Track (DNT)</strong>
+        </div>
+        <div class="section-content">
+            Some browsers offer a "Do Not Track" (DNT) setting. However, there is no universal standard for how websites
+            should respond to DNT signals. We currently do not respond to DNT signals.
+        </div>
+    </div>
+
+    <!-- Section 6 -->
+    <div class="section">
+        <div class="section-title">6. IMPACT OF DISABLING COOKIES</div>
+        <div class="section-content">
+            If you disable or block cookies, certain features of the Website may not function properly. This may include:
+        </div>
+        <ul>
+            <li>Inability to log in or access your account</li>
+            <li>Loss of saved preferences and settings</li>
+            <li>Reduced website performance or functionality</li>
+            <li>Inability to complete purchases or bookings</li>
+            <li>Repetitive pop-ups or notifications</li>
+        </ul>
+        <div class="section-content">
+            Essential cookies are necessary for the Website to operate and cannot be disabled without significantly
+            affecting your experience.
+        </div>
+    </div>
+
+    <!-- Section 7 -->
+    <div class="section">
+        <div class="section-title">7. OTHER TRACKING TECHNOLOGIES</div>
+        <div class="section-content">
+            In addition to cookies, we may use other tracking technologies, including:
+        </div>
+        <ul>
+            <li><strong>Web Beacons (Pixels):</strong> Small images embedded in emails or web pages that track whether you
+                opened an email or visited a page</li>
+            <li><strong>Local Storage:</strong> HTML5 local storage that retains data on your device</li>
+            <li><strong>Session Storage:</strong> Temporary storage that is deleted when you close your browser</li>
+            <li><strong>Device Fingerprinting:</strong> Collecting information about your device (e.g., browser type, OS,
+                screen resolution) to identify unique visitors</li>
+        </ul>
+    </div>
+
+    <!-- Section 8 -->
+    <div class="section">
+        <div class="section-title">8. UPDATES TO THIS COOKIE POLICY</div>
+        <div class="section-content">
+            We may update this Cookie Policy from time to time to reflect changes in our practices, technology, or legal
+            requirements. When we make updates, we will revise the "Last Updated" date at the top of this policy.
+        </div>
+        <div class="section-content">
+            We encourage you to review this policy periodically. Your continued use of the Website after changes are
+            posted constitutes your acceptance of the updated Cookie Policy.
+        </div>
+    </div>
+
+    <!-- Section 9 -->
+    <div class="section">
+        <div class="section-title">9. CONTACT US</div>
+        <div class="section-content">
+            If you have any questions about this Cookie Policy or how we use cookies, please contact us:
+        </div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong><br>
+            {{BusinessAddress}}<br>
+            Email: {{Email}}<br>
+            Phone: {{Phone}}
+        </div>
+    </div>
+
+    <!-- Acknowledgement -->
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT</div>
+        <div class="section-content">
+            By using our Website, you acknowledge that you have read and understood this Cookie Policy and consent to our
+            use of cookies and similar technologies as described above.
+        </div>
+    </div>
+
+
+    <!-- Footer Disclaimer -->
+    <div class="footer-disclaimer">
+        <div class="footer-disclaimer-title">⚖️ Important Legal Disclaimer</div>
+        <div class="footer-disclaimer-text">
+            <strong>This document is a template and has NOT been reviewed by a licensed attorney.</strong> It is provided for informational purposes only and does not constitute legal advice. This template may not be appropriate for your specific business, state, or legal requirements.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>This is NOT a legally binding contract</strong> until it has been reviewed, customized, and approved by a qualified attorney who understands your business and applicable laws. Using this template without proper legal review may leave you exposed to significant legal and financial risks.
+        </div>
+        <div class="footer-disclaimer-text">
+            <strong>We strongly recommend</strong> having this document reviewed by an experienced attorney before using it with clients. Generic templates cannot account for your unique business model, state-specific regulations, or industry requirements.
+        </div>
+
+        <!-- Call to Action -->
+        <div class="cta-box">
+            <div class="cta-title">Get Your Documents Professionally Reviewed</div>
+            <div class="cta-text">
+                Our legal team specializes in wellness businesses and can review, customize, and perfect your contracts to ensure maximum protection. Book a free consultation to discuss your specific needs.
+            </div>
+            <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" class="cta-link">📅 Book Free Legal Consultation</a>
+        </div>
+    </div>
+
+</body>
+
+</html>

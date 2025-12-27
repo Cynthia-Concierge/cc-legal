@@ -28,8 +28,8 @@ export const IpProtectionWidget: React.FC<IpProtectionWidgetProps> = ({
             >
                 <div className="flex items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-slate-900 text-sm font-semibold">
-                        <BadgeCheck className="text-brand-600" size={18} />
-                        Brand Protection
+                        <div className="flex items-center justify-center w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-xs font-bold">3</div>
+                        Business Name & Trademark Check
                     </CardTitle>
                     <div className="flex items-center gap-2">
                         {hasTakenQuiz ? (
@@ -47,8 +47,8 @@ export const IpProtectionWidget: React.FC<IpProtectionWidgetProps> = ({
                         />
                     </div>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                    Check if your business name is safe from trademark infringement.
+                <p className="text-xs text-slate-500 mt-1 pl-7">
+                    Check whether your business name is clear to use or could conflict with existing trademarks.
                 </p>
             </div>
 
@@ -98,10 +98,9 @@ export const IpProtectionWidget: React.FC<IpProtectionWidgetProps> = ({
                     ) : (
                         <div className="space-y-4">
                             <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                <h4 className="font-medium text-slate-900 mb-1 text-sm">Is your name at risk?</h4>
+                                <h4 className="font-medium text-slate-900 mb-1 text-sm">Is your business name clear to use?</h4>
                                 <p className="text-xs text-slate-500 leading-relaxed">
-                                    Someone could trademark your business name and force you to rebrand.
-                                    Take our 2-minute quiz to check your risk level.
+                                    We’ll take a quick look at your business name to see whether it could conflict with existing trademarks — and flag any potential concerns.
                                 </p>
                             </div>
 
@@ -111,7 +110,7 @@ export const IpProtectionWidget: React.FC<IpProtectionWidgetProps> = ({
                                 size="sm"
                                 className="w-full bg-brand-600 hover:bg-brand-700 text-white"
                             >
-                                Start Brand Protection Quiz
+                                👉 Check My Business Name
                             </Button>
                         </div>
                     )}

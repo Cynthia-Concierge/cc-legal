@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refund and Cancellation Policy</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 12px; line-height: 1.6; color: #000; padding: 60px 80px; background: white; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #000; padding-bottom: 20px; }
+        .document-title { font-size: 24pt; font-weight: bold; margin-top: 15px; text-transform: uppercase; }
+        .date { text-align: right; font-style: italic; margin-bottom: 20px; color: #555; }
+        .info-box { background: #f8f8f8; border: 2px solid #333; padding: 25px; margin: 30px 0; border-radius: 5px; }
+        .info-box h3 { margin-bottom: 15px; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        .info-row { display: flex; margin-bottom: 8px; }
+        .info-label { font-weight: bold; width: 200px; flex-shrink: 0; }
+        .info-value { flex: 1; }
+        .section { margin: 25px 0; }
+        .section-title { font-size: 13px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+        .section-content { text-align: justify; margin-bottom: 10px; }
+        ul { margin-left: 40px; margin-bottom: 15px; }
+        li { margin-bottom: 5px; }
+        strong { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header"><div class="document-title">REFUND AND CANCELLATION POLICY</div></div>
+    <div class="date">Last Updated: {{date}}</div>
+    <div class="info-box">
+        <h3>Business Information</h3>
+        <div class="info-row"><div class="info-label">Business Name:</div><div class="info-value">{{BusinessName}}</div></div>
+        <div class="info-row"><div class="info-label">Email:</div><div class="info-value">{{Email}}</div></div>
+        <div class="info-row"><div class="info-label">Phone:</div><div class="info-value">{{Phone}}</div></div>
+    </div>
+    <div class="section">
+        <div class="section-title">1. MEMBERSHIP CANCELLATIONS</div>
+        <div class="section-content">
+            <strong>Monthly Memberships:</strong> Cancel at any time with at least 7 days' notice before your next billing date. No refunds for partial months.
+        </div>
+        <div class="section-content">
+            <strong>Annual Memberships:</strong> Generally non-refundable. Exceptions may be made for medical reasons (with documentation), relocation over 50 miles, or other extenuating circumstances at our discretion.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">2. CLASS PACKAGES AND CREDITS</div>
+        <div class="section-content">
+            <strong>Prepaid Packages:</strong> Non-refundable. All class credits must be used before expiration date. Extensions may be granted for medical reasons with documentation.
+        </div>
+        <div class="section-content">
+            <strong>Drop-In Classes:</strong> Refunds available if you cancel at least 12 hours before class start time. No refunds for late cancellations or no-shows.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">3. WORKSHOPS AND EVENTS</div>
+        <div class="section-content">
+            <strong>Cancellation Timeline:</strong>
+        </div>
+        <ul>
+            <li>More than 14 days before event: Full refund minus processing fee</li>
+            <li>7-14 days before event: 50% refund</li>
+            <li>Less than 7 days before event: No refund</li>
+            <li>Transfers to another participant may be allowed with approval</li>
+        </ul>
+    </div>
+    <div class="section">
+        <div class="section-title">4. ONLINE COURSES AND DIGITAL PRODUCTS</div>
+        <div class="section-content">
+            Digital products and online courses are non-refundable once access has been granted. If you experience technical issues preventing access, contact us at {{Email}} for assistance.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">5. RETREATS AND TRAVEL PROGRAMS</div>
+        <div class="section-content">
+            <strong>Cancellation Fees:</strong>
+        </div>
+        <ul>
+            <li>More than 90 days before: Full refund minus $200 administrative fee</li>
+            <li>60-90 days before: 50% refund</li>
+            <li>30-60 days before: 25% refund</li>
+            <li>Less than 30 days before: No refund</li>
+        </ul>
+        <div class="section-content">
+            We strongly recommend purchasing travel insurance. <strong>{{BusinessName}}</strong> is not responsible for travel disruptions, weather, or personal emergencies.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">6. PROVIDER CANCELLATIONS</div>
+        <div class="section-content">
+            If <strong>{{BusinessName}}</strong> cancels a class, workshop, or event, you will receive a full refund or credit. We are not liable for consequential damages such as travel costs.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">7. REFUND PROCESSING</div>
+        <div class="section-content">
+            Approved refunds will be processed within 14 business days to the original payment method. Processing fees (typically 3-5%) may be deducted from refunds.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">8. CHARGEBACKS</div>
+        <div class="section-content">
+            Initiating a chargeback without first contacting us may result in immediate membership termination and possible legal action. Please contact {{Email}} to resolve any billing disputes.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">9. CHANGES TO THIS POLICY</div>
+        <div class="section-content">
+            We reserve the right to modify this policy at any time. Changes will not affect purchases made before the update.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">10. CONTACT FOR CANCELLATIONS</div>
+        <div class="section-content">
+            To request a cancellation or refund, please contact us at:
+        </div>
+        <div class="section-content">
+            Email: {{Email}}<br>
+            Phone: {{Phone}}
+        </div>
+    </div>
+</body>
+</html>

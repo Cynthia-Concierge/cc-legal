@@ -496,65 +496,73 @@ export class EmailService {
       const riskLevelColor = riskLevel.includes('HIGH') ? '#ef4444' :
         riskLevel.includes('MODERATE') ? '#f59e0b' : '#10b981';
 
+      const riskIcon = riskLevel.includes('HIGH') ? '⚠️' : riskLevel.includes('MODERATE') ? '⚡' : '✅';
+
       const html = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #ffffff;">
           <h1 style="color: #1a1a1a; font-size: 24px; margin-bottom: 20px;">Hi ${name || 'there'},</h1>
-          
+
           <p style="color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-            Based on your responses, we've created a <strong>Preliminary Trademark Risk Snapshot</strong> for your brand.
-          </p>
-          
-          <p style="color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-            This report highlights potential risk factors to consider before investing further in branding or expansion.
+            Your <strong>Trademark Risk Snapshot</strong> for <strong>${businessName}</strong> is ready!
           </p>
 
-          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${riskLevelColor};">
-            <p style="margin: 0 0 10px 0; font-weight: bold; color: #1a1a1a;">Your Risk Assessment:</p>
-            <p style="margin: 5px 0; color: #555;">
-              <strong>Risk Level:</strong> 
-              <span style="color: ${riskLevelColor}; font-weight: bold;">${riskLevel}</span>
-            </p>
-            <p style="margin: 5px 0; color: #555;">
-              <strong>Risk Score:</strong> ${score}/40
-            </p>
+          <!-- Risk Badge (Large, Visual) -->
+          <div style="background: ${riskLevel.includes('HIGH') ? '#fef2f2' : riskLevel.includes('MODERATE') ? '#fff7ed' : '#f0fdf4'}; border: 3px solid ${riskLevelColor}; padding: 25px; border-radius: 12px; margin: 25px 0; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 10px;">${riskIcon}</div>
+            <div style="font-size: 28px; font-weight: bold; color: ${riskLevelColor}; margin-bottom: 8px;">${riskLevel}</div>
+            <div style="font-size: 14px; color: #555;">Risk Score: ${score}/40</div>
           </div>
 
           ${pdfBuffer ? `
-          <div style="text-align: center; margin: 30px 0;">
-            <div style="background-color: #14b8a6; color: white; padding: 16px 32px; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-              📄 Your Trademark Risk Report (PDF)
-            </div>
-          </div>
-          <div style="background-color: #f0f9ff; border: 2px solid #14b8a6; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <p style="color: #1a1a1a; font-size: 15px; font-weight: bold; margin: 0 0 10px 0; text-align: center;">
-              📎 PDF Attachment Included
-            </p>
-            <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
-              Your <strong>Trademark Risk Report PDF</strong> is attached to this email. 
-              Look for the attachment icon (📎) in your email client to download it.
-            </p>
-            <p style="color: #666; font-size: 13px; margin: 15px 0 0 0; text-align: center; font-style: italic;">
-              The file is named: <code style="background: white; padding: 2px 6px; border-radius: 4px; font-size: 12px;">Trademark-Risk-Report-${businessName.replace(/[^a-zA-Z0-9]/g, '-')}.pdf</code>
-            </p>
+          <!-- PDF Download Section -->
+          <div style="background: #f0f9ff; border: 2px solid #14b8a6; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <p style="font-size: 18px; font-weight: bold; margin: 0 0 10px 0; color: #1a1a1a;">📄 Your Report is Attached</p>
+            <p style="font-size: 14px; color: #555; margin: 0;">Download the PDF to see USPTO conflict details and trademark protection recommendations</p>
           </div>
           ` : ''}
 
-          <div style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0; font-size: 13px; color: #856404; line-height: 1.6;">
-              <strong>Important:</strong> This is a preliminary screening based on business and branding factors. 
-              It is not a legal opinion, does not constitute legal advice, and does not include a comprehensive 
-              search of USPTO, WIPO, or state trademark databases.
+          <!-- Separator -->
+          <hr style="margin: 30px 0; border: none; border-top: 2px solid #e0e0e0;" />
+
+          <!-- CTA Section (PROMINENT with Gradient) -->
+          <div style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); padding: 30px; border-radius: 12px; text-align: center; margin: 30px 0;">
+            <h2 style="color: white; font-size: 22px; margin: 0 0 15px 0;">Want a Full Trademark Analysis?</h2>
+            <p style="color: white; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+              This is a preliminary automated scan. Our trademark attorney can review your specific situation, explain the USPTO search results, and recommend personalized protection strategies for ${businessName}.
+            </p>
+
+            <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+              <tr>
+                <td style="background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                  <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" style="display: inline-block; background: white; color: #14b8a6; font-size: 18px; font-weight: bold; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-family: sans-serif;">
+                    📅 Book Your Free Strategy Call
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="color: rgba(255,255,255,0.9); font-size: 14px; margin: 15px 0 0 0;">
+              30-minute consultation • No obligation • Trademark expert
             </p>
           </div>
 
-          <p style="color: #555; font-size: 16px; line-height: 1.6; margin-top: 30px;">
-            If you'd like, we can also run a full attorney-led trademark search and walk you through next steps.
-          </p>
+          <!-- Disclaimer -->
+          <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; font-size: 13px; color: #92400e; line-height: 1.6;">
+            <strong>Important:</strong> This is a preliminary screening based on automated USPTO database search.
+            It is not a legal opinion or comprehensive trademark clearance search. For full trademark analysis including
+            state registrations, common law usage, and domain availability, consult with a trademark attorney.
+          </div>
 
+          <!-- Closing -->
           <p style="color: #1a1a1a; margin-top: 30px;">
             Best,<br>
             <strong>The Conscious Counsel Team</strong>
           </p>
+
+          <!-- Footer -->
+          <div style="border-top: 1px solid #e0e0e0; margin-top: 30px; padding-top: 20px; color: #999; font-size: 12px; text-align: center;">
+            <p>© ${new Date().getFullYear()} Conscious Counsel. All rights reserved.</p>
+          </div>
         </div>
       `;
 
@@ -591,49 +599,52 @@ export class EmailService {
   }
 
   /**
-   * Send onboarding package with 3 free documents
+   * Send onboarding package notification (no attachments - all docs in vault)
    */
   async sendOnboardingPackageEmail(
     email: string,
     name: string,
-    documents: { filename: string; content: Buffer }[]
+    documentCount: number,
+    documentTitles: string[]
   ): Promise<any> {
     try {
-      console.log(`[EmailService] Sending onboarding package:`);
+      console.log(`[EmailService] Sending onboarding package notification:`);
       console.log(`[EmailService]   To: ${email}`);
-      console.log(`[EmailService]   Attachments: ${documents.length}`);
+      console.log(`[EmailService]   Documents Generated: ${documentCount}`);
 
-      const subject = `Your Free Legal Documents are Ready! 📄`;
+      const subject = `Your ${documentCount} Legal Documents are Ready! 📄`;
+
+      // Generate document list HTML (show up to 8 documents)
+      const displayTitles = documentTitles.slice(0, 8);
+      const documentListHtml = displayTitles.map(title => {
+        return `<li style="margin-bottom: 8px; color: #555;"><strong>${title}</strong></li>`;
+      }).join('');
 
       const html = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h1 style="color: #1a1a1a; font-size: 24px; margin-bottom: 20px;">Hi ${name || 'there'},</h1>
-          
+
           <p style="color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-            Congratulations on taking the first step towards protecting your wellness business!
+            Great news! We've automatically generated <strong>${documentCount} personalized legal documents</strong> for your wellness business.
           </p>
-          
+
           <p style="color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-            We've automatically generated your three free essential legal documents based on your profile. They are attached to this email as PDFs, ready for you to use.
+            All documents are customized with your business details and ready to download from your dashboard.
           </p>
 
           <div style="background-color: #f0f9ff; border: 2px solid #14b8a6; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <p style="color: #1a1a1a; font-size: 15px; font-weight: bold; margin: 0 0 10px 0; text-align: center;">
-              📎 3 Documents Attached
+            <p style="color: #1a1a1a; font-size: 16px; font-weight: bold; margin: 0 0 15px 0; text-align: center;">
+              ✅ ${documentCount} Documents Ready in Your Vault
             </p>
             <ul style="color: #555; font-size: 14px; line-height: 1.6; margin: 0; padding-left: 20px;">
-              <li style="margin-bottom: 5px;"><strong>Social Media Disclaimer</strong> - Protects your content liability</li>
-              <li style="margin-bottom: 5px;"><strong>Photo Release Form</strong> - For using client photos legally</li>
-              <li><strong>Client Intake Form</strong> - Essential client onboarding</li>
+              ${documentListHtml}
+              ${documentTitles.length > 8 ? `<li style="margin-bottom: 8px; color: #555;"><em>...and ${documentTitles.length - 8} more</em></li>` : ''}
             </ul>
-             <p style="color: #666; font-size: 13px; margin: 15px 0 0 0; text-align: center;">
-              Look for the attachments in your email client.
-            </p>
           </div>
 
           <p style="color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-            <strong>What about the rest?</strong><br/>
-            You have other recommended documents that require more care (like Waivers and Service Agreements). You can finalize these in your <a href="https://free.consciouscounsel.ca/wellness/dashboard">Legal Dashboard</a>.
+            <strong>What's Next?</strong><br/>
+            Access your Legal Dashboard to view, customize, and download all your documents. Each document is 100% editable and ready to use immediately.
           </p>
 
           <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="text-align:center;margin-top:32px;margin-bottom:32px">
@@ -664,11 +675,11 @@ export class EmailService {
         from: fromAddress,
         to: email,
         subject: subject,
-        html: html,
-        attachments: documents // { filename, content } objects
+        html: html
+        // No attachments - all documents are saved in the vault
       });
 
-      console.log('[EmailService] Onboarding package sent:', result);
+      console.log('[EmailService] Onboarding package notification sent:', result);
       return result;
     } catch (error: any) {
       console.error('[EmailService] Error sending onboarding package:', error);
@@ -718,6 +729,476 @@ export class EmailService {
       return result;
     } catch (error) {
       console.error('[EmailService] Error sending admin trademark alert:', error);
+    }
+  }
+
+  /**
+   * Send Case Study Email (Day 3 of nurture sequence)
+   */
+  async sendCaseStudyEmail(
+    email: string,
+    userData: {
+      name?: string;
+      businessName?: string;
+      businessType?: string;
+    }
+  ): Promise<any> {
+    try {
+      console.log(`[EmailService] Sending Case Study email to: ${email}`);
+
+      const { render } = await import('@react-email/render');
+      const { CaseStudyEmail } = await import('../../src/emails/CaseStudyEmail.js');
+
+      const dashboardLink = process.env.DASHBOARD_URL ||
+        (process.env.NODE_ENV === 'production'
+          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+          : 'http://localhost:5173/wellness/dashboard');
+
+      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+
+      const emailHtml = await render(
+        CaseStudyEmail({
+          name: userData.name,
+          businessName: userData.businessName,
+          businessType: userData.businessType,
+          dashboardLink: dashboardLink,
+          calendlyLink: calendlyLink,
+        })
+      );
+
+      const subject = `How a ${userData.businessType || 'wellness business'} avoided a $50K lawsuit`;
+
+      const result = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: email,
+        subject: subject,
+        html: emailHtml,
+      });
+
+      console.log('[EmailService] Case Study email sent successfully');
+      return result;
+    } catch (error: any) {
+      console.error('[EmailService] Error sending Case Study email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send Risk Scenario Email (Day 5 of nurture sequence)
+   */
+  async sendRiskScenarioEmail(
+    email: string,
+    userData: {
+      name?: string;
+      businessName?: string;
+      businessType?: string;
+      hasPhysicalMovement?: boolean;
+      hostsRetreats?: boolean;
+      hiresStaff?: boolean;
+      collectsOnline?: boolean;
+    }
+  ): Promise<any> {
+    try {
+      console.log(`[EmailService] Sending Risk Scenario email to: ${email}`);
+
+      const { render } = await import('@react-email/render');
+      const { RiskScenarioEmail } = await import('../../src/emails/RiskScenarioEmail.js');
+
+      const dashboardLink = process.env.DASHBOARD_URL ||
+        (process.env.NODE_ENV === 'production'
+          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+          : 'http://localhost:5173/wellness/dashboard');
+
+      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+
+      const emailHtml = await render(
+        RiskScenarioEmail({
+          name: userData.name,
+          businessName: userData.businessName,
+          businessType: userData.businessType,
+          hasPhysicalMovement: userData.hasPhysicalMovement,
+          hostsRetreats: userData.hostsRetreats,
+          hiresStaff: userData.hiresStaff,
+          collectsOnline: userData.collectsOnline,
+          dashboardLink: dashboardLink,
+          calendlyLink: calendlyLink,
+        })
+      );
+
+      // Dynamic subject based on business type
+      let subject = 'What happens if something goes wrong?';
+      if (userData.hostsRetreats) {
+        subject = 'What happens if a client gets injured at your retreat?';
+      } else if (userData.hasPhysicalMovement) {
+        subject = 'What happens if a client gets injured during class?';
+      } else if (userData.collectsOnline) {
+        subject = 'What happens if a client disputes a charge?';
+      }
+
+      const result = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: email,
+        subject: subject,
+        html: emailHtml,
+      });
+
+      console.log('[EmailService] Risk Scenario email sent successfully');
+      return result;
+    } catch (error: any) {
+      console.error('[EmailService] Error sending Risk Scenario email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send Social Proof Email (Day 7 of nurture sequence)
+   */
+  async sendSocialProofEmail(
+    email: string,
+    userData: {
+      name?: string;
+      businessName?: string;
+      businessType?: string;
+      totalProtected?: number;
+      recentSignups?: number;
+    }
+  ): Promise<any> {
+    try {
+      console.log(`[EmailService] Sending Social Proof email to: ${email}`);
+
+      const { render } = await import('@react-email/render');
+      const { SocialProofEmail } = await import('../../src/emails/SocialProofEmail.js');
+
+      const dashboardLink = process.env.DASHBOARD_URL ||
+        (process.env.NODE_ENV === 'production'
+          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+          : 'http://localhost:5173/wellness/dashboard');
+
+      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+
+      const emailHtml = await render(
+        SocialProofEmail({
+          name: userData.name,
+          businessName: userData.businessName,
+          businessType: userData.businessType,
+          totalProtected: userData.totalProtected || 1247,
+          recentSignups: userData.recentSignups || 34,
+          dashboardLink: dashboardLink,
+          calendlyLink: calendlyLink,
+        })
+      );
+
+      const subject = `${userData.totalProtected || 1247}+ wellness businesses trust Conscious Counsel for legal protection`;
+
+      const result = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: email,
+        subject: subject,
+        html: emailHtml,
+      });
+
+      console.log('[EmailService] Social Proof email sent successfully');
+      return result;
+    } catch (error: any) {
+      console.error('[EmailService] Error sending Social Proof email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send Final Reminder Email (Day 10 of nurture sequence)
+   */
+  async sendFinalReminderEmail(
+    email: string,
+    userData: {
+      name?: string;
+      businessName?: string;
+      businessType?: string;
+    }
+  ): Promise<any> {
+    try {
+      console.log(`[EmailService] Sending Final Reminder email to: ${email}`);
+
+      const { render } = await import('@react-email/render');
+      const { FinalReminderEmail } = await import('../../src/emails/FinalReminderEmail.js');
+
+      const dashboardLink = process.env.DASHBOARD_URL ||
+        (process.env.NODE_ENV === 'production'
+          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+          : 'http://localhost:5173/wellness/dashboard');
+
+      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+
+      const emailHtml = await render(
+        FinalReminderEmail({
+          name: userData.name,
+          businessName: userData.businessName,
+          businessType: userData.businessType,
+          dashboardLink: dashboardLink,
+          calendlyLink: calendlyLink,
+        })
+      );
+
+      const subject = 'Last chance: Free consultation expires in 48 hours';
+
+      const result = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: email,
+        subject: subject,
+        html: emailHtml,
+      });
+
+      console.log('[EmailService] Final Reminder email sent successfully');
+      return result;
+    } catch (error: any) {
+      console.error('[EmailService] Error sending Final Reminder email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a magic link email via Resend
+   */
+  async sendMagicLinkEmail(email: string, magicLinkUrl: string, name: string = ''): Promise<any> {
+    try {
+      console.log(`[EmailService] Sending magic link email:`);
+      console.log(`[EmailService]   From: ${this.fromEmail}`);
+      console.log(`[EmailService]   To: ${email}`);
+      console.log(`[EmailService]   Magic Link URL: ${magicLinkUrl.substring(0, 50)}...`);
+
+      const result = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: email,
+        subject: 'Sign in to your dashboard',
+        html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="en">
+  <head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <meta name="x-apple-disable-message-reformatting" />
+  </head>
+  <body style='background-color:rgb(243,244,246);margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"'>
+    <table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation" align="center">
+      <tbody>
+        <tr>
+          <td style='background-color:rgb(243,244,246);margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"'>
+            <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-width:1px;border-style:solid;border-color:rgb(234,234,234);border-radius:0.25rem;margin-top:40px;margin-bottom:40px;margin-left:auto;margin-right:auto;padding:20px;max-width:465px;background-color:rgb(255,255,255)">
+              <tbody>
+                <tr style="width:100%">
+                  <td>
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:32px;margin-bottom:32px">
+                      <tbody>
+                        <tr>
+                          <td>
+                            <p style="color:rgb(0,0,0);font-size:24px;font-weight:700;text-align:center;padding:0px;margin-top:0px;margin-bottom:0px;margin-left:auto;margin-right:auto;line-height:24px">
+                              Conscious Counsel
+                            </p>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin-top:16px;margin-bottom:16px">
+                      Hi ${name || 'there'},
+                    </p>
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin-top:16px;margin-bottom:16px">
+                      Here's your secure link to sign in to your Conscious Counsel wellness dashboard.
+                    </p>
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="text-align:center;margin-top:32px;margin-bottom:32px">
+                      <tbody>
+                        <tr>
+                          <td>
+                            <a href="${magicLinkUrl}" style="background-color:rgb(20,184,166);border-radius:0.25rem;color:rgb(255,255,255);font-size:16px;font-weight:600;text-decoration-line:none;text-align:center;padding:12px 24px;display:inline-block;line-height:100%;text-decoration:none;">
+                              <span style="max-width:100%;display:inline-block;line-height:120%;">Sign in to your dashboard</span>
+                            </a>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="background-color:rgb(249,250,251);padding:1rem;border-radius:0.375rem;border-width:1px;border-color:rgb(243,244,246);margin-bottom:24px">
+                      <tbody>
+                        <tr>
+                          <td>
+                            <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin:0px;margin-top:0px;margin-bottom:0px;margin-left:0px;margin-right:0px">
+                              <strong>🔒 Security tip:</strong><br />This link will expire shortly and can only be used once. If you didn't request this email, you can safely ignore it.
+                            </p>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin-top:16px;margin-bottom:16px">
+                      If the button above doesn't work, copy and paste this link into your browser:
+                    </p>
+                    <p style="color:rgb(13,148,136);font-size:14px;line-height:24px;margin-top:8px;margin-bottom:16px;word-break:break-all">
+                      <a href="${magicLinkUrl}" style="color:rgb(13,148,136);text-decoration-line:underline" target="_blank">${magicLinkUrl}</a>
+                    </p>
+                    <hr style="border-width:1px;border-style:solid;border-color:rgb(234,234,234);margin-top:26px;margin-bottom:26px;margin-left:0px;margin-right:0px;width:100%;border:none;border-top:1px solid #eaeaea" />
+                    <p style="color:rgb(102,102,102);font-size:12px;line-height:24px;text-align:center;margin-top:16px;margin-bottom:16px">
+                      Need help?
+                      <a href="mailto:chad@consciouscounsel.ca" style="color:rgb(13,148,136);text-decoration-line:underline" target="_blank">Email us here</a>
+                      (chad@consciouscounsel.ca)
+                    </p>
+                    <p style="color:rgb(102,102,102);font-size:12px;line-height:24px;text-align:center;margin-top:16px;margin-bottom:16px">
+                      © ${new Date().getFullYear()} Conscious Counsel. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>`
+      });
+
+      console.log('[EmailService] Magic link email sent successfully:', result);
+      return result;
+    } catch (error: any) {
+      console.error('[EmailService] ===== ERROR SENDING MAGIC LINK EMAIL =====');
+      console.error('[EmailService] Error details:', {
+        message: error?.message,
+        status: error?.status,
+        statusCode: error?.statusCode,
+        response: error?.response,
+      });
+      if (error?.response) {
+        console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Send an email when a new contact is created
+   */
+  async sendContactCreatedEmail(email: string, firstName: string = '', magicLinkUrl: string = ''): Promise<any> {
+    try {
+      console.log(`[EmailService] Sending contact created email:`);
+      console.log(`[EmailService]   From: ${this.fromEmail}`);
+      console.log(`[EmailService]   To: ${email}`);
+      console.log(`[EmailService]   Magic Link URL: ${magicLinkUrl.substring(0, 50)}...`);
+
+      const result = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: email,
+        subject: 'Your personalized legal documents are ready! 🛡️',
+        html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="en">
+  <head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <meta name="x-apple-disable-message-reformatting" />
+  </head>
+  <body style='background-color:rgb(243,244,246);margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"'>
+    <table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation" align="center">
+      <tbody>
+        <tr>
+          <td style='background-color:rgb(243,244,246);margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"'>
+            <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-width:1px;border-style:solid;border-color:rgb(234,234,234);border-radius:0.25rem;margin-top:40px;margin-bottom:40px;margin-left:auto;margin-right:auto;padding:20px;max-width:465px;background-color:rgb(255,255,255)">
+              <tbody>
+                <tr style="width:100%">
+                  <td>
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:32px;margin-bottom:32px">
+                      <tbody>
+                        <tr>
+                          <td>
+                            <p style="color:rgb(0,0,0);font-size:24px;font-weight:700;text-align:center;padding:0px;margin-top:0px;margin-bottom:0px;margin-left:auto;margin-right:auto;line-height:24px">
+                              Conscious Counsel
+                            </p>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin-top:16px;margin-bottom:16px">
+                      Hi ${firstName || 'there'},
+                    </p>
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin-top:16px;margin-bottom:16px">
+                      Your personalized legal documents are ready in your Conscious Counsel dashboard.
+                    </p>
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin-top:16px;margin-bottom:16px">
+                      👉 Access your dashboard instantly (no password needed):
+                    </p>
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="text-align:center;margin-top:32px;margin-bottom:32px">
+                      <tbody>
+                        <tr>
+                          <td>
+                            <a href="${magicLinkUrl || 'https://free.consciouscounsel.ca/wellness/dashboard'}" style="background-color:rgb(20,184,166);border-radius:0.25rem;color:rgb(255,255,255);font-size:16px;font-weight:600;text-decoration-line:none;text-align:center;padding:12px 24px;display:inline-block;line-height:100%;text-decoration:none;">
+                              <span style="max-width:100%;display:inline-block;line-height:120%;">View My Legal Documents</span>
+                            </a>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin-top:16px;margin-bottom:16px">
+                      If you're prompted, just confirm your email — it takes about 30 seconds.
+                    </p>
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;font-weight:700;margin-top:16px;margin-bottom:16px">
+                      Once you're in, you can:
+                    </p>
+                    <ul style="color:rgb(0,0,0);font-size:14px;line-height:24px;padding-left:1.25rem;margin-top:0px">
+                      <li style="margin-bottom:0.5rem">
+                        <strong>Download your personalized legal documents</strong>
+                      </li>
+                      <li style="margin-bottom:0.5rem">
+                        <strong>Complete your business profile</strong> to unlock more protection
+                      </li>
+                      <li style="margin-bottom:0.5rem">
+                        <strong>See your legal health score</strong> and next steps
+                      </li>
+                    </ul>
+                    ${magicLinkUrl ? `
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="background-color:rgb(249,250,251);padding:1rem;border-radius:0.375rem;border-width:1px;border-color:rgb(243,244,246);margin-bottom:24px">
+                      <tbody>
+                        <tr>
+                          <td>
+                            <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin:0px;margin-top:0px;margin-bottom:0px;margin-left:0px;margin-right:0px">
+                              If the button doesn't work, you can use this link instead:
+                            </p>
+                            <p style="color:rgb(13,148,136);font-size:12px;line-height:20px;margin-top:8px;margin-bottom:0px;word-break:break-all">
+                              <a href="${magicLinkUrl}" style="color:rgb(13,148,136);text-decoration-line:underline" target="_blank">${magicLinkUrl}</a>
+                            </p>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    ` : ''}
+                    <p style="color:rgb(0,0,0);font-size:14px;line-height:24px;margin-top:16px;margin-bottom:16px">
+                      If you have any questions at all - <a href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" style="color:rgb(13,148,136);text-decoration-line:underline" target="_blank">schedule a call here</a>.
+                    </p>
+                    <hr style="border-width:1px;border-style:solid;border-color:rgb(234,234,234);margin-top:26px;margin-bottom:26px;margin-left:0px;margin-right:0px;width:100%;border:none;border-top:1px solid #eaeaea" />
+                    <p style="color:rgb(102,102,102);font-size:12px;line-height:24px;text-align:center;margin-top:16px;margin-bottom:16px">
+                      Need help?
+                      <a href="mailto:chad@consciouscounsel.ca" style="color:rgb(13,148,136);text-decoration-line:underline" target="_blank">Email us here</a>
+                      (chad@consciouscounsel.ca)
+                    </p>
+                    <p style="color:rgb(102,102,102);font-size:12px;line-height:24px;text-align:center;margin-top:16px;margin-bottom:16px">
+                      © ${new Date().getFullYear()} Conscious Counsel. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>`
+      });
+
+      console.log('[EmailService] Contact created email sent successfully:', result);
+      return result;
+    } catch (error: any) {
+      console.error('[EmailService] ===== ERROR SENDING CONTACT CREATED EMAIL =====');
+      console.error('[EmailService] Error details:', {
+        message: error?.message,
+        status: error?.status,
+        statusCode: error?.statusCode,
+        response: error?.response,
+      });
+      if (error?.response) {
+        console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
+      }
+      throw error;
     }
   }
 }

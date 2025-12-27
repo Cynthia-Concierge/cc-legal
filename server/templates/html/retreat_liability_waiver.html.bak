@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retreat Liability Waiver</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 12px; line-height: 1.6; color: #000; padding: 60px 80px; background: white; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #000; padding-bottom: 20px; }
+        .document-title { font-size: 24pt; font-weight: bold; margin-top: 15px; text-transform: uppercase; }
+        .date { text-align: right; font-style: italic; margin-bottom: 20px; color: #555; }
+        .info-box { background: #f8f8f8; border: 2px solid #333; padding: 25px; margin: 30px 0; border-radius: 5px; }
+        .info-box h3 { margin-bottom: 15px; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        .info-row { display: flex; margin-bottom: 8px; }
+        .info-label { font-weight: bold; width: 200px; flex-shrink: 0; }
+        .info-value { flex: 1; }
+        .section { margin: 25px 0; }
+        .section-title { font-size: 13px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+        .section-content { text-align: justify; margin-bottom: 10px; }
+        ul { margin-left: 40px; margin-bottom: 15px; }
+        li { margin-bottom: 5px; }
+        strong { font-weight: bold; }
+        .form-row { margin-top: 30px; page-break-inside: avoid; }
+        .form-label { font-weight: bold; margin-bottom: 5px; }
+        .form-line { border-bottom: 1px solid #000; min-height: 40px; margin-bottom: 15px; }
+        .signature-section { margin-top: 40px; page-break-inside: avoid; }
+        .warning-box { background: #fff9e6; border: 2px solid #d4a900; padding: 15px; margin: 20px 0; border-radius: 5px; }
+        .warning-box strong { display: block; margin-bottom: 5px; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="header"><div class="document-title">RETREAT LIABILITY WAIVER</div></div>
+    <div class="date">Last Updated: {{date}}</div>
+    <div class="info-box">
+        <h3>Retreat Organizer Information</h3>
+        <div class="info-row"><div class="info-label">Organizer:</div><div class="info-value">{{BusinessName}}</div></div>
+        <div class="info-row"><div class="info-label">Legal Entity:</div><div class="info-value">{{LegalEntityName}}</div></div>
+        <div class="info-row"><div class="info-label">Contact:</div><div class="info-value">{{Email}} | {{Phone}}</div></div>
+    </div>
+    <div class="warning-box">
+        <strong>IMPORTANT NOTICE</strong>
+        This waiver affects your legal rights. By signing, you waive claims for injuries or damages during the retreat, including travel, lodging, and activities.
+    </div>
+    <div class="section">
+        <div class="section-title">1. RETREAT ACTIVITIES AND RISKS</div>
+        <div class="section-content">
+            I acknowledge that participating in retreats organized by <strong>{{BusinessName}}</strong> involves physical activities (yoga, hiking, swimming, etc.), travel, shared accommodations, and exposure to unfamiliar environments.
+        </div>
+        <div class="section-content">
+            Risks include but are not limited to: physical injury, illness, foodborne illness, allergic reactions, adverse weather, travel delays, lost luggage, theft, political instability, natural disasters, and in extreme cases, permanent disability or death.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">2. ASSUMPTION OF RISK</div>
+        <div class="section-content">
+            I voluntarily assume all risks associated with retreat participation, including those caused by negligence of <strong>{{BusinessName}}</strong>, venue operators, or third-party service providers.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">3. RELEASE OF LIABILITY</div>
+        <div class="section-content">
+            I release and waive any claims against <strong>{{BusinessName}}</strong>, its owners, staff, instructors, contractors, and affiliated parties from liability for injuries, damages, or losses arising from retreat participation.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">4. MEDICAL CLEARANCE</div>
+        <div class="section-content">
+            I confirm that I am in good health and have consulted a physician before participating. I will disclose any medical conditions, injuries, allergies, or dietary restrictions to retreat organizers.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">5. TRAVEL INSURANCE</div>
+        <div class="section-content">
+            I understand that <strong>{{BusinessName}}</strong> strongly recommends purchasing travel insurance covering trip cancellation, medical emergencies, and evacuation. I assume all financial risks if I decline insurance.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">6. PARTICIPANT RESPONSIBILITIES</div>
+        <ul>
+            <li>Follow all instructions from retreat leaders and local guides</li>
+            <li>Respect local customs, laws, and regulations</li>
+            <li>Maintain respectful behavior toward other participants and staff</li>
+            <li>Secure personal belongings and valuables</li>
+            <li>Arrive prepared with required items (passport, visas, medications, etc.)</li>
+        </ul>
+    </div>
+    <div class="section">
+        <div class="section-title">7. CANCELLATION AND REFUNDS</div>
+        <div class="section-content">
+            Retreat cancellations are subject to the cancellation policy provided at booking. Refunds are not guaranteed for participant-initiated cancellations. <strong>{{BusinessName}}</strong> is not liable for costs incurred due to cancellations, delays, or changes.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">8. EMERGENCY MEDICAL AUTHORIZATION</div>
+        <div class="section-content">
+            I authorize <strong>{{BusinessName}}</strong> to arrange emergency medical treatment if I am unable to do so. I am responsible for all medical costs.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">9. GOVERNING LAW</div>
+        <div class="section-content">
+            This Waiver is governed by the laws of <strong>{{Jurisdiction}}</strong>.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT</div>
+        <div class="section-content">
+            I HAVE READ THIS WAIVER, UNDERSTAND IT, AND SIGN IT VOLUNTARILY. I UNDERSTAND THAT I AM GIVING UP SUBSTANTIAL LEGAL RIGHTS.
+        </div>
+    </div>
+    <div class="signature-section">
+        <div class="form-row"><div class="form-label">Participant Name:</div><div class="form-line"></div></div>
+        <div class="form-row"><div class="form-label">Signature:</div><div class="form-line"></div></div>
+        <div class="form-row"><div class="form-label">Date:</div><div class="form-line"></div></div>
+        <div class="form-row"><div class="form-label">Email:</div><div class="form-line"></div></div>
+        <div class="form-row"><div class="form-label">Emergency Contact Name & Phone:</div><div class="form-line"></div></div>
+    </div>
+</body>
+</html>

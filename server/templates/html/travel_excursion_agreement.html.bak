@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel and Excursion Agreement</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 12px; line-height: 1.6; color: #000; padding: 60px 80px; background: white; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #000; padding-bottom: 20px; }
+        .document-title { font-size: 22pt; font-weight: bold; margin-top: 15px; text-transform: uppercase; }
+        .date { text-align: right; font-style: italic; margin-bottom: 20px; color: #555; }
+        .info-box { background: #f8f8f8; border: 2px solid #333; padding: 25px; margin: 30px 0; border-radius: 5px; }
+        .info-box h3 { margin-bottom: 15px; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        .info-row { display: flex; margin-bottom: 8px; }
+        .info-label { font-weight: bold; width: 200px; flex-shrink: 0; }
+        .info-value { flex: 1; }
+        .section { margin: 25px 0; }
+        .section-title { font-size: 13px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+        .section-content { text-align: justify; margin-bottom: 10px; }
+        ul { margin-left: 40px; margin-bottom: 15px; }
+        li { margin-bottom: 5px; }
+        strong { font-weight: bold; }
+        .form-row { margin-top: 30px; page-break-inside: avoid; }
+        .form-label { font-weight: bold; margin-bottom: 5px; }
+        .form-line { border-bottom: 1px solid #000; min-height: 40px; margin-bottom: 15px; }
+        .signature-section { margin-top: 40px; page-break-inside: avoid; }
+    </style>
+</head>
+<body>
+    <div class="header"><div class="document-title">TRAVEL AND EXCURSION AGREEMENT</div></div>
+    <div class="date">Effective Date: {{date}}</div>
+    <div class="info-box">
+        <h3>Organizer Information</h3>
+        <div class="info-row"><div class="info-label">Organizer:</div><div class="info-value">{{BusinessName}}</div></div>
+        <div class="info-row"><div class="info-label">Contact:</div><div class="info-value">{{Email}} | {{Phone}}</div></div>
+    </div>
+    <div class="section">
+        <div class="section-content">
+            This Travel and Excursion Agreement ("Agreement") governs participation in travel, excursions, and off-site activities organized by <strong>{{BusinessName}}</strong>.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">1. TRIP DETAILS</div>
+        <div class="section-content">
+            Trip details including destination, dates, itinerary, accommodations, and included services will be provided in the Trip Confirmation. <strong>{{BusinessName}}</strong> reserves the right to modify itineraries due to weather, safety concerns, or unforeseen circumstances.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">2. PARTICIPANT RESPONSIBILITIES</div>
+        <ul>
+            <li>Obtain necessary passports, visas, and travel documents</li>
+            <li>Ensure vaccinations and health clearances are up to date</li>
+            <li>Purchase recommended travel insurance</li>
+            <li>Arrive on time for all scheduled departures</li>
+            <li>Follow local laws and customs</li>
+            <li>Behave respectfully toward guides, staff, and fellow travelers</li>
+        </ul>
+    </div>
+    <div class="section">
+        <div class="section-title">3. PAYMENT AND DEPOSITS</div>
+        <div class="section-content">
+            A non-refundable deposit is required to secure your reservation. Final payment is due [number] days before departure. Failure to pay on time may result in forfeiture of your spot and all payments made.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">4. CANCELLATIONS AND REFUNDS</div>
+        <div class="section-content">
+            Cancellation fees apply as outlined in the Trip Confirmation. <strong>{{BusinessName}}</strong> is not responsible for refunding costs due to participant cancellations, no-shows, or early departures.
+        </div>
+        <div class="section-content">
+            If <strong>{{BusinessName}}</strong> cancels the trip, you will receive a full refund or credit. We are not liable for expenses incurred (flights, accommodations booked independently, etc.).
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">5. TRAVEL INSURANCE</div>
+        <div class="section-content">
+            We strongly recommend purchasing comprehensive travel insurance covering trip cancellation, medical emergencies, evacuation, lost luggage, and travel delays. Participation without insurance is at your own risk.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">6. HEALTH AND SAFETY</div>
+        <div class="section-content">
+            Participants must be in adequate health for the activities involved. Disclose any medical conditions, allergies, or physical limitations. <strong>{{BusinessName}}</strong> is not liable for health issues arising during travel.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">7. ASSUMPTION OF RISK AND WAIVER</div>
+        <div class="section-content">
+            I assume all risks associated with travel including injury, illness, theft, property damage, natural disasters, political unrest, and travel delays. I waive all claims against <strong>{{BusinessName}}</strong> for injuries or losses.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">8. THIRD-PARTY SERVICES</div>
+        <div class="section-content">
+            <strong>{{BusinessName}}</strong> contracts with third-party providers (airlines, hotels, tour operators, etc.). We are not liable for acts, errors, or omissions of these providers.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">9. CONDUCT</div>
+        <div class="section-content">
+            Participants engaging in disruptive, illegal, or dangerous behavior may be removed from the trip without refund. <strong>{{BusinessName}}</strong> reserves the right to deny participation to anyone at any time.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">10. GOVERNING LAW</div>
+        <div class="section-content">
+            This Agreement is governed by the laws of <strong>{{Jurisdiction}}</strong>.
+        </div>
+    </div>
+    <div class="section">
+        <div class="section-title">ACKNOWLEDGEMENT</div>
+        <div class="section-content">
+            By signing, I acknowledge that I have read, understood, and agree to this Travel and Excursion Agreement.
+        </div>
+    </div>
+    <div class="signature-section">
+        <div class="form-row"><div class="form-label">Participant Name:</div><div class="form-line"></div></div>
+        <div class="form-row"><div class="form-label">Signature:</div><div class="form-line"></div></div>
+        <div class="form-row"><div class="form-label">Date:</div><div class="form-line"></div></div>
+        <div class="form-row"><div class="form-label">Email:</div><div class="form-line"></div></div>
+        <div class="form-row"><div class="form-label">Emergency Contact:</div><div class="form-line"></div></div>
+    </div>
+</body>
+</html>

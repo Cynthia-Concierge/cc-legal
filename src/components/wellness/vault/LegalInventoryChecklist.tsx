@@ -1,12 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, AlertCircle, XCircle, FileText, ChevronDown, ChevronRight, ArrowRight, Shield, Eye, Trash2, Download } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, FileText, ChevronDown, ChevronRight, ArrowRight, Eye, Trash2, Download, Copy } from 'lucide-react';
 import { UserDocument, UserAnswers, DocumentItem } from '../../../types/wellness';
 import { getRecommendedDocuments } from '../../../lib/wellness/documentEngine';
+import { getCompletedDocumentsCount } from '../../../lib/wellness/documentCountUtils';
+import { supabase } from '../../../lib/supabase';
+import { vaultService } from '../../../lib/wellness/vaultService';
+import { toast } from 'sonner';
 
 export interface DocumentChecklistItem {
   id: string; // Template ID or custom ID
   label: string;
-  category: 'core' | 'marketing' | 'advanced' | 'studio' | 'retreat' | 'website';
+  category: 'core' | 'marketing' | 'advanced' | 'studio' | 'retreat' | 'website' | 'employment';
   templateId?: string; // Link to document template
 }
 
@@ -15,12 +19,12 @@ type DocumentStatus = 'present' | 'needs-review' | 'missing';
 interface LegalInventoryChecklistProps {
   documents: UserDocument[];
   userAnswers?: UserAnswers | null;
-  onUploadClick?: () => void;
-  onUploadWithType?: (documentType: string, documentLabel: string) => void;
+  // Upload functionality removed - all documents are auto-generated
   onViewDocument?: (document: UserDocument) => void;
-  onViewAnalysis?: (document: UserDocument) => void;
+  // onViewAnalysis removed - no analysis shown for auto-generated documents
   onDeleteDocument?: (document: UserDocument) => void;
   onDownloadDocument?: (document: UserDocument) => void;
+  onCopyAsText?: (document: UserDocument) => void;
   formatDate?: (dateString: string) => string;
 }
 
@@ -37,9 +41,8 @@ export const TEMPLATE_TO_CHECKLIST: Record<string, Omit<DocumentChecklistItem, '
   'template-4': { label: 'Photo / Video Release', category: 'marketing', templateId: 'template-4' },
   'template-6': { label: 'Social Media Disclaimer', category: 'marketing', templateId: 'template-6' },
   'template-5': { label: 'Testimonials Consent', category: 'marketing', templateId: 'template-5' },
-  'template-10': { label: 'Trademark Protection', category: 'advanced', templateId: 'template-10' },
-  'template-7': { label: 'Contractor Agreements', category: 'advanced', templateId: 'template-7' },
-  'template-8': { label: 'Employment Agreement', category: 'advanced', templateId: 'template-8' },
+  'template-7': { label: 'Contractor Agreements', category: 'employment', templateId: 'template-7' },
+  'template-8': { label: 'Employment Agreement', category: 'employment', templateId: 'template-8' },
   'template-2': { label: 'Service Agreement & Membership Contract', category: 'studio', templateId: 'template-2' },
   'template-studio': { label: 'Studio Policies', category: 'studio', templateId: 'template-studio' },
   'template-class': { label: 'Class Terms & Conditions', category: 'studio', templateId: 'template-class' },
@@ -47,25 +50,53 @@ export const TEMPLATE_TO_CHECKLIST: Record<string, Omit<DocumentChecklistItem, '
   'template-travel': { label: 'Travel & Excursion Agreement', category: 'retreat', templateId: 'template-travel' },
 };
 
-// Insurance is not in templates but should be in checklist
-const INSURANCE_CHECKLIST_ITEM: DocumentChecklistItem = {
-  id: 'insurance',
-  label: 'Insurance Certificates',
-  category: 'advanced',
+// Map template IDs to template file names for generation
+const TEMPLATE_ID_TO_FILE_NAME: Record<string, string> = {
+  // Original 3 free templates
+  'template-6': 'social_media_disclaimer',
+  'template-4': 'media_release_form',
+  'template-intake': 'client_intake_form',
+
+  // NEW: 15 advanced templates (now free with HTML generation)
+  'template-1': 'waiver_release_of_liability',
+  'template-2': 'service_agreement_membership_contract',
+  'template-5': 'testimonial_consent_agreement',
+  'template-7': 'independent_contractor_agreement',
+  'template-8': 'employment_agreement',
+  'template-membership': 'membership_agreement',
+  'template-studio': 'studio_policies',
+  'template-class': 'class_terms_conditions',
+  'template-privacy': 'privacy_policy',
+  'template-website': 'website_terms_conditions',
+  'template-refund': 'refund_cancellation_policy',
+  'template-disclaimer': 'website_disclaimer',
+  'template-cookie': 'cookie_policy',
+  'template-retreat-waiver': 'retreat_liability_waiver',
+  'template-travel': 'travel_excursion_agreement',
 };
+
+// Free template IDs that can be generated (all 18 templates now free)
+const FREE_TEMPLATE_IDS = new Set([
+  'template-6', 'template-4', 'template-intake',
+  'template-1', 'template-2', 'template-5',
+  'template-7', 'template-8',
+  'template-membership', 'template-studio', 'template-class',
+  'template-privacy', 'template-website', 'template-refund',
+  'template-disclaimer', 'template-cookie',
+  'template-retreat-waiver', 'template-travel'
+]);
 
 export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = ({
   documents,
   userAnswers,
-  onUploadClick,
-  onUploadWithType,
   onViewDocument,
-  onViewAnalysis,
   onDeleteDocument,
   onDownloadDocument,
+  onCopyAsText,
   formatDate
 }) => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [generatingDocs, setGeneratingDocs] = useState<Set<string>>(new Set());
   // Get recommended documents based on user answers
   const recommendedDocs = useMemo(() => {
     if (!userAnswers) {
@@ -97,9 +128,6 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
         addedTemplateIds.add(doc.id);
       }
     });
-
-    // Always include insurance (it's not a template but should be tracked)
-    items.push(INSURANCE_CHECKLIST_ITEM);
 
     return items;
   }, [recommendedDocs]);
@@ -184,11 +212,6 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
       return titleLower.includes('testimonial');
     }
 
-    if (item.templateId === 'template-10') {
-      // Trademark Protection
-      return titleLower.includes('trademark') || categoryLower === 'formation';
-    }
-
     if (item.templateId === 'template-7') {
       // Contractor Agreement - must have contractor
       return titleLower.includes('contractor');
@@ -227,11 +250,6 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
         titleLower.includes('agreement');
     }
 
-    if (item.id === 'insurance') {
-      // Insurance Certificates
-      return titleLower.includes('insurance') || categoryLower === 'insurance';
-    }
-
     if (item.templateId === 'template-disclaimer') {
       // Disclaimer - must have disclaimer but NOT social
       return titleLower.includes('disclaimer') && !titleLower.includes('social');
@@ -246,61 +264,222 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
     return false;
   };
 
+  // Check if a website scan has been performed
+  // DISABLED: Scan results no longer connected to document vault
+  const hasWebsiteScanBeenPerformed = (): boolean => {
+    return false;
+  };
+
+  // Check if document was found in website scan
+  // DISABLED: Scan results no longer connected to document vault
+  const checkWebsiteScanForDocument = (item: DocumentChecklistItem): boolean => {
+    return false;
+  };
+
+  // Get issues for a specific document from website scan
+  // DISABLED: No issues shown in vault - all documents are auto-generated
+  const getDocumentIssues = (item: DocumentChecklistItem): Array<{
+    document: string;
+    issue: string;
+    severity: 'high' | 'medium' | 'low';
+    whyItMatters: string;
+  }> => {
+    return [];
+  };
+
   // Map document categories/titles to checklist items
   const getDocumentStatus = (item: DocumentChecklistItem): DocumentStatus => {
     const matchingDocs = documents.filter(doc => documentMatchesItem(doc, item));
 
-    if (matchingDocs.length === 0) return 'missing';
+    // If we have matching documents in vault, use that status
+    if (matchingDocs.length > 0) {
+      // Check if this is a personalized document (free template that was generated)
+      // This includes documents generated during onboarding OR manually via "Personalize now"
+      const templateId = item.templateId || item.id;
+      const isPersonalizedFreeDoc = FREE_TEMPLATE_IDS.has(templateId) && 
+        matchingDocs.some(doc => 
+          (doc.title?.toLowerCase().includes('personalized')) ||
+          (doc.description?.toLowerCase().includes('auto-generated')) ||
+          (doc.description?.toLowerCase().includes('auto-generated during onboarding')) ||
+          (doc.document_type === templateId && (doc.description?.toLowerCase().includes('auto-generated') || !doc.analysis))
+        );
 
-    // Check if any document has analysis (needs review)
-    const hasAnalysis = matchingDocs.some(doc => doc.analysis);
-    if (hasAnalysis) {
-      // Check if analysis indicates issues
-      const hasIssues = matchingDocs.some(doc =>
-        doc.analysis && (
-          doc.analysis.toLowerCase().includes('missing') ||
-          doc.analysis.toLowerCase().includes('risk') ||
-          doc.analysis.toLowerCase().includes('gap')
-        )
-      );
-      return hasIssues ? 'needs-review' : 'present';
+      // Personalized free documents are automatically "present" (completed)
+      if (isPersonalizedFreeDoc) {
+        return 'present';
+      }
+
+      // Check if this document was found on website (even if it's also in vault)
+      const foundInScan = checkWebsiteScanForDocument(item);
+      
+      // If found on website, always count as "present" (completed) regardless of issues
+      // This ensures documents found on website count towards the total
+      if (foundInScan) {
+        return 'present';
+      }
+
+      // Check if any document has analysis (needs review)
+      const hasAnalysis = matchingDocs.some(doc => doc.analysis);
+      if (hasAnalysis) {
+        // Check if analysis indicates issues
+        const hasIssues = matchingDocs.some(doc =>
+          doc.analysis && (
+            doc.analysis.toLowerCase().includes('missing') ||
+            doc.analysis.toLowerCase().includes('risk') ||
+            doc.analysis.toLowerCase().includes('gap')
+          )
+        );
+        return hasIssues ? 'needs-review' : 'present';
+      }
+
+      return 'needs-review'; // Uploaded but not analyzed
     }
 
-    return 'needs-review'; // Uploaded but not analyzed
+    // No matching documents in vault - check if found in website scan
+    const foundInScan = checkWebsiteScanForDocument(item);
+    if (foundInScan) {
+      // Document was found on website - count it as "present" (completed)
+      // Even if it has issues, it exists on their website and should count towards the total
+      return 'present';
+    }
+
+    return 'missing';
   };
 
-  const getStatusIcon = (status: DocumentStatus) => {
+  const getStatusIcon = (status: DocumentStatus, item?: DocumentChecklistItem) => {
     switch (status) {
       case 'present':
         return <CheckCircle2 className="w-4 h-4 text-green-600" />;
       case 'needs-review':
+        // If document was found in scan but not in vault, show a different icon
+        if (item && !documents.some(doc => documentMatchesItem(doc, item))) {
+          const foundInScan = checkWebsiteScanForDocument(item);
+          if (foundInScan) {
+            return <CheckCircle2 className="w-4 h-4 text-emerald-600" />; // Slightly different green for "found on website"
+          }
+        }
         return <AlertCircle className="w-4 h-4 text-amber-600" />;
       case 'missing':
         return <XCircle className="w-4 h-4 text-slate-400" />;
     }
   };
 
-  const getStatusText = (status: DocumentStatus) => {
+  const getStatusText = (status: DocumentStatus, item?: DocumentChecklistItem) => {
     switch (status) {
       case 'present':
         return 'Present';
       case 'needs-review':
+        // If document was found in scan but not in vault, show "Found on Website"
+        if (item && !documents.some(doc => documentMatchesItem(doc, item))) {
+          const foundInScan = checkWebsiteScanForDocument(item);
+          if (foundInScan) {
+            return 'Found on Website';
+          }
+        }
         return 'Needs Review';
       case 'missing':
         return 'Missing';
     }
   };
 
+  // Handle generating a free document
+  const handleGenerateFreeDocument = async (item: DocumentChecklistItem) => {
+    const templateId = item.templateId || item.id;
+    
+    if (!FREE_TEMPLATE_IDS.has(templateId)) {
+      // Not a free template, fall back to upload
+      handleStatusClick(item, 'missing');
+      return;
+    }
+
+    const templateFileName = TEMPLATE_ID_TO_FILE_NAME[templateId];
+    if (!templateFileName) {
+      console.error('No template file name found for:', templateId);
+      return;
+    }
+
+    // Check if already generating
+    if (generatingDocs.has(templateId)) {
+      return;
+    }
+
+    try {
+      setGeneratingDocs(prev => new Set(prev).add(templateId));
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Please log in to generate documents');
+        return;
+      }
+
+      // Check if profile is complete
+      if (!userAnswers?.isProfileComplete) {
+        toast.info('Please complete your business profile first');
+        return;
+      }
+
+      // Call backend API to generate personalized document
+      const serverUrl = import.meta.env.VITE_SERVER_URL || '';
+      const response = await fetch(`${serverUrl}/api/documents/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          templateName: templateFileName,
+          userId: user.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate document: ${response.statusText}`);
+      }
+
+      // Get the generated PDF blob
+      const blob = await response.blob();
+      const downloadFileName = `${templateFileName}-personalized-${Date.now()}.pdf`;
+      const file = new File([blob], downloadFileName, { type: 'application/pdf' });
+
+      // Save to vault
+      await vaultService.uploadDocument(
+        file,
+        'contract',
+        item.label + ' (Personalized)',
+        'Auto-generated personalized document',
+        undefined,
+        templateId
+      );
+
+      toast.success('Document generated and saved to your vault!');
+      
+      // Trigger a custom event to refresh documents in parent component
+      window.dispatchEvent(new CustomEvent('documents-updated'));
+    } catch (error: any) {
+      console.error('Error generating document:', error);
+      toast.error(error?.message || 'Failed to generate document. Please try again.');
+    } finally {
+      setGeneratingDocs(prev => {
+        const next = new Set(prev);
+        next.delete(templateId);
+        return next;
+      });
+    }
+  };
+
   // Handle status click
   const handleStatusClick = (item: DocumentChecklistItem, status: DocumentStatus) => {
     if (status === 'missing') {
-      // Missing - trigger upload with document type pre-selected
-      const documentType = item.templateId || item.id;
-      if (onUploadWithType && documentType) {
-        onUploadWithType(documentType, item.label);
-      } else if (onUploadClick) {
-        onUploadClick();
+      // Check if this is a free template that can be generated
+      const templateId = item.templateId || item.id;
+      if (FREE_TEMPLATE_IDS.has(templateId)) {
+        // Free template - generate instead of upload
+        handleGenerateFreeDocument(item);
+        return;
       }
+
+      // Upload functionality removed - all documents are auto-generated
+      // Missing documents should never occur since all are generated during onboarding
     } else {
       // Present or Needs Review - toggle accordion or show document
       const matchingDocs = documents.filter(doc => documentMatchesItem(doc, item));
@@ -487,50 +666,47 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
     onToggleAccordion: () => void;
   }> = ({ item, status, isExpanded, matchingDocs, onStatusClick, onToggleAccordion }) => {
     const primaryDoc = matchingDocs[0] || null; // Best version (already sorted)
-    const hasAnalysis = primaryDoc?.analysis;
-    const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set());
-
-    const toggleIssue = (idx: number) => {
-      const newExpanded = new Set(expandedIssues);
-      if (newExpanded.has(idx)) {
-        newExpanded.delete(idx);
-      } else {
-        newExpanded.add(idx);
-      }
-      setExpandedIssues(newExpanded);
-    };
-
-    const getSeverityBadge = (severity: string) => {
-      const severityLower = severity.toLowerCase();
-      if (severityLower === 'high' || severityLower.includes('high')) {
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">HIGH</span>;
-      }
-      if (severityLower === 'medium' || severityLower.includes('medium')) {
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">MEDIUM</span>;
-      }
-      return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">LOW</span>;
-    };
+    // Analysis-related variables removed - documents are auto-generated and ready to use
 
     return (
       <div className="border border-slate-200 rounded-lg overflow-hidden">
         <div className="flex items-center gap-3 p-3 hover:bg-slate-50 transition-colors">
-          {getStatusIcon(status)}
+          {getStatusIcon(status, item)}
           <span className="flex-1 text-sm font-medium text-slate-700">{item.label}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={onStatusClick}
-              className={`text-xs font-medium cursor-pointer hover:underline transition-all ${status === 'present' ? 'text-green-600 hover:text-green-700' :
-                status === 'needs-review' ? 'text-amber-600 hover:text-amber-700' :
-                  'text-slate-400 hover:text-slate-600'
-                }`}
+              disabled={generatingDocs.has(item.templateId || item.id)}
+              className={`text-xs font-medium transition-all flex items-center gap-1 ${
+                status === 'present' ? 'text-green-600 hover:text-green-700 hover:underline cursor-pointer' :
+                status === 'needs-review' ? 'text-amber-600 hover:text-amber-700 hover:underline cursor-pointer' :
+                generatingDocs.has(item.templateId || item.id) ? 'text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 cursor-not-allowed' :
+                status === 'missing' && FREE_TEMPLATE_IDS.has(item.templateId || item.id) ?
+                  'text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 px-4 py-2 rounded-full border-0 shadow-lg hover:shadow-xl group cursor-pointer animate-pulse' :
+                  'text-slate-500 cursor-default'
+              }`}
             >
-              {getStatusText(status)}
+              {status === 'missing' ? (
+                FREE_TEMPLATE_IDS.has(item.templateId || item.id) ? (
+                  <>
+                    <span className="font-bold">
+                      {generatingDocs.has(item.templateId || item.id) ? 'Generating...' : 'Personalize now'}
+                    </span>
+                    <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
+                  </>
+                ) : (
+                  <span>Missing</span>
+                )
+              ) : (
+                getStatusText(status, item)
+              )}
             </button>
-            {(hasAnalysis || matchingDocs.length > 0) && (
+
+            {matchingDocs.length > 0 && (
               <button
                 onClick={onToggleAccordion}
                 className="p-1 hover:bg-slate-200 rounded transition-colors"
-                title={hasAnalysis ? "View analysis" : "View document"}
+                title="View document"
               >
                 {isExpanded ? (
                   <ChevronDown className="w-4 h-4 text-slate-500" />
@@ -545,7 +721,7 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
         {/* Accordion Content */}
         {isExpanded && (
           <div className="border-t border-slate-200 bg-white p-5 space-y-4">
-            {/* Show uploaded document(s) if present */}
+            {/* Show saved document(s) */}
             {matchingDocs.length > 0 && (
               <div className="space-y-3 mb-4">
                 <div className="text-xs font-semibold text-slate-600 mb-2">Saved Document{matchingDocs.length > 1 ? 's' : ''}</div>
@@ -564,15 +740,6 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
                         </div>
                       </div>
                       <div className="flex items-center gap-1 bg-white rounded-lg border border-slate-200 p-0.5">
-                        {doc.analysis && onViewAnalysis && (
-                          <button
-                            onClick={() => onViewAnalysis(doc)}
-                            className="p-1.5 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded transition-all"
-                            title="View Analysis"
-                          >
-                            <Shield size={14} />
-                          </button>
-                        )}
                         {onViewDocument && (
                           <button
                             onClick={() => onViewDocument(doc)}
@@ -586,9 +753,18 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
                           <button
                             onClick={() => onDownloadDocument(doc)}
                             className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                            title="Download"
+                            title="Download PDF"
                           >
                             <Download size={14} />
+                          </button>
+                        )}
+                        {onCopyAsText && doc.document_type && doc.document_type.startsWith('template-') && (
+                          <button
+                            onClick={() => onCopyAsText(doc)}
+                            className="p-1.5 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded transition-all"
+                            title="Copy as Text"
+                          >
+                            <Copy size={14} />
                           </button>
                         )}
                         {onDeleteDocument && (
@@ -610,164 +786,7 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
               </div>
             )}
 
-            {/* Show analysis if available */}
-            {hasAnalysis && primaryDoc && (
-              <>
-                <div className="flex items-center gap-2 mb-4">
-                  <Shield className="w-4 h-4 text-slate-600" />
-                  <h3 className="text-sm font-bold text-slate-900">Analysis & Recommendations</h3>
-                </div>
-
-                {/* Parse and display issues */}
-                {(() => {
-                  const issues = parseIssues(primaryDoc.analysis);
-                  const highIssues = issues.filter(i => i.severity === 'high').length;
-                  const mediumIssues = issues.filter(i => i.severity === 'medium').length;
-
-                  if (issues.length > 0) {
-                    return (
-                      <div className="space-y-4">
-                        {/* Summary */}
-                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                          <div className="text-xs font-semibold text-slate-700 mb-2">ISSUES FOUND: {issues.length}</div>
-                          <div className="flex items-center gap-4 text-xs">
-                            {highIssues > 0 && (
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                                <span className="text-slate-600">{highIssues} High Priority</span>
-                              </div>
-                            )}
-                            {mediumIssues > 0 && (
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                                <span className="text-slate-600">{mediumIssues} Medium Priority</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Issues List */}
-                        <div className="space-y-3">
-                          {issues.map((issue, idx) => (
-                            <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                              <div className="p-4">
-                                <div className="flex items-start gap-3 mb-3">
-                                  {getSeverityBadge(issue.severity)}
-                                  <span className="flex-1 text-sm font-medium text-slate-900 leading-snug">
-                                    {issue.issue}
-                                  </span>
-                                </div>
-
-                                {/* Why This Matters - Collapsible */}
-                                {issue.whyItMatters && (
-                                  <div className="mt-3">
-                                    <button
-                                      onClick={() => toggleIssue(idx)}
-                                      className="w-full flex items-center justify-between p-2.5 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-200 group"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-amber-600" />
-                                        <span className="text-xs font-semibold text-amber-900">Why This Matters</span>
-                                      </div>
-                                      {expandedIssues.has(idx) ? (
-                                        <ChevronDown className="w-4 h-4 text-amber-600 transition-transform" />
-                                      ) : (
-                                        <ChevronRight className="w-4 h-4 text-amber-600 transition-transform group-hover:translate-x-0.5" />
-                                      )}
-                                    </button>
-                                    {expandedIssues.has(idx) && (
-                                      <div className="mt-2 p-3 bg-amber-50/50 rounded-lg border border-amber-100 animate-in fade-in slide-in-from-top-2">
-                                        <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{issue.whyItMatters}</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Recommendation - Always visible */}
-                                {issue.recommendation && (
-                                  <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                    <div className="flex items-start gap-2">
-                                      <ArrowRight className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                      <div className="flex-1">
-                                        <div className="text-xs font-semibold text-blue-900 mb-1.5">What to Do:</div>
-                                        <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{issue.recommendation}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Action CTA */}
-                        {highIssues > 0 && (
-                          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                            <div className="flex items-start gap-2">
-                              <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                              <div className="flex-1">
-                                <div className="text-xs font-semibold text-red-900 mb-1">
-                                  {highIssues} High Priority Issue{highIssues > 1 ? 's' : ''} Found
-                                </div>
-                                <p className="text-xs text-slate-700">
-                                  Consider reviewing these with a lawyer to ensure your document is fully protected.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  // Fallback to formatted sections if no issues parsed
-                  return (
-                    <div className="prose prose-sm max-w-none">
-                      {formatAnalysis(primaryDoc.analysis).map((section, idx) => {
-                        if (section.type === 'covered') {
-                          return (
-                            <div key={idx} className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                              <div className="flex items-center gap-2 mb-2">
-                                <CheckCircle2 className="w-4 h-4 text-green-600" />
-                                <h4 className="text-sm font-semibold text-green-900">What's Covered</h4>
-                              </div>
-                              <div className="text-xs text-slate-700 whitespace-pre-wrap">{section.content.trim()}</div>
-                            </div>
-                          );
-                        }
-                        if (section.type === 'missing') {
-                          return (
-                            <div key={idx} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                              <div className="flex items-center gap-2 mb-2">
-                                <XCircle className="w-4 h-4 text-red-600" />
-                                <h4 className="text-sm font-semibold text-red-900">What's Missing</h4>
-                              </div>
-                              <div className="text-xs text-slate-700 whitespace-pre-wrap">{section.content.trim()}</div>
-                            </div>
-                          );
-                        }
-                        if (section.type === 'recommendations') {
-                          return (
-                            <div key={idx} className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <div className="flex items-center gap-2 mb-2">
-                                <FileText className="w-4 h-4 text-blue-600" />
-                                <h4 className="text-sm font-semibold text-blue-900">Recommended Changes</h4>
-                              </div>
-                              <div className="text-xs text-slate-700 whitespace-pre-wrap">{section.content.trim()}</div>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={idx} className="text-xs text-slate-600 whitespace-pre-wrap mb-2">
-                            {section.content.trim()}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </>
-            )}
+            {/* Analysis section removed - all documents are auto-generated and ready to use */}
           </div>
         )}
       </div>
@@ -863,12 +882,11 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
   const marketingDocs = checklistItems.filter(item => item.category === 'marketing');
   const studioDocs = checklistItems.filter(item => item.category === 'studio');
   const retreatDocs = checklistItems.filter(item => item.category === 'retreat');
+  const employmentDocs = checklistItems.filter(item => item.category === 'employment');
   const advancedDocs = checklistItems.filter(item => item.category === 'advanced');
 
-  const presentCount = checklistItems.filter(item =>
-    getDocumentStatus(item) === 'present'
-  ).length;
-  const totalCount = checklistItems.length;
+  // Use the shared utility function to ensure consistency with other widgets
+  const { completed: presentCount, total: totalCount } = getCompletedDocumentsCount(documents, userAnswers);
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
@@ -1000,6 +1018,32 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
           <h3 className="text-sm font-semibold text-slate-700 mb-3">Retreat-Specific Documents</h3>
           <div className="space-y-3">
             {retreatDocs.map(item => {
+              const status = getDocumentStatus(item);
+              const matchingDocs = getMatchingDocuments(item);
+              const isExpanded = expandedItems.has(item.id);
+
+              return (
+                <DocumentItemWithAccordion
+                  key={item.id}
+                  item={item}
+                  status={status}
+                  isExpanded={isExpanded}
+                  matchingDocs={matchingDocs}
+                  onStatusClick={() => handleStatusClick(item, status)}
+                  onToggleAccordion={() => toggleAccordion(item.id)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Employment Agreements */}
+      {employmentDocs.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Employment Agreements</h3>
+          <div className="space-y-3">
+            {employmentDocs.map(item => {
               const status = getDocumentStatus(item);
               const matchingDocs = getMatchingDocuments(item);
               const isExpanded = expandedItems.has(item.id);
