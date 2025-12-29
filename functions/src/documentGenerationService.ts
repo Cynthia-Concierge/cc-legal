@@ -91,18 +91,22 @@ export class DocumentGenerationService {
             // 1. HTML templates can be properly populated with user data
             // 2. Pre-generated PDFs may have placeholders baked in
             // 3. HTML-to-PDF conversion ensures placeholders are replaced
-            const htmlTemplatePath = path.join(__dirname, '../templates/html', `${templateName}.html`);
+            // In compiled functions: __dirname = lib/, templates are at lib/templates/html/
+            const htmlTemplatePath = path.join(__dirname, 'templates/html', `${templateName}.html`);
+            console.log('[DocGen] Looking for HTML template at:', htmlTemplatePath);
+            console.log('[DocGen] __dirname is:', __dirname);
             let templateBytes: Buffer;
             
             try {
                 await fs.access(htmlTemplatePath);
                 // HTML template exists - use it (can be properly populated)
-                console.log('[DocGen] HTML template found, converting to PDF with populated data...');
+                console.log('[DocGen] ✅ HTML template found, converting to PDF with populated data...');
                 templateBytes = await this.generateFromHtml(htmlTemplatePath, profileData);
-                console.log('[DocGen] Successfully converted HTML to PDF with user data');
-            } catch (htmlError) {
+                console.log('[DocGen] ✅ Successfully converted HTML to PDF with user data');
+            } catch (htmlError: any) {
                 // HTML doesn't exist - try PDF template as fallback
-                console.log('[DocGen] HTML template not found, trying PDF template...');
+                console.log('[DocGen] ⚠️ HTML template not found:', htmlError.message);
+                console.log('[DocGen] Trying PDF template as fallback...');
                 try {
                     await fs.access(templatePath);
                     // PDF exists - use it directly (for templates that don't need population)
@@ -363,8 +367,10 @@ export class DocumentGenerationService {
         profileData: BusinessProfileData
     ): Promise<Buffer> {
         try {
+            console.log('[DocGen] Reading HTML template from:', htmlTemplatePath);
             // Read and populate HTML template (reuse logic from generateHtmlOnly)
             const htmlContent = await fs.readFile(htmlTemplatePath, 'utf-8');
+            console.log('[DocGen] HTML template read, length:', htmlContent.length, 'bytes');
             let populatedHtml = htmlContent;
 
             const replacements: Record<string, string> = {
