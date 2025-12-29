@@ -87,28 +87,31 @@ export class DocumentGenerationService {
             const templatePath = path.join(this.templatesPath, `${templateName}.pdf`);
             console.log('[DocGen] Loading PDF template from:', templatePath);
 
-            // Check if PDF file exists
+            // ALWAYS prefer HTML templates when they exist because:
+            // 1. HTML templates can be properly populated with user data
+            // 2. Pre-generated PDFs may have placeholders baked in
+            // 3. HTML-to-PDF conversion ensures placeholders are replaced
+            const htmlTemplatePath = path.join(__dirname, '../templates/html', `${templateName}.html`);
             let templateBytes: Buffer;
+            
             try {
-                await fs.access(templatePath);
-                // PDF exists - use it directly
-                templateBytes = await fs.readFile(templatePath);
-                console.log('[DocGen] Using PDF template');
-            } catch (accessError) {
-                // PDF doesn't exist - try HTML template with Playwright conversion
-                console.log('[DocGen] PDF template not found, trying HTML template...');
-                const htmlTemplatePath = path.join(__dirname, '../templates/html', `${templateName}.html`);
-                
+                await fs.access(htmlTemplatePath);
+                // HTML template exists - use it (can be properly populated)
+                console.log('[DocGen] HTML template found, converting to PDF with populated data...');
+                templateBytes = await this.generateFromHtml(htmlTemplatePath, profileData);
+                console.log('[DocGen] Successfully converted HTML to PDF with user data');
+            } catch (htmlError) {
+                // HTML doesn't exist - try PDF template as fallback
+                console.log('[DocGen] HTML template not found, trying PDF template...');
                 try {
-                    await fs.access(htmlTemplatePath);
-                    // HTML template exists - convert it to PDF using Playwright
-                    console.log('[DocGen] HTML template found, converting to PDF...');
-                    templateBytes = await this.generateFromHtml(htmlTemplatePath, profileData);
-                    console.log('[DocGen] Successfully converted HTML to PDF');
-                } catch (htmlError) {
+                    await fs.access(templatePath);
+                    // PDF exists - use it directly (for templates that don't need population)
+                    templateBytes = await fs.readFile(templatePath);
+                    console.log('[DocGen] Using PDF template');
+                } catch (pdfError) {
                     throw new Error(
-                        `Template not found: ${templateName}.pdf or ${templateName}.html. ` +
-                        `Expected locations: ${templatePath} or ${htmlTemplatePath}`
+                        `Template not found: ${templateName}.html or ${templateName}.pdf. ` +
+                        `Expected locations: ${htmlTemplatePath} or ${templatePath}`
                     );
                 }
             }
@@ -405,9 +408,15 @@ export class DocumentGenerationService {
             };
 
             // Perform all replacements
+            let replacementCount = 0;
             for (const [placeholder, value] of Object.entries(replacements)) {
-                populatedHtml = populatedHtml.split(placeholder).join(value);
+                if (populatedHtml.includes(placeholder)) {
+                    populatedHtml = populatedHtml.split(placeholder).join(value);
+                    replacementCount++;
+                    console.log(`[DocGen] Replaced ${placeholder} with: ${value.substring(0, 50)}${value.length > 50 ? '...' : ''}`);
+                }
             }
+            console.log(`[DocGen] Total placeholders replaced: ${replacementCount}`);
 
             // Convert HTML to PDF using Playwright
             console.log('[DocGen] Launching browser for HTML-to-PDF conversion...');
