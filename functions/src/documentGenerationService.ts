@@ -8,6 +8,7 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
+import { chromium } from 'playwright';
 
 export interface BusinessProfileData {
     businessName?: string;
@@ -86,7 +87,31 @@ export class DocumentGenerationService {
             const templatePath = path.join(this.templatesPath, `${templateName}.pdf`);
             console.log('[DocGen] Loading PDF template from:', templatePath);
 
-            const templateBytes = await fs.readFile(templatePath);
+            // Check if PDF file exists
+            let templateBytes: Buffer;
+            try {
+                await fs.access(templatePath);
+                // PDF exists - use it directly
+                templateBytes = await fs.readFile(templatePath);
+                console.log('[DocGen] Using PDF template');
+            } catch (accessError) {
+                // PDF doesn't exist - try HTML template with Playwright conversion
+                console.log('[DocGen] PDF template not found, trying HTML template...');
+                const htmlTemplatePath = path.join(__dirname, '../templates/html', `${templateName}.html`);
+                
+                try {
+                    await fs.access(htmlTemplatePath);
+                    // HTML template exists - convert it to PDF using Playwright
+                    console.log('[DocGen] HTML template found, converting to PDF...');
+                    templateBytes = await this.generateFromHtml(htmlTemplatePath, profileData);
+                    console.log('[DocGen] Successfully converted HTML to PDF');
+                } catch (htmlError) {
+                    throw new Error(
+                        `Template not found: ${templateName}.pdf or ${templateName}.html. ` +
+                        `Expected locations: ${templatePath} or ${htmlTemplatePath}`
+                    );
+                }
+            }
             console.log('[DocGen] Template loaded, size:', templateBytes.length, 'bytes');
 
             const pdfDoc = await PDFDocument.load(templateBytes);
@@ -323,6 +348,91 @@ export class DocumentGenerationService {
         } catch (error: any) {
             console.error('[DocGen] Error generating HTML:', error);
             throw new Error(`Failed to generate HTML: ${error.message}`);
+        }
+    }
+
+    /**
+     * Generate PDF from HTML template using Playwright
+     * Used as fallback when PDF template doesn't exist
+     */
+    private async generateFromHtml(
+        htmlTemplatePath: string,
+        profileData: BusinessProfileData
+    ): Promise<Buffer> {
+        try {
+            // Read and populate HTML template (reuse logic from generateHtmlOnly)
+            const htmlContent = await fs.readFile(htmlTemplatePath, 'utf-8');
+            let populatedHtml = htmlContent;
+
+            const replacements: Record<string, string> = {
+                '{{BusinessName}}': profileData.businessName || '[Business Name]',
+                '{{BusinessType}}': profileData.businessType || 'Business',
+                '{{BusinessAddress}}': profileData.businessAddress || '[Address]',
+                '{{Email}}': profileData.email || '',
+                '{{SocialLinks}}': `${profileData.website || ''} ${profileData.instagram ? `| IG: ${profileData.instagram}` : ''}`,
+                '{{Jurisdiction}}': profileData.state || '[Jurisdiction]',
+                '{{date}}': new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                }),
+                '{{LegalEntityName}}': profileData.legalEntityName || profileData.businessName || '[Legal Entity Name]',
+                '{{EntityType}}': profileData.entityType || '[Entity Type]',
+                '{{State}}': profileData.state || '[State]',
+                '{{OwnerName}}': profileData.ownerName || '[Business Owner]',
+                '{{Phone}}': profileData.phone || '[Phone Number]',
+                '{{Website}}': profileData.website || '',
+                '{{Instagram}}': profileData.instagram || '',
+                '{{Services}}': Array.isArray(profileData.services) ? profileData.services.join(', ') : '',
+                '{{businessName}}': profileData.businessName || '[Business Name]',
+                '{{legalEntityName}}': profileData.legalEntityName || profileData.businessName || '[Legal Name]',
+                '{{entityType}}': profileData.entityType || '',
+                '{{businessAddress}}': profileData.businessAddress || '[Address]',
+                '{{ownerName}}': profileData.ownerName || '',
+                '{{phone}}': profileData.phone || '',
+                '{{email}}': profileData.email || '',
+                '{{website}}': profileData.website || '',
+                '{{instagram}}': profileData.instagram || '',
+                '{{businessType}}': profileData.businessType || '',
+                '{{riskIcon}}': profileData.riskIcon || this.getRiskIconFromLevel(profileData.riskLevel),
+                '{{riskClass}}': profileData.riskClass || (profileData.riskLevel || '').toLowerCase().replace(/\s+/g, '-'),
+                '{{urgencyMessage}}': profileData.urgencyMessage || this.getUrgencyMessageFromLevel(profileData.riskLevel),
+                '{{totalConflicts}}': profileData.totalConflicts?.toString() || '0',
+                '{{conflictsSection}}': profileData.conflictsSection || '<div class="conflict-count-box"><p>No exact trademark matches found in our preliminary scan.</p></div>',
+                '{{riskLevel}}': profileData.riskLevel || 'MODERATE RISK',
+                '{{verdict}}': profileData.verdict || 'Based on the preliminary scan, we recommend consulting with a trademark attorney to discuss your specific situation.',
+                '{{year}}': new Date().getFullYear().toString(),
+            };
+
+            // Perform all replacements
+            for (const [placeholder, value] of Object.entries(replacements)) {
+                populatedHtml = populatedHtml.split(placeholder).join(value);
+            }
+
+            // Convert HTML to PDF using Playwright
+            console.log('[DocGen] Launching browser for HTML-to-PDF conversion...');
+            const browser = await chromium.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            });
+
+            try {
+                const page = await browser.newPage();
+                await page.setContent(populatedHtml, { waitUntil: 'networkidle' });
+                
+                const pdfBuffer = await page.pdf({
+                    format: 'Letter',
+                    printBackground: true,
+                    margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' }
+                });
+
+                return Buffer.from(pdfBuffer);
+            } finally {
+                await browser.close();
+            }
+        } catch (error: any) {
+            console.error('[DocGen] Error converting HTML to PDF:', error);
+            throw new Error(`Failed to convert HTML to PDF: ${error.message}`);
         }
     }
 
