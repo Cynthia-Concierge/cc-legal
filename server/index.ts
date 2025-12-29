@@ -1145,10 +1145,9 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
       .single();
 
     if (error || !profile) {
-      console.error('[Onboarding Package] ❌ PROFILE NOT FOUND - Email will NOT be sent');
+      console.error('[Onboarding Package] ❌ PROFILE NOT FOUND');
       console.error('[Onboarding Package] Error details:', error);
       console.error('[Onboarding Package] User ID searched:', userId);
-      console.error('[Onboarding Package] ⚠️ This means Resend will show NO attempt because emailService.sendOnboardingPackageEmail() is never called');
       return res.status(404).json({
         error: "Profile not found",
         message: "Business profile does not exist. Email cannot be sent without profile data.",
@@ -1272,15 +1271,7 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
     console.log(`[Onboarding Package] Total documents generated: ${templates.length}`);
     console.log(`[Onboarding Package] Documents successfully generated: ${attachments.length}`);
 
-    // Send notification email (no attachments - all docs are in the vault)
-    await emailService.sendOnboardingPackageEmail(
-      email,
-      name,
-      attachments.length,
-      templates.map(t => t.title)
-    );
-
-    console.log(`[Onboarding Package] Successfully generated ${attachments.length} documents and sent notification to ${email}`);
+    console.log(`[Onboarding Package] Successfully generated ${attachments.length} documents for ${email}`);
 
     return res.json({
       success: true,
@@ -1944,9 +1935,9 @@ app.post("/api/save-contact", async (req, res) => {
     if (supabaseResult && Array.isArray(supabaseResult) && supabaseResult.length > 0) {
       const contact = supabaseResult[0];
       // Check if this contact was just created (not an existing one)
-      // We'll send the email regardless, but the email service will handle gracefully
-      const nameParts = name.trim().split(/\s+/);
-      const firstName = nameParts[0] || "";
+      // Use first_name from the saved contact record (properly extracted by SupabaseService)
+      // Fallback to extracting from name if first_name is not available
+      const firstName = contact.first_name || (contact.name ? contact.name.trim().split(/\s+/)[0] : "") || "";
       
       // Send email asynchronously (fire and forget)
       (async () => {
@@ -2145,135 +2136,142 @@ app.post("/api/save-contact", async (req, res) => {
     // NOTE: If workflow completes successfully, we'll update the Instantly lead with email content
     // The campaign sequence in Instantly.ai should have a 24-hour delay and use {{email_subject}} and {{email_body_html}} variables
 
+    // ===================================================================
+    // DISABLED: OpenAI Email Generation Workflow
+    // ===================================================================
+    // The workflow that generates personalized emails via OpenAI and sends them to Instantly.ai
+    // has been disabled. To re-enable, uncomment the block below.
+    // ===================================================================
+
     // Automatically trigger legal analyzer workflow if website URL is provided
     // Run asynchronously - don't block the response
-    if (normalizedWebsite) {
-      // Validate URL format before triggering workflow
-      let isValidUrl = false;
-      try {
-        new URL(normalizedWebsite);
-        isValidUrl = true;
-      } catch (urlError) {
-        console.warn("[Save Contact] Invalid website URL, skipping workflow:", normalizedWebsite);
-      }
+    // if (normalizedWebsite) {
+    //   // Validate URL format before triggering workflow
+    //   let isValidUrl = false;
+    //   try {
+    //     new URL(normalizedWebsite);
+    //     isValidUrl = true;
+    //   } catch (urlError) {
+    //     console.warn("[Save Contact] Invalid website URL, skipping workflow:", normalizedWebsite);
+    //   }
 
-      if (isValidUrl) {
-        (async () => {
-          try {
-            console.log("[Save Contact] Auto-triggering legal analyzer for:", normalizedWebsite);
+    //   if (isValidUrl) {
+    //     (async () => {
+    //       try {
+    //         console.log("[Save Contact] Auto-triggering legal analyzer for:", normalizedWebsite);
 
-            const leadInfo = {
-              name: name,
-              company: "", // Could extract from name if needed
-              email: email,
-            };
+    //         const leadInfo = {
+    //           name: name,
+    //           company: "", // Could extract from name if needed
+    //           email: email,
+    //         };
 
-            const workflowResult = await emailWorkflow.execute(normalizedWebsite, leadInfo);
+    //         const workflowResult = await emailWorkflow.execute(normalizedWebsite, leadInfo);
 
-            if (workflowResult.error) {
-              console.error("[Save Contact] Workflow error:", workflowResult.error);
-              // Save error result to database
-              try {
-                await workflowResultsService.saveWorkflowResult({
-                  websiteUrl: normalizedWebsite,
-                  leadInfo,
-                  error: workflowResult.error,
-                  status: "error",
-                });
-              } catch (saveError) {
-                console.error("[Save Contact] Error saving failed workflow result:", saveError);
-              }
-            } else {
-              // Save successful workflow results
-              try {
-                const contactInfo = workflowResult.socialMedia ? {
-                  instagram: workflowResult.socialMedia.instagram,
-                  socialLinks: workflowResult.socialMedia.socialLinks,
-                  emails: workflowResult.socialMedia.emails || [],
-                } : undefined;
+    //         if (workflowResult.error) {
+    //           console.error("[Save Contact] Workflow error:", workflowResult.error);
+    //           // Save error result to database
+    //           try {
+    //             await workflowResultsService.saveWorkflowResult({
+    //               websiteUrl: normalizedWebsite,
+    //               leadInfo,
+    //               error: workflowResult.error,
+    //               status: "error",
+    //             });
+    //           } catch (saveError) {
+    //             console.error("[Save Contact] Error saving failed workflow result:", saveError);
+    //           }
+    //         } else {
+    //           // Save successful workflow results
+    //           try {
+    //             const contactInfo = workflowResult.socialMedia ? {
+    //               instagram: workflowResult.socialMedia.instagram,
+    //               socialLinks: workflowResult.socialMedia.socialLinks,
+    //               emails: workflowResult.socialMedia.emails || [],
+    //             } : undefined;
 
-                await workflowResultsService.saveWorkflowResult({
-                  websiteUrl: workflowResult.websiteUrl,
-                  leadInfo,
-                  legalDocuments: workflowResult.legalDocuments,
-                  analysis: workflowResult.analysis,
-                  email: workflowResult.email,
-                  contactInfo,
-                  executionDetails: workflowResult.executionDetails,
-                  status: "completed",
-                });
-                console.log("[Save Contact] Successfully saved workflow results for contact");
+    //             await workflowResultsService.saveWorkflowResult({
+    //               websiteUrl: workflowResult.websiteUrl,
+    //               leadInfo,
+    //               legalDocuments: workflowResult.legalDocuments,
+    //               analysis: workflowResult.analysis,
+    //               email: workflowResult.email,
+    //               contactInfo,
+    //               executionDetails: workflowResult.executionDetails,
+    //               status: "completed",
+    //             });
+    //             console.log("[Save Contact] Successfully saved workflow results for contact");
 
-                // UPDATE Instantly.ai lead with the generated email content as custom variables
-                // Since we already added the lead immediately, we'll update it with email content
-                // Using skip_if_in_campaign: true will update the existing lead
-                if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
-                  try {
-                    const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
+    //             // UPDATE Instantly.ai lead with the generated email content as custom variables
+    //             // Since we already added the lead immediately, we'll update it with email content
+    //             // Using skip_if_in_campaign: true will update the existing lead
+    //             if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
+    //               try {
+    //                 const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
 
-                    // Split name into first and last name
-                    const nameParts = name.trim().split(/\s+/);
-                    const firstName = nameParts[0] || "";
-                    const lastName = nameParts.slice(1).join(" ") || "";
+    //                 // Split name into first and last name
+    //                 const nameParts = name.trim().split(/\s+/);
+    //                 const firstName = nameParts[0] || "";
+    //                 const lastName = nameParts.slice(1).join(" ") || "";
 
-                    // Clean up the email body HTML for Instantly AI (remove excessive inline styles)
-                    const cleanEmailBody = workflowResult.email.body
-                      .replace(/style="[^"]*line-height:\s*[^;"]*[^"]*"/g, "")
-                      .replace(/style="[^"]*margin[^"]*"/g, "")
-                      .replace(/style="[^"]*"/g, "")
-                      .replace(/\n{3,}/g, "\n\n")
-                      .trim();
+    //                 // Clean up the email body HTML for Instantly AI (remove excessive inline styles)
+    //                 const cleanEmailBody = workflowResult.email.body
+    //                   .replace(/style="[^"]*line-height:\s*[^;"]*[^"]*"/g, "")
+    //                   .replace(/style="[^"]*margin[^"]*"/g, "")
+    //                   .replace(/style="[^"]*"/g, "")
+    //                   .replace(/\n{3,}/g, "\n\n")
+    //                   .trim();
 
-                    const instantlyLeadData = {
-                      first_name: firstName,
-                      last_name: lastName,
-                      phone: phone?.trim() || "",
-                      website: normalizedWebsite,
-                      custom_variables: {
-                        email_subject: workflowResult.email.subject,
-                        email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
-                        email_body: cleanEmailBody, // Cleaned version as backup
+    //                 const instantlyLeadData = {
+    //                   first_name: firstName,
+    //                   last_name: lastName,
+    //                   phone: phone?.trim() || "",
+    //                   website: normalizedWebsite,
+    //                   custom_variables: {
+    //                     email_subject: workflowResult.email.subject,
+    //                     email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
+    //                     email_body: cleanEmailBody, // Cleaned version as backup
 
-                        // Uppercase to match UI columns explicitly
-                        EMAIL_SUBJECT: workflowResult.email.subject,
-                        EMAIL_BODY_HTML: workflowResult.email.body,
-                        EMAIL_BODY: cleanEmailBody
-                      },
-                    };
+    //                     // Uppercase to match UI columns explicitly
+    //                     EMAIL_SUBJECT: workflowResult.email.subject,
+    //                     EMAIL_BODY_HTML: workflowResult.email.body,
+    //                     EMAIL_BODY: cleanEmailBody
+    //                   },
+    //                 };
 
-                    console.log("[Save Contact] Updating Instantly.ai lead with email content:", {
-                      email: email.trim().toLowerCase(),
-                      campaignId,
-                      hasEmailSubject: !!workflowResult.email.subject,
-                      hasEmailBody: !!workflowResult.email.body,
-                    });
+    //                 console.log("[Save Contact] Updating Instantly.ai lead with email content:", {
+    //                   email: email.trim().toLowerCase(),
+    //                   campaignId,
+    //                   hasEmailSubject: !!workflowResult.email.subject,
+    //                   hasEmailBody: !!workflowResult.email.body,
+    //                 });
 
-                    // Update the lead by adding again with updateIfExists: true
-                    // This will update the existing lead's custom variables
-                    await instantlyService.addLeadToCampaign(
-                      email.trim().toLowerCase(),
-                      campaignId,
-                      instantlyLeadData,
-                      true // updateIfExists - will update existing lead in campaign
-                    );
+    //                 // Update the lead by adding again with updateIfExists: true
+    //                 // This will update the existing lead's custom variables
+    //                 await instantlyService.addLeadToCampaign(
+    //                   email.trim().toLowerCase(),
+    //                   campaignId,
+    //                   instantlyLeadData,
+    //                   true // updateIfExists - will update existing lead in campaign
+    //                 );
 
-                    console.log("[Save Contact] Successfully updated Instantly.ai lead with personalized email content");
-                  } catch (instantlyErr: any) {
-                    console.error("[Save Contact] Error updating Instantly.ai lead with email:", instantlyErr);
-                    // Don't throw - workflow already succeeded and lead was already added
-                  }
-                }
-              } catch (saveError: any) {
-                console.error("[Save Contact] Error saving workflow results:", saveError);
-              }
-            }
-          } catch (workflowError: any) {
-            console.error("[Save Contact] Error running workflow:", workflowError);
-            // Don't throw - we don't want to break the contact save
-          }
-        })(); // Immediately invoke async function
-      }
-    }
+    //                 console.log("[Save Contact] Successfully updated Instantly.ai lead with personalized email content");
+    //               } catch (instantlyErr: any) {
+    //                 console.error("[Save Contact] Error updating Instantly.ai lead with email:", instantlyErr);
+    //                 // Don't throw - workflow already succeeded and lead was already added
+    //               }
+    //             }
+    //           } catch (saveError: any) {
+    //             console.error("[Save Contact] Error saving workflow results:", saveError);
+    //           }
+    //         }
+    //       } catch (workflowError: any) {
+    //         console.error("[Save Contact] Error running workflow:", workflowError);
+    //         // Don't throw - we don't want to break the contact save
+    //       }
+    //     })(); // Immediately invoke async function
+    //   }
+    // }
 
     // Log final integration status (in priority order)
     console.log("[Save Contact] ===== FINAL INTEGRATION STATUS (PRIORITY ORDER) =====");

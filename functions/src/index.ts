@@ -824,15 +824,7 @@ async function initializeRoutes() {
           console.log(`[Onboarding Package] Total documents generated: ${templates.length}`);
           console.log(`[Onboarding Package] Documents successfully generated: ${attachments.length}`);
 
-          // Send notification email (no attachments - all docs are in the vault)
-          await emailService.sendOnboardingPackageEmail(
-            email,
-            name,
-            attachments.length,
-            templates.map((t: any) => t.title)
-          );
-
-          console.log(`[Onboarding Package] Successfully generated ${attachments.length} documents and sent notification to ${email}`);
+          console.log(`[Onboarding Package] Successfully generated ${attachments.length} documents for ${email}`);
 
           return res.json({
             success: true,
@@ -1127,10 +1119,10 @@ async function initializeRoutes() {
       // ================================================================
       // This endpoint schedules all 4 nurture sequence emails
       // Supports both users (userId) and contacts/leads (contactId)
-      // Day 3: Case Study Email
-      // Day 5: Risk Scenario Email
-      // Day 7: Social Proof Email
-      // Day 10: Final Reminder Email
+      // Day 1: Case Study Email (24 hours after signup)
+      // Day 2: Risk Scenario Email (48 hours after signup)
+      // Day 3: Social Proof Email (72 hours after signup)
+      // Day 4: Final Reminder Email (96 hours after signup)
       app.post("/api/emails/schedule-nurture-sequence", async (req, res) => {
         try {
           const { userId, contactId } = req.body;
@@ -1142,34 +1134,98 @@ async function initializeRoutes() {
           const recipientType = userId ? 'user' : 'contact';
           const recipientId = userId || contactId;
 
-          const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+          // Get project ID - Firebase Functions v2 provides this via metadata or we can get from request
+          // Priority: 1) Extract from request URL, 2) Firebase Admin, 3) Env vars, 4) Metadata service
+          let project: string | undefined;
+          
+          // Method 1: Extract from request host (most reliable in Firebase Functions)
+          const host = req.get("host");
+          if (host) {
+            // For Firebase Functions: us-central1-PROJECT_ID.cloudfunctions.net
+            const match = host.match(/us-central1-([^.]+)\.cloudfunctions\.net/);
+            if (match) {
+              project = match[1];
+            }
+            // Also try: PROJECT_ID.cloudfunctions.net (without region prefix)
+            if (!project) {
+              const match2 = host.match(/([^.]+)\.cloudfunctions\.net/);
+              if (match2) {
+                project = match2[1];
+              }
+            }
+          }
+          
+          // Method 2: Try Firebase Admin SDK
+          if (!project) {
+            try {
+              project = admin.app().options.projectId;
+            } catch (e) {
+              // Ignore if not available
+            }
+          }
+          
+          // Method 3: Environment variables
+          if (!project) {
+            project = process.env.GOOGLE_CLOUD_PROJECT || 
+                     process.env.GCLOUD_PROJECT || 
+                     process.env.GCP_PROJECT;
+          }
+          
+          // Method 4: Metadata service (works in Cloud Functions runtime)
+          if (!project) {
+            try {
+              const metadataResponse = await fetch('http://metadata.google.internal/computeMetadata/v1/project/project-id', {
+                headers: { 'Metadata-Flavor': 'Google' },
+                signal: AbortSignal.timeout(1000) // 1 second timeout
+              });
+              if (metadataResponse.ok) {
+                project = await metadataResponse.text();
+              }
+            } catch (e) {
+              // Ignore if metadata service not available (e.g., local dev)
+            }
+          }
+
           const location = "us-central1";
           const queue = "email-reminders";
 
           if (!project) {
-            console.error("[Nurture Sequence Schedule] Project ID not found");
-            return res.status(500).json({ error: "Server configuration error: Project ID missing" });
+            console.error("[Nurture Sequence Schedule] Project ID not found. Available env vars:", {
+              GOOGLE_CLOUD_PROJECT: !!process.env.GOOGLE_CLOUD_PROJECT,
+              GCLOUD_PROJECT: !!process.env.GCLOUD_PROJECT,
+              GCP_PROJECT: !!process.env.GCP_PROJECT,
+              adminProjectId: !!admin.app().options.projectId,
+              host: req.get("host")
+            });
+            return res.status(500).json({ 
+              error: "Server configuration error: Project ID missing",
+              details: "Could not determine Google Cloud project ID. Please set GCLOUD_PROJECT environment variable."
+            });
           }
+
+          console.log(`[Nurture Sequence Schedule] Using project ID: ${project}`);
 
           const tasksClient = new CloudTasksClient();
           const queuePath = tasksClient.queuePath(project, location, queue);
 
+          // baseUrl should be the function base URL (without /api since routes already include it)
           const baseUrl = req.get("host")?.includes("localhost")
             ? `http://${req.get("host")}`
             : `https://${location}-${project}.cloudfunctions.net/api`;
 
           const emails = [
-            { day: 3, endpoint: "send-case-study-email", name: "Case Study", emailType: "case_study" },
-            { day: 5, endpoint: "send-risk-scenario-email", name: "Risk Scenario", emailType: "risk_scenario" },
-            { day: 7, endpoint: "send-social-proof-email", name: "Social Proof", emailType: "social_proof" },
-            { day: 10, endpoint: "send-final-reminder-email", name: "Final Reminder", emailType: "final_reminder" },
+            { day: 1, endpoint: "send-case-study-email", name: "Case Study", emailType: "case_study" },
+            { day: 2, endpoint: "send-risk-scenario-email", name: "Risk Scenario", emailType: "risk_scenario" },
+            { day: 3, endpoint: "send-social-proof-email", name: "Social Proof", emailType: "social_proof" },
+            { day: 4, endpoint: "send-final-reminder-email", name: "Final Reminder", emailType: "final_reminder" },
           ];
 
           const scheduledTasks = [];
 
           for (const email of emails) {
             const scheduleTime = new Date(Date.now() + email.day * 24 * 60 * 60 * 1000);
-            const functionUrl = `${baseUrl}/api/workers/${email.endpoint}`;
+            // Worker endpoints are at /api/workers/..., and baseUrl already includes /api
+            const functionUrl = `${baseUrl}/workers/${email.endpoint}`;
 
             const task = {
               httpRequest: {
@@ -1225,7 +1281,7 @@ async function initializeRoutes() {
       // Worker Endpoints for Nurture Sequence Emails
       // ================================================================
 
-      // Worker: Send Case Study Email (Day 3)
+      // Worker: Send Case Study Email (Day 1 - 24 hours after signup)
       // Supports both users and contacts
       app.post("/api/workers/send-case-study-email", async (req, res) => {
         try {
@@ -1269,7 +1325,6 @@ async function initializeRoutes() {
           // Get recipient data (user or contact)
           let email: string | undefined;
           let name: string | undefined;
-          let businessName: string | undefined;
           let businessType: string | undefined;
 
           if (recipientType === 'user') {
@@ -1294,13 +1349,12 @@ async function initializeRoutes() {
               .eq("user_id", recipientId)
               .single();
 
-            businessName = profile?.business_name;
-            businessType = profile?.business_type;
+            businessType = profile?.business_type || 'wellness business'; // Ensure always a string
           } else {
             // contact
             const { data: contact, error: contactError } = await supabaseAdmin
               .from("contacts")
-              .select("id, email, name")
+              .select("id, email, name, first_name")
               .eq("id", recipientId)
               .single();
 
@@ -1310,10 +1364,16 @@ async function initializeRoutes() {
             }
 
             email = contact.email;
-            name = contact.name;
-            businessName = contact.name; // Fallback
-            businessType = 'wellness business'; // Default
+            // Use first_name if available, otherwise extract from name, otherwise use email prefix
+            name = contact.first_name || 
+                  (contact.name ? contact.name.trim().split(/\s+/)[0] : '') ||
+                  (email ? email.split('@')[0] : 'there');
+            businessType = 'wellness business'; // Default for contacts
           }
+
+          // Final fallbacks to ensure we never have undefined/null values
+          name = name || (email ? email.split('@')[0] : 'there');
+          businessType = businessType || 'wellness business';
 
           if (!email) {
             return res.json({ status: "skipped", reason: "no_email" });
@@ -1322,7 +1382,6 @@ async function initializeRoutes() {
           // Send email
           await emailService.sendCaseStudyEmail(email, {
             name: name,
-            businessName: businessName,
             businessType: businessType,
           });
 
@@ -1366,7 +1425,7 @@ async function initializeRoutes() {
         }
       });
 
-      // Worker: Send Risk Scenario Email (Day 5)
+      // Worker: Send Risk Scenario Email (Day 2 - 48 hours after signup)
       // Supports both users and contacts
       app.post("/api/workers/send-risk-scenario-email", async (req, res) => {
         try {
@@ -1410,7 +1469,6 @@ async function initializeRoutes() {
           // Get recipient data (user or contact)
           let email: string | undefined;
           let name: string | undefined;
-          let businessName: string | undefined;
           let businessType: string | undefined;
           let hasPhysicalMovement = false;
           let hostsRetreats = false;
@@ -1439,8 +1497,7 @@ async function initializeRoutes() {
               .eq("user_id", recipientId)
               .single();
 
-            businessName = profile?.business_name;
-            businessType = profile?.business_type;
+            businessType = profile?.business_type || 'wellness business'; // Ensure always a string
             hasPhysicalMovement = profile?.has_physical_movement || false;
             hostsRetreats = profile?.hosts_retreats || false;
             hiresStaff = profile?.hires_staff || false;
@@ -1449,7 +1506,7 @@ async function initializeRoutes() {
             // contact
             const { data: contact, error: contactError } = await supabaseAdmin
               .from("contacts")
-              .select("id, email, name")
+              .select("id, email, name, first_name")
               .eq("id", recipientId)
               .single();
 
@@ -1459,10 +1516,21 @@ async function initializeRoutes() {
             }
 
             email = contact.email;
-            name = contact.name;
-            businessName = contact.name; // Fallback
-            businessType = 'wellness business'; // Default
+            // Use first_name if available, otherwise extract from name, otherwise use email prefix
+            name = contact.first_name || 
+                  (contact.name ? contact.name.trim().split(/\s+/)[0] : '') ||
+                  (email ? email.split('@')[0] : 'there');
+            businessType = 'wellness business'; // Default for contacts
+            // Contacts don't have profile data, so use safe defaults
+            hasPhysicalMovement = false;
+            hostsRetreats = false;
+            hiresStaff = false;
+            collectsOnline = false;
           }
+
+          // Final fallbacks to ensure we never have undefined/null values
+          name = name || (email ? email.split('@')[0] : 'there');
+          businessType = businessType || 'wellness business';
 
           if (!email) {
             return res.json({ status: "skipped", reason: "no_email" });
@@ -1471,7 +1539,6 @@ async function initializeRoutes() {
           // Send email
           await emailService.sendRiskScenarioEmail(email, {
             name: name,
-            businessName: businessName,
             businessType: businessType,
             hasPhysicalMovement,
             hostsRetreats,
@@ -1519,7 +1586,7 @@ async function initializeRoutes() {
         }
       });
 
-      // Worker: Send Social Proof Email (Day 7)
+      // Worker: Send Social Proof Email (Day 3 - 72 hours after signup)
       // Supports both users and contacts
       app.post("/api/workers/send-social-proof-email", async (req, res) => {
         try {
@@ -1563,7 +1630,6 @@ async function initializeRoutes() {
           // Get recipient data (user or contact)
           let email: string | undefined;
           let name: string | undefined;
-          let businessName: string | undefined;
           let businessType: string | undefined;
 
           if (recipientType === 'user') {
@@ -1588,13 +1654,12 @@ async function initializeRoutes() {
               .eq("user_id", recipientId)
               .single();
 
-            businessName = profile?.business_name;
-            businessType = profile?.business_type;
+            businessType = profile?.business_type || 'wellness business'; // Ensure always a string
           } else {
             // contact
             const { data: contact, error: contactError } = await supabaseAdmin
               .from("contacts")
-              .select("id, email, name")
+              .select("id, email, name, first_name")
               .eq("id", recipientId)
               .single();
 
@@ -1604,10 +1669,16 @@ async function initializeRoutes() {
             }
 
             email = contact.email;
-            name = contact.name;
-            businessName = contact.name; // Fallback
-            businessType = 'wellness business'; // Default
+            // Use first_name if available, otherwise extract from name, otherwise use email prefix
+            name = contact.first_name || 
+                  (contact.name ? contact.name.trim().split(/\s+/)[0] : '') ||
+                  (email ? email.split('@')[0] : 'there');
+            businessType = 'wellness business'; // Default for contacts
           }
+
+          // Final fallbacks to ensure we never have undefined/null values
+          name = name || (email ? email.split('@')[0] : 'there');
+          businessType = businessType || 'wellness business';
 
           if (!email) {
             return res.json({ status: "skipped", reason: "no_email" });
@@ -1633,7 +1704,6 @@ async function initializeRoutes() {
           // Send email
           await emailService.sendSocialProofEmail(email, {
             name: name,
-            businessName: businessName,
             businessType: businessType,
             totalProtected,
             recentSignups,
@@ -1679,7 +1749,7 @@ async function initializeRoutes() {
         }
       });
 
-      // Worker: Send Final Reminder Email (Day 10)
+      // Worker: Send Final Reminder Email (Day 4 - 96 hours after signup)
       // Supports both users and contacts
       app.post("/api/workers/send-final-reminder-email", async (req, res) => {
         try {
@@ -1723,7 +1793,6 @@ async function initializeRoutes() {
           // Get recipient data (user or contact)
           let email: string | undefined;
           let name: string | undefined;
-          let businessName: string | undefined;
           let businessType: string | undefined;
 
           if (recipientType === 'user') {
@@ -1748,13 +1817,12 @@ async function initializeRoutes() {
               .eq("user_id", recipientId)
               .single();
 
-            businessName = profile?.business_name;
-            businessType = profile?.business_type;
+            businessType = profile?.business_type || 'wellness business'; // Ensure always a string
           } else {
             // contact
             const { data: contact, error: contactError } = await supabaseAdmin
               .from("contacts")
-              .select("id, email, name")
+              .select("id, email, name, first_name")
               .eq("id", recipientId)
               .single();
 
@@ -1764,10 +1832,16 @@ async function initializeRoutes() {
             }
 
             email = contact.email;
-            name = contact.name;
-            businessName = contact.name; // Fallback
-            businessType = 'wellness business'; // Default
+            // Use first_name if available, otherwise extract from name, otherwise use email prefix
+            name = contact.first_name || 
+                  (contact.name ? contact.name.trim().split(/\s+/)[0] : '') ||
+                  (email ? email.split('@')[0] : 'there');
+            businessType = 'wellness business'; // Default for contacts
           }
+
+          // Final fallbacks to ensure we never have undefined/null values
+          name = name || (email ? email.split('@')[0] : 'there');
+          businessType = businessType || 'wellness business';
 
           if (!email) {
             return res.json({ status: "skipped", reason: "no_email" });
@@ -1776,7 +1850,6 @@ async function initializeRoutes() {
           // Send email
           await emailService.sendFinalReminderEmail(email, {
             name: name,
-            businessName: businessName,
             businessType: businessType,
           });
 
@@ -1882,6 +1955,104 @@ async function initializeRoutes() {
           console.log("[Save Contact] Attempting to save:", contactData);
           const supabaseResult = await supabaseService.saveContact(contactData);
           console.log("[Save Contact] Successfully saved to Supabase:", supabaseResult);
+
+          // Send contact created email immediately (fire and forget - don't block response)
+          // Only send if this is a new contact (created within the last minute)
+          if (supabaseResult && Array.isArray(supabaseResult) && supabaseResult.length > 0) {
+            const contact = supabaseResult[0];
+            // Check if this contact was just created (within the last minute)
+            // This helps avoid sending duplicate emails to existing contacts
+            const contactCreatedAt = contact.created_at ? new Date(contact.created_at) : null;
+            const now = new Date();
+            const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+            const isNewContact = contactCreatedAt && contactCreatedAt >= oneMinuteAgo;
+            
+            if (isNewContact) {
+              // Use first_name from the saved contact record (properly extracted by SupabaseService)
+              // Fallback to extracting from name if first_name is not available
+              const firstName = contact.first_name || (contact.name ? contact.name.trim().split(/\s+/)[0] : "") || "";
+              
+              // Send email asynchronously (fire and forget)
+              (async () => {
+                try {
+                  console.log("[Save Contact] Sending contact created email to:", email);
+                  console.log("[Save Contact] Using firstName:", firstName || "(empty, will use 'there')");
+                  
+                  // Generate magic link using Supabase admin API
+                  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.RESEND_API_KEY) {
+                    const { createClient } = require("@supabase/supabase-js");
+                    const supabaseAdmin = createClient(
+                      process.env.SUPABASE_URL,
+                      process.env.SUPABASE_SERVICE_ROLE_KEY
+                    );
+
+                    const redirectUrl = `${process.env.DASHBOARD_URL || 'https://free.consciouscounsel.ca'}/wellness/dashboard`;
+                    
+                    let magicLinkUrl = redirectUrl; // Default fallback
+                    try {
+                      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+                        type: 'magiclink',
+                        email: email.trim(),
+                        options: {
+                          redirectTo: redirectUrl,
+                        },
+                      });
+
+                      if (!linkError && linkData?.properties?.action_link) {
+                        magicLinkUrl = linkData.properties.action_link;
+                        console.log("[Save Contact] Magic link generated successfully");
+                      } else {
+                        console.warn("[Save Contact] Magic link generation failed, using dashboard URL:", linkError?.message);
+                      }
+                    } catch (linkErr: any) {
+                      console.warn("[Save Contact] Error generating magic link, using dashboard URL:", linkErr.message);
+                    }
+
+                    // Send email via email service
+                    await emailService.sendContactCreatedEmail(
+                      email.trim(),
+                      firstName,
+                      magicLinkUrl
+                    );
+                    
+                    console.log("[Save Contact] ✅ Contact created email sent successfully");
+                  } else {
+                    console.warn("[Save Contact] ⚠️ Missing required env vars for email (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or RESEND_API_KEY)");
+                  }
+                } catch (emailError: any) {
+                  console.error("[Save Contact] ❌ Error sending contact created email:", emailError);
+                  // Don't throw - we don't want to break the contact save
+                }
+              })();
+            } else {
+              console.log("[Save Contact] Skipping email - contact was created more than 1 minute ago (likely a duplicate)");
+            }
+
+            // Schedule nurture sequence emails for new contacts (fire and forget)
+            if (isNewContact && contact.id) {
+              (async () => {
+                try {
+                  console.log("[Save Contact] Scheduling nurture sequence emails for contact:", contact.id);
+                  const baseUrl = req.get("host")?.includes("localhost")
+                    ? `http://${req.get("host")}`
+                    : `https://us-central1-${process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'cc-legal'}.cloudfunctions.net/api`;
+                  
+                  await fetch(`${baseUrl}/emails/schedule-nurture-sequence`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      contactId: contact.id
+                    })
+                  });
+                  
+                  console.log("[Save Contact] ✅ Nurture sequence emails scheduled for contact:", contact.id);
+                } catch (scheduleError: any) {
+                  console.error("[Save Contact] ❌ Error scheduling nurture sequence:", scheduleError);
+                  // Don't throw - we don't want to break the contact save
+                }
+              })();
+            }
+          }
 
           // STEP 1: Supabase ✅ (Complete)
           // STEP 2: GoHighLevel (PRIORITY - Must complete before Instantly.ai)
@@ -2028,187 +2199,194 @@ async function initializeRoutes() {
           // NOTE: If workflow completes successfully, we'll update the Instantly lead with email content
           // The campaign sequence in Instantly.ai should have a 24-hour delay and use {{email_subject}} and {{email_body_html}} variables
 
+          // ===================================================================
+          // DISABLED: OpenAI Email Generation Workflow
+          // ===================================================================
+          // The workflow that generates personalized emails via OpenAI and sends them to Instantly.ai
+          // has been disabled. To re-enable, uncomment the block below.
+          // ===================================================================
+
           // Automatically trigger legal analyzer workflow if website URL is provided
           // Run asynchronously - don't block the response
-          console.log("[Save Contact] Checking workflow prerequisites:", {
-            hasWebsite: !!normalizedWebsite,
-            hasEmailWorkflow: !!emailWorkflow,
-            hasWorkflowResultsService: !!workflowResultsService,
-            website: normalizedWebsite,
-          });
+          // console.log("[Save Contact] Checking workflow prerequisites:", {
+          //   hasWebsite: !!normalizedWebsite,
+          //   hasEmailWorkflow: !!emailWorkflow,
+          //   hasWorkflowResultsService: !!workflowResultsService,
+          //   website: normalizedWebsite,
+          // });
 
-          if (!emailWorkflow) {
-            console.error("[Save Contact] Email workflow not initialized - cannot run legal analysis");
-          }
+          // if (!emailWorkflow) {
+          //   console.error("[Save Contact] Email workflow not initialized - cannot run legal analysis");
+          // }
 
-          if (!workflowResultsService) {
-            console.error("[Save Contact] WorkflowResultsService not initialized - cannot save results");
-          }
+          // if (!workflowResultsService) {
+          //   console.error("[Save Contact] WorkflowResultsService not initialized - cannot save results");
+          // }
 
-          if (normalizedWebsite && emailWorkflow && workflowResultsService) {
-            // Validate URL format before triggering workflow
-            let isValidUrl = false;
-            try {
-              new URL(normalizedWebsite);
-              isValidUrl = true;
-            } catch (urlError) {
-              console.warn("[Save Contact] Invalid website URL, skipping workflow:", normalizedWebsite);
-            }
+          // if (normalizedWebsite && emailWorkflow && workflowResultsService) {
+          //   // Validate URL format before triggering workflow
+          //   let isValidUrl = false;
+          //   try {
+          //     new URL(normalizedWebsite);
+          //     isValidUrl = true;
+          //   } catch (urlError) {
+          //     console.warn("[Save Contact] Invalid website URL, skipping workflow:", normalizedWebsite);
+          //   }
 
-            if (isValidUrl) {
-              (async () => {
-                try {
-                  console.log("[Save Contact] ===== STARTING WORKFLOW EXECUTION =====");
-                  console.log("[Save Contact] Auto-triggering legal analyzer for:", normalizedWebsite);
-                  console.log("[Save Contact] Lead info:", { name, email, website: normalizedWebsite });
+          //   if (isValidUrl) {
+          //     (async () => {
+          //       try {
+          //         console.log("[Save Contact] ===== STARTING WORKFLOW EXECUTION =====");
+          //         console.log("[Save Contact] Auto-triggering legal analyzer for:", normalizedWebsite);
+          //         console.log("[Save Contact] Lead info:", { name, email, website: normalizedWebsite });
 
-                  const leadInfo = {
-                    name: name,
-                    company: "",
-                    email: email,
-                  };
+          //         const leadInfo = {
+          //           name: name,
+          //           company: "",
+          //           email: email,
+          //         };
 
-                  const workflowStartTime = Date.now();
-                  console.log("[Save Contact] Executing workflow...");
-                  const workflowResult = await emailWorkflow.execute(normalizedWebsite, leadInfo);
-                  const workflowDuration = Date.now() - workflowStartTime;
-                  console.log(`[Save Contact] Workflow completed in ${workflowDuration}ms`);
+          //         const workflowStartTime = Date.now();
+          //         console.log("[Save Contact] Executing workflow...");
+          //         const workflowResult = await emailWorkflow.execute(normalizedWebsite, leadInfo);
+          //         const workflowDuration = Date.now() - workflowStartTime;
+          //         console.log(`[Save Contact] Workflow completed in ${workflowDuration}ms`);
 
-                  console.log("[Save Contact] Workflow result:", {
-                    hasError: !!workflowResult.error,
-                    hasEmail: !!workflowResult.email,
-                    hasAnalysis: !!workflowResult.analysis,
-                    hasLegalDocuments: !!workflowResult.legalDocuments,
-                    emailSubject: workflowResult.email?.subject,
-                    emailBodyLength: workflowResult.email?.body?.length,
-                  });
+          //         console.log("[Save Contact] Workflow result:", {
+          //           hasError: !!workflowResult.error,
+          //           hasEmail: !!workflowResult.email,
+          //           hasAnalysis: !!workflowResult.analysis,
+          //           hasLegalDocuments: !!workflowResult.legalDocuments,
+          //           emailSubject: workflowResult.email?.subject,
+          //           emailBodyLength: workflowResult.email?.body?.length,
+          //         });
 
-                  if (workflowResult.error) {
-                    console.error("[Save Contact] Workflow error:", workflowResult.error);
-                    console.error("[Save Contact] Full error details:", JSON.stringify(workflowResult, null, 2));
-                    try {
-                      await workflowResultsService.saveWorkflowResult({
-                        websiteUrl: normalizedWebsite,
-                        leadInfo,
-                        error: workflowResult.error,
-                        status: "error",
-                      });
-                    } catch (saveError) {
-                      console.error("[Save Contact] Error saving failed workflow result:", saveError);
-                    }
-                  } else {
-                    try {
-                      const contactInfo = workflowResult.socialMedia ? {
-                        instagram: workflowResult.socialMedia.instagram,
-                        socialLinks: workflowResult.socialMedia.socialLinks,
-                        emails: workflowResult.socialMedia.emails || [],
-                      } : undefined;
+          //         if (workflowResult.error) {
+          //           console.error("[Save Contact] Workflow error:", workflowResult.error);
+          //           console.error("[Save Contact] Full error details:", JSON.stringify(workflowResult, null, 2));
+          //           try {
+          //             await workflowResultsService.saveWorkflowResult({
+          //               websiteUrl: normalizedWebsite,
+          //               leadInfo,
+          //               error: workflowResult.error,
+          //               status: "error",
+          //             });
+          //           } catch (saveError) {
+          //             console.error("[Save Contact] Error saving failed workflow result:", saveError);
+          //           }
+          //         } else {
+          //           try {
+          //             const contactInfo = workflowResult.socialMedia ? {
+          //               instagram: workflowResult.socialMedia.instagram,
+          //               socialLinks: workflowResult.socialMedia.socialLinks,
+          //               emails: workflowResult.socialMedia.emails || [],
+          //             } : undefined;
 
-                      console.log("[Save Contact] Saving workflow results to database...");
-                      const savedResult = await workflowResultsService.saveWorkflowResult({
-                        websiteUrl: workflowResult.websiteUrl,
-                        leadInfo,
-                        legalDocuments: workflowResult.legalDocuments,
-                        analysis: workflowResult.analysis,
-                        email: workflowResult.email,
-                        contactInfo,
-                        executionDetails: workflowResult.executionDetails,
-                        status: "completed",
-                      });
-                      console.log("[Save Contact] Successfully saved workflow results for contact");
-                      console.log("[Save Contact] Saved result ID:", savedResult?.id);
+          //             console.log("[Save Contact] Saving workflow results to database...");
+          //             const savedResult = await workflowResultsService.saveWorkflowResult({
+          //               websiteUrl: workflowResult.websiteUrl,
+          //               leadInfo,
+          //               legalDocuments: workflowResult.legalDocuments,
+          //               analysis: workflowResult.analysis,
+          //               email: workflowResult.email,
+          //               contactInfo,
+          //               executionDetails: workflowResult.executionDetails,
+          //               status: "completed",
+          //             });
+          //             console.log("[Save Contact] Successfully saved workflow results for contact");
+          //             console.log("[Save Contact] Saved result ID:", savedResult?.id);
 
-                      // UPDATE Instantly.ai lead with the generated email content as custom variables
-                      // Since we already added the lead immediately, we'll update it with email content
-                      // Using skip_if_in_campaign: true will update the existing lead
-                      if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
-                        try {
-                          const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
+          //             // UPDATE Instantly.ai lead with the generated email content as custom variables
+          //             // Since we already added the lead immediately, we'll update it with email content
+          //             // Using skip_if_in_campaign: true will update the existing lead
+          //             if (workflowResult.email && process.env.INSTANTLY_AI_API_KEY) {
+          //               try {
+          //                 const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
 
-                          // Split name into first and last name
-                          const nameParts = name.trim().split(/\s+/);
-                          const firstName = nameParts[0] || "";
-                          const lastName = nameParts.slice(1).join(" ") || "";
+          //                 // Split name into first and last name
+          //                 const nameParts = name.trim().split(/\s+/);
+          //                 const firstName = nameParts[0] || "";
+          //                 const lastName = nameParts.slice(1).join(" ") || "";
 
-                          // Clean up the email body HTML for Instantly AI (remove excessive inline styles)
-                          const cleanEmailBody = workflowResult.email.body
-                            .replace(/style="[^"]*line-height:\s*[^;"]*[^"]*"/g, "")
-                            .replace(/style="[^"]*margin[^"]*"/g, "")
-                            .replace(/style="[^"]*"/g, "")
-                            .replace(/\n{3,}/g, "\n\n")
-                            .trim();
+          //                 // Clean up the email body HTML for Instantly AI (remove excessive inline styles)
+          //                 const cleanEmailBody = workflowResult.email.body
+          //                   .replace(/style="[^"]*line-height:\s*[^;"]*[^"]*"/g, "")
+          //                   .replace(/style="[^"]*margin[^"]*"/g, "")
+          //                   .replace(/style="[^"]*"/g, "")
+          //                   .replace(/\n{3,}/g, "\n\n")
+          //                   .trim();
 
-                          const instantlyLeadData = {
-                            first_name: firstName,
-                            last_name: lastName,
-                            phone: phone?.trim() || "",
-                            website: normalizedWebsite,
-                            custom_variables: {
-                              email_subject: workflowResult.email.subject,
-                              email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
-                              email_body: cleanEmailBody, // Cleaned version as backup
-                            },
-                          };
+          //                 const instantlyLeadData = {
+          //                   first_name: firstName,
+          //                   last_name: lastName,
+          //                   phone: phone?.trim() || "",
+          //                   website: normalizedWebsite,
+          //                   custom_variables: {
+          //                     email_subject: workflowResult.email.subject,
+          //                     email_body_html: workflowResult.email.body, // Full HTML version for Instantly AI template
+          //                     email_body: cleanEmailBody, // Cleaned version as backup
+          //                   },
+          //                 };
 
-                          console.log("[Save Contact] Updating Instantly.ai lead with email content:", {
-                            email: email.trim().toLowerCase(),
-                            campaignId,
-                            hasEmailSubject: !!workflowResult.email.subject,
-                            hasEmailBody: !!workflowResult.email.body,
-                            emailSubjectPreview: workflowResult.email.subject?.substring(0, 50),
-                            emailBodyPreview: workflowResult.email.body?.substring(0, 100),
-                          });
+          //                 console.log("[Save Contact] Updating Instantly.ai lead with email content:", {
+          //                   email: email.trim().toLowerCase(),
+          //                   campaignId,
+          //                   hasEmailSubject: !!workflowResult.email.subject,
+          //                   hasEmailBody: !!workflowResult.email.body,
+          //                   emailSubjectPreview: workflowResult.email.subject?.substring(0, 50),
+          //                   emailBodyPreview: workflowResult.email.body?.substring(0, 100),
+          //                 });
 
-                          // Update the lead by adding again with updateIfExists: true
-                          // This will update the existing lead's custom variables
-                          console.log("[Save Contact] Calling Instantly.ai API to update lead...");
-                          const instantlyUpdateResult = await instantlyService.addLeadToCampaign(
-                            email.trim().toLowerCase(),
-                            campaignId,
-                            instantlyLeadData,
-                            true // updateIfExists - will update existing lead in campaign
-                          );
+          //                 // Update the lead by adding again with updateIfExists: true
+          //                 // This will update the existing lead's custom variables
+          //                 console.log("[Save Contact] Calling Instantly.ai API to update lead...");
+          //                 const instantlyUpdateResult = await instantlyService.addLeadToCampaign(
+          //                   email.trim().toLowerCase(),
+          //                   campaignId,
+          //                   instantlyLeadData,
+          //                   true // updateIfExists - will update existing lead in campaign
+          //                 );
 
-                          console.log("[Save Contact] Successfully updated Instantly.ai lead with personalized email content");
-                          console.log("[Save Contact] Instantly.ai update result:", JSON.stringify(instantlyUpdateResult, null, 2));
-                        } catch (instantlyErr: any) {
-                          console.error("[Save Contact] Error updating Instantly.ai lead with email:", instantlyErr);
-                          // Don't throw - workflow already succeeded and lead was already added
-                        }
-                      }
-                    } catch (saveError: any) {
-                      console.error("[Save Contact] ===== ERROR SAVING WORKFLOW RESULTS =====");
-                      console.error("[Save Contact] Error saving workflow results:", saveError);
-                      console.error("[Save Contact] Error message:", saveError?.message);
-                      console.error("[Save Contact] Error stack:", saveError?.stack);
-                      console.error("[Save Contact] Error details:", JSON.stringify(saveError, null, 2));
-                    }
-                  }
-                } catch (workflowError: any) {
-                  console.error("[Save Contact] ===== ERROR RUNNING WORKFLOW =====");
-                  console.error("[Save Contact] Error running workflow:", workflowError);
-                  console.error("[Save Contact] Error message:", workflowError?.message);
-                  console.error("[Save Contact] Error stack:", workflowError?.stack);
-                  console.error("[Save Contact] Full error:", JSON.stringify(workflowError, null, 2));
+          //                 console.log("[Save Contact] Successfully updated Instantly.ai lead with personalized email content");
+          //                 console.log("[Save Contact] Instantly.ai update result:", JSON.stringify(instantlyUpdateResult, null, 2));
+          //               } catch (instantlyErr: any) {
+          //                 console.error("[Save Contact] Error updating Instantly.ai lead with email:", instantlyErr);
+          //                 // Don't throw - workflow already succeeded and lead was already added
+          //               }
+          //             }
+          //           } catch (saveError: any) {
+          //             console.error("[Save Contact] ===== ERROR SAVING WORKFLOW RESULTS =====");
+          //             console.error("[Save Contact] Error saving workflow results:", saveError);
+          //             console.error("[Save Contact] Error message:", saveError?.message);
+          //             console.error("[Save Contact] Error stack:", saveError?.stack);
+          //             console.error("[Save Contact] Error details:", JSON.stringify(saveError, null, 2));
+          //           }
+          //         }
+          //       } catch (workflowError: any) {
+          //         console.error("[Save Contact] ===== ERROR RUNNING WORKFLOW =====");
+          //         console.error("[Save Contact] Error running workflow:", workflowError);
+          //         console.error("[Save Contact] Error message:", workflowError?.message);
+          //         console.error("[Save Contact] Error stack:", workflowError?.stack);
+          //         console.error("[Save Contact] Full error:", JSON.stringify(workflowError, null, 2));
 
-                  // Try to save error result to database
-                  try {
-                    await workflowResultsService.saveWorkflowResult({
-                      websiteUrl: normalizedWebsite,
-                      leadInfo: { name, email, company: "" },
-                      error: workflowError?.message || "Unknown workflow error",
-                      status: "error",
-                    });
-                    console.log("[Save Contact] Saved workflow error to database");
-                  } catch (saveErrorErr: any) {
-                    console.error("[Save Contact] Failed to save workflow error to database:", saveErrorErr);
-                  }
-                } finally {
-                  console.log("[Save Contact] ===== WORKFLOW EXECUTION COMPLETE =====");
-                }
-              })(); // Immediately invoke async function
-            }
-          }
+          //         // Try to save error result to database
+          //         try {
+          //           await workflowResultsService.saveWorkflowResult({
+          //             websiteUrl: normalizedWebsite,
+          //             leadInfo: { name, email, company: "" },
+          //             error: workflowError?.message || "Unknown workflow error",
+          //             status: "error",
+          //           });
+          //           console.log("[Save Contact] Saved workflow error to database");
+          //         } catch (saveErrorErr: any) {
+          //           console.error("[Save Contact] Failed to save workflow error to database:", saveErrorErr);
+          //         }
+          //       } finally {
+          //         console.log("[Save Contact] ===== WORKFLOW EXECUTION COMPLETE =====");
+          //       }
+          //     })(); // Immediately invoke async function
+          //   }
+          // }
 
           // Log final integration status (in priority order)
           console.log("[Save Contact] ===== FINAL INTEGRATION STATUS (PRIORITY ORDER) =====");
@@ -2542,6 +2720,37 @@ Keep it brief and practical. Focus on the most important problems.`;
           res.status(500).json({
             error: "Internal server error",
             message: error.message || "An error occurred during the compliance scan",
+          });
+        }
+      });
+
+      // USPTO Trademark Search Endpoint
+      app.post("/api/trademarks/uspto-search", async (req, res) => {
+        try {
+          const { businessName } = req.body;
+
+          if (!businessName || typeof businessName !== 'string' || businessName.trim().length === 0) {
+            return res.status(400).json({ error: "Business name is required" });
+          }
+
+          console.log(`[USPTO] Searching trademarks for: "${businessName}"`);
+
+          // Import USPTO service
+          const { usptoService } = require(path.join(__dirname, "usptoService.js"));
+          
+          // Perform USPTO trademark search
+          const searchResults = await usptoService.searchTrademarks(businessName.trim());
+
+          console.log(`[USPTO] Search complete. Found: ${searchResults.totalResults} results`);
+          console.log(`[USPTO] Risk level: ${searchResults.riskLevel}`);
+
+          // Return the search results
+          return res.json(searchResults);
+        } catch (error: any) {
+          console.error('[USPTO] Error in trademark search:', error);
+          return res.status(500).json({
+            error: 'Failed to search USPTO database',
+            message: error.message
           });
         }
       });
@@ -3322,6 +3531,80 @@ Keep it brief and practical. Focus on the most important problems.`;
           res.status(500).json({
             error: "Internal server error",
             message: error.message || "Failed to generate document",
+            stack: error.stack,
+          });
+          return;
+        }
+      });
+
+      // Generate personalized HTML (without converting to PDF)
+      app.post("/api/documents/generate-html", async (req, res) => {
+        try {
+          const { templateName, userId } = req.body;
+
+          if (!templateName) {
+            return res.status(400).json({
+              error: "templateName is required",
+            });
+          }
+
+          console.log(`[API] Generating HTML: ${templateName} for user: ${userId || 'anonymous'}`);
+
+          // Get user's business profile data
+          let profileData: any = {};
+
+          if (userId && process.env.SUPABASE_URL) {
+            try {
+              const { data: profile, error: profileError } = await createClient(
+                process.env.SUPABASE_URL || "",
+                process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+              )
+                .from('business_profiles')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
+
+              if (!profileError && profile) {
+                profileData = {
+                  businessName: profile.business_name,
+                  legalEntityName: profile.legal_entity_name,
+                  entityType: profile.entity_type,
+                  state: profile.state,
+                  businessAddress: profile.business_address,
+                  ownerName: profile.owner_name,
+                  phone: profile.phone,
+                  email: profile.email,
+                  website: profile.website,
+                  instagram: profile.instagram,
+                  businessType: profile.business_type,
+                  services: profile.services,
+                };
+                console.log('[API] Loaded business profile data for personalization');
+              } else {
+                console.log('[API] No business profile found, using defaults');
+              }
+            } catch (err) {
+              console.error('[API] Error loading business profile:', err);
+              // Continue with empty profile data
+            }
+          }
+
+          // Generate the HTML
+          const html = await documentGenerationService.generateHtmlOnly(
+            templateName,
+            profileData
+          );
+
+          // Set response headers for HTML
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.send(html);
+          return;
+        } catch (error: any) {
+          console.error("[API] Error generating HTML:", error);
+          console.error("[API] Error stack:", error.stack);
+          res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to generate HTML",
             stack: error.stack,
           });
           return;
