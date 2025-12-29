@@ -83,66 +83,46 @@ export class DocumentGenerationService {
         profileData: BusinessProfileData
     ): Promise<Buffer> {
         try {
-            // Use PDF template
-            const templatePath = path.join(this.templatesPath, `${templateName}.pdf`);
-            console.log('[DocGen] Loading PDF template from:', templatePath);
-
-            // ALWAYS prefer HTML templates when they exist because:
-            // 1. HTML templates can be properly populated with user data
-            // 2. Pre-generated PDFs may have placeholders baked in
-            // 3. HTML-to-PDF conversion ensures placeholders are replaced
+            // ALWAYS use HTML templates - they can be properly populated with user data
+            // HTML templates are the source of truth for personalized documents
             // In compiled functions: __dirname = lib/, templates are at lib/templates/html/
             const htmlTemplatePath = path.join(__dirname, 'templates/html', `${templateName}.html`);
             console.log('[DocGen] Looking for HTML template at:', htmlTemplatePath);
             console.log('[DocGen] __dirname is:', __dirname);
-            let templateBytes: Buffer;
             
+            // Check if HTML template exists
             try {
                 await fs.access(htmlTemplatePath);
-                // HTML template exists - use it (can be properly populated)
-                console.log('[DocGen] ✅ HTML template found, converting to PDF with populated data...');
-                templateBytes = await this.generateFromHtml(htmlTemplatePath, profileData);
-                console.log('[DocGen] ✅ Successfully converted HTML to PDF with user data');
-            } catch (htmlError: any) {
-                // HTML doesn't exist - try PDF template as fallback
-                console.log('[DocGen] ⚠️ HTML template not found:', htmlError.message);
-                console.log('[DocGen] Trying PDF template as fallback...');
+                console.log('[DocGen] ✅ HTML template found');
+            } catch (accessError: any) {
+                // Try alternative path in case __dirname resolution is different
+                const altPath = path.join(process.cwd(), 'templates/html', `${templateName}.html`);
+                console.log('[DocGen] Trying alternative path:', altPath);
                 try {
-                    await fs.access(templatePath);
-                    // PDF exists - use it directly (for templates that don't need population)
-                    templateBytes = await fs.readFile(templatePath);
-                    console.log('[DocGen] Using PDF template');
-                } catch (pdfError) {
+                    await fs.access(altPath);
+                    console.log('[DocGen] ✅ HTML template found at alternative path');
+                    // Use the alternative path
+                    const templateBytes = await this.generateFromHtml(altPath, profileData);
+                    console.log('[DocGen] ✅ Successfully converted HTML to PDF with user data');
+                    return templateBytes;
+                } catch (altError) {
                     throw new Error(
-                        `Template not found: ${templateName}.html or ${templateName}.pdf. ` +
-                        `Expected locations: ${htmlTemplatePath} or ${templatePath}`
+                        `HTML template not found: ${templateName}.html. ` +
+                        `Tried: ${htmlTemplatePath} and ${altPath}. ` +
+                        `HTML templates are required for personalized document generation.`
                     );
                 }
             }
+            
+            // HTML template exists - use it (can be properly populated)
+            console.log('[DocGen] Converting HTML template to PDF with populated user data...');
+            const templateBytes = await this.generateFromHtml(htmlTemplatePath, profileData);
+            console.log('[DocGen] ✅ Successfully converted HTML to PDF with user data');
             console.log('[DocGen] Template loaded, size:', templateBytes.length, 'bytes');
-
-            const pdfDoc = await PDFDocument.load(templateBytes);
-            console.log('[DocGen] PDF parsed successfully');
-
-            // Check if template has form fields
-            const form = pdfDoc.getForm();
-            const fields = form.getFields();
-
-            console.log(`[DocGen] Template: ${templateName}`);
-            console.log(`[DocGen] Form fields found: ${fields.length}`);
-
-            if (fields.length > 0) {
-                // Template has fillable form fields - use them
-                await this.fillFormFields(form, profileData);
-            } else {
-                // Template doesn't have form fields - overlay text
-                console.log('[DocGen] No form fields found, overlaying text instead');
-                await this.overlayText(pdfDoc, profileData, templateName);
-            }
-
-            // Save and return the filled PDF
-            const pdfBytes = await pdfDoc.save();
-            return Buffer.from(pdfBytes);
+            
+            // HTML-to-PDF conversion already includes all user data - return directly
+            // No need to process further - the PDF is complete and personalized
+            return templateBytes;
         } catch (error: any) {
             console.error('[DocGen] Error generating document:', error);
             throw new Error(`Failed to generate document: ${error.message}`);
