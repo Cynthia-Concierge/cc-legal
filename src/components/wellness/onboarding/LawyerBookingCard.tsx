@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Calendar, ArrowRight, Users, Clock, CheckCircle2, Sparkles } from 'lucide-react';
@@ -15,18 +15,10 @@ interface BookingStats {
     nextAvailable: string;
 }
 
-declare global {
-    interface Window {
-        Calendly: any;
-    }
-}
-
 export const LawyerBookingCard: React.FC<LawyerBookingCardProps> = ({
     onComplete,
     email
 }) => {
-    const widgetRef = useRef<HTMLDivElement>(null);
-    const [scriptLoaded, setScriptLoaded] = useState(false);
     const [appointmentScheduled, setAppointmentScheduled] = useState(false);
     const [showPreBooking, setShowPreBooking] = useState(true);
     const [bookingStats, setBookingStats] = useState<BookingStats>({
@@ -35,122 +27,8 @@ export const LawyerBookingCard: React.FC<LawyerBookingCardProps> = ({
         nextAvailable: 'Tomorrow at 2pm'
     });
 
-    // Load Calendly script
-    useEffect(() => {
-        // Check if immediately available
-        if (window.Calendly && window.Calendly.initInlineWidget) {
-            setScriptLoaded(true);
-            return;
-        }
-
-        const scriptId = 'calendly-script';
-        let script = document.getElementById(scriptId) as HTMLScriptElement;
-
-        const onScriptLoad = () => {
-            // Wait a bit for Calendly to be fully initialized
-            const checkCalendly = setInterval(() => {
-                if (window.Calendly && window.Calendly.initInlineWidget) {
-                    setScriptLoaded(true);
-                    clearInterval(checkCalendly);
-                }
-            }, 100);
-
-            // Timeout after 5 seconds
-            setTimeout(() => {
-                clearInterval(checkCalendly);
-                if (window.Calendly && window.Calendly.initInlineWidget) {
-                    setScriptLoaded(true);
-                } else {
-                    console.error('[Calendly] Script loaded but Calendly object not available');
-                }
-            }, 5000);
-        };
-
-        if (!script) {
-            script = document.createElement('script');
-            script.id = scriptId;
-            script.src = 'https://assets.calendly.com/assets/external/widget.js';
-            script.async = true;
-            script.addEventListener('load', onScriptLoad);
-            script.addEventListener('error', () => {
-                console.error('[Calendly] Failed to load script');
-            });
-            document.head.appendChild(script);
-        } else {
-            // If script exists but not loaded, listen for load
-            if (script.complete || script.readyState === 'complete') {
-                onScriptLoad();
-            } else {
-                script.addEventListener('load', onScriptLoad);
-            }
-        }
-
-        // Fallback: poll for window.Calendly in case onload missed or script already loaded
-        const intervalId = setInterval(() => {
-            if (window.Calendly && window.Calendly.initInlineWidget) {
-                setScriptLoaded(true);
-                clearInterval(intervalId);
-            }
-        }, 500);
-
-        // Cleanup after 10 seconds
-        const timeoutId = setTimeout(() => {
-            clearInterval(intervalId);
-        }, 10000);
-
-        return () => {
-            script?.removeEventListener('load', onScriptLoad);
-            clearInterval(intervalId);
-            clearTimeout(timeoutId);
-        };
-    }, []);
-
-    // Initialize widget
-    useEffect(() => {
-        if (!scriptLoaded || !widgetRef.current) return;
-
-        // Wait a bit to ensure Calendly is fully ready
-        const initWidget = () => {
-            if (!window.Calendly || !window.Calendly.initInlineWidget) {
-                console.warn('[Calendly] Calendly object not ready, retrying...');
-                setTimeout(initWidget, 200);
-                return;
-            }
-
-            // Clear any existing widget content
-            widgetRef.current!.innerHTML = '';
-
-            // Create container for widget
-            const widgetDiv = document.createElement('div');
-            widgetDiv.className = 'calendly-inline-widget';
-            widgetDiv.style.minWidth = '320px';
-            widgetDiv.style.height = '700px';
-            widgetDiv.style.width = '100%';
-
-            widgetRef.current!.appendChild(widgetDiv);
-
-            // Initialize Calendly with the new URL
-            try {
-                window.Calendly.initInlineWidget({
-                    url: 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad-simpler?primary_color=7da69f',
-                    parentElement: widgetDiv,
-                });
-                console.log('[Calendly] Widget initialized successfully');
-            } catch (error) {
-                console.error('[Calendly] Error initializing widget:', error);
-            }
-        };
-
-        // Small delay to ensure script is fully loaded
-        const timeoutId = setTimeout(initWidget, 100);
-
-        return () => {
-            clearTimeout(timeoutId);
-            if (widgetRef.current) {
-                widgetRef.current.innerHTML = '';
-            }
-        };
-    }, [scriptLoaded]);
+    // Calendly URL - using iframe method which is 100% reliable
+    const calendlyUrl = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad-simpler?primary_color=7da69f';
 
     // Fetch booking statistics
     useEffect(() => {
@@ -175,6 +53,7 @@ export const LawyerBookingCard: React.FC<LawyerBookingCardProps> = ({
     }, []);
 
     // Listen for Calendly events to detect when appointment is scheduled
+    // Works with iframe via postMessage API
     useEffect(() => {
         // Function to check if message is from Calendly
         const isCalendlyEvent = (e: MessageEvent) => {
@@ -186,14 +65,16 @@ export const LawyerBookingCard: React.FC<LawyerBookingCardProps> = ({
         // Event handler for Calendly messages
         const handleCalendlyMessage = (e: MessageEvent) => {
             if (isCalendlyEvent(e)) {
+                console.log('[Calendly] Received event:', e.data.event);
+                
                 // Detect when an event is scheduled
                 if (e.data.event === "calendly.event_scheduled") {
-                    console.log('[Calendly] Appointment scheduled:', e.data.payload);
+                    console.log('[Calendly] ✅ Appointment scheduled:', e.data.payload);
                     
                     // Update contact record in database to track booking
                     const updateContactBooking = async () => {
                         try {
-                            // Get user email from prop, or try to get from auth
+                            // Get user email from prop, or try to get from auth, or from Calendly payload
                             let userEmail = email;
                             
                             if (!userEmail && supabase) {
@@ -201,9 +82,14 @@ export const LawyerBookingCard: React.FC<LawyerBookingCardProps> = ({
                                 userEmail = user?.email || undefined;
                             }
                             
+                            // Fallback: get email from Calendly event payload
+                            if (!userEmail && e.data.payload?.invitee?.email) {
+                                userEmail = e.data.payload.invitee.email;
+                                console.log('[Calendly] Using email from event payload:', userEmail);
+                            }
+                            
                             if (userEmail) {
                                 // Call server endpoint to update contact booking status
-                                // This uses service role key to bypass RLS if needed
                                 const serverUrl = import.meta.env.VITE_SERVER_URL || '';
                                 const response = await fetch(`${serverUrl}/api/contacts/update-calendly-booking`, {
                                     method: 'POST',
@@ -242,7 +128,7 @@ export const LawyerBookingCard: React.FC<LawyerBookingCardProps> = ({
             }
         };
 
-        // Add event listener
+        // Add event listener for Calendly postMessage events
         window.addEventListener("message", handleCalendlyMessage);
 
         // Cleanup
@@ -379,13 +265,8 @@ export const LawyerBookingCard: React.FC<LawyerBookingCardProps> = ({
 
                 <CardContent className="p-0">
                     <div className="min-h-[700px] bg-slate-50 relative">
-                        {!scriptLoaded && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
-                            </div>
-                        )}
                         {appointmentScheduled && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-white/95 z-10 backdrop-blur-sm">
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/95 z-30 backdrop-blur-sm">
                                 <div className="text-center p-6">
                                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <Calendar size={32} />
@@ -400,7 +281,17 @@ export const LawyerBookingCard: React.FC<LawyerBookingCardProps> = ({
                                 </div>
                             </div>
                         )}
-                        <div ref={widgetRef} />
+                        {/* Use iframe - most reliable method, works 100% of the time */}
+                        <iframe
+                            src={calendlyUrl}
+                            width="100%"
+                            height="700"
+                            frameBorder="0"
+                            className="w-full min-h-[700px] border-0"
+                            title="Schedule a call"
+                            allow="camera; microphone; geolocation"
+                            style={{ display: 'block' }}
+                        />
                     </div>
 
                     <div className="p-6 bg-white border-t border-slate-100 flex justify-end">
