@@ -19,23 +19,6 @@ This document lists all Resend emails currently configured in the codebase, wher
 
 ---
 
-### 2. **Onboarding Package Email (3 Free Documents)** ⚠️ NEEDS VERIFICATION
-- **Method**: `EmailService.sendOnboardingPackageEmail()`
-- **Endpoint**: `POST /api/documents/onboarding-package`
-- **Triggered From**:
-  - `src/components/wellness/onboarding/GeneratedDocumentsCard.tsx` (line 62) - Automatically on component mount
-  - This component appears in the onboarding flow after password creation
-- **Status**: ⚠️ **NEEDS VERIFICATION** - You mentioned it works in test mode but want to confirm real users receive it
-- **Subject**: "Your Free Legal Documents are Ready! 📄"
-- **Attachments**: 3 PDFs:
-  1. Social Media Disclaimer
-  2. Photo Release Form  
-  3. Client Intake Form
-- **When Sent**: Automatically when user reaches the "Generated Documents" step in onboarding (after password creation)
-- **Note**: Uses `sessionStorage` to prevent duplicate sends on page reload
-
----
-
 ## 📧 **SCHEDULED/REMINDER EMAILS (May or May Not Be Active)**
 
 ### 3. **Website Scan Reminder Email** ⚠️ STATUS UNKNOWN

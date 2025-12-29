@@ -26,6 +26,8 @@ import { toast } from '../../../components/ui/use-toast';
 import { SocialProofWidget } from '../../../components/wellness/dashboard/SocialProofWidget';
 import { WebsiteComplianceWidget } from '../../../components/wellness/dashboard/WebsiteComplianceWidget';
 import { socialProofStats } from '../../../config/socialProofStats';
+import { DocumentViewerModal } from '../../../components/wellness/vault/DocumentViewerModal';
+import { CopyableDocumentModal } from '../../../components/wellness/vault/CopyableDocumentModal';
 
 
 export const DashboardHome: React.FC = () => {
@@ -50,6 +52,13 @@ export const DashboardHome: React.FC = () => {
     const [hasScannedWebsite, setHasScannedWebsite] = useState(false);
     const [hasCompletedContractReview, setHasCompletedContractReview] = useState(false);
     const [user, setUser] = useState<any>(null);
+
+    // Document viewing state
+    const [viewerDoc, setViewerDoc] = useState<UserDocument | null>(null);
+    const [viewerContent, setViewerContent] = useState<string>('');
+    const [copyableDoc, setCopyableDoc] = useState<UserDocument | null>(null);
+    const [copyableHtmlContent, setCopyableHtmlContent] = useState<string>('');
+    const [isLoadingHtml, setIsLoadingHtml] = useState(false);
 
     // Ref to scroll to the documents section
     const documentsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -211,6 +220,189 @@ export const DashboardHome: React.FC = () => {
                 }
                 break;
             case 'call': setIsCalendlyModalOpen(true); break;
+        }
+    };
+
+    // Document viewing handlers
+    const handleViewDocument = async (doc: UserDocument) => {
+        try {
+            const url = await vaultService.getDownloadUrl(doc.file_path);
+            if (!url) {
+                toast({
+                    variant: "destructive",
+                    title: "Could not open document",
+                    description: "We couldn't generate a secure link for this file. Please try again.",
+                });
+                return;
+            }
+
+            // Check if it's a text file we can display in-app
+            const isTextFile = doc.file_type === 'txt' || doc.file_type === 'md' || doc.file_type === 'json' || doc.file_path.endsWith('.txt') || doc.file_path.endsWith('.md');
+
+            if (isTextFile) {
+                try {
+                    // Fetch the content
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        const text = await response.text();
+                        setViewerContent(text);
+                        setViewerDoc(doc);
+                        return;
+                    }
+                } catch (fetchErr) {
+                    console.error('Failed to fetch text content:', fetchErr);
+                    // Fall back to opening in new tab
+                }
+            }
+
+            // Default: Open in new tab (browser will display PDF/Image)
+            window.open(url, '_blank');
+
+        } catch (error) {
+            console.error('View failed', error);
+            toast({
+                variant: "destructive",
+                title: "Could not open document",
+                description: "An error occurred while trying to open the document.",
+            });
+        }
+    };
+
+    const handleDownloadDocument = async (doc: UserDocument) => {
+        try {
+            const url = await vaultService.getDownloadUrl(doc.file_path);
+            if (!url) {
+                toast({
+                    variant: "destructive",
+                    title: "Could not download document",
+                    description: "We couldn't generate a secure link for this file. Please try again.",
+                });
+                return;
+            }
+
+            // Create a temporary link and trigger download
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = doc.title || 'document';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            toast({
+                title: "Download started",
+                description: `"${doc.title}" is downloading.`,
+            });
+        } catch (error) {
+            console.error('Download failed', error);
+            toast({
+                variant: "destructive",
+                title: "Download failed",
+                description: "An error occurred while trying to download the document.",
+            });
+        }
+    };
+
+    const handleCopyAsText = async (doc: UserDocument) => {
+        try {
+            setIsLoadingHtml(true);
+            setCopyableDoc(doc);
+
+            // Get the download URL for the document
+            const url = await vaultService.getDownloadUrl(doc.file_path);
+            if (!url) {
+                toast({
+                    variant: "destructive",
+                    title: "Could not load document",
+                    description: "We couldn't generate a link for this file. Please try again.",
+                });
+                setIsLoadingHtml(false);
+                setCopyableDoc(null);
+                return;
+            }
+
+            // Check if this is a template-based document that we can generate HTML for
+            if (doc.document_type && doc.document_type.startsWith('template-')) {
+                try {
+                    // Get template name from document_type
+                    const templateId = doc.document_type;
+                    const TEMPLATE_ID_TO_FILE_NAME: Record<string, string> = {
+                        'template-6': 'social_media_disclaimer',
+                        'template-4': 'media_release_form',
+                        'template-intake': 'client_intake_form',
+                        'template-1': 'waiver_release_of_liability',
+                        'template-2': 'service_agreement_membership_contract',
+                        'template-5': 'testimonial_consent_agreement',
+                        'template-7': 'independent_contractor_agreement',
+                        'template-8': 'employment_agreement',
+                        'template-membership': 'membership_agreement',
+                        'template-studio': 'studio_policies',
+                        'template-class': 'class_terms_conditions',
+                        'template-privacy': 'privacy_policy',
+                        'template-website': 'website_terms_conditions',
+                        'template-refund': 'refund_cancellation_policy',
+                        'template-disclaimer': 'website_disclaimer',
+                        'template-cookie': 'cookie_policy',
+                        'template-retreat-waiver': 'retreat_liability_waiver',
+                        'template-travel': 'travel_excursion_agreement',
+                    };
+
+                    const templateName = TEMPLATE_ID_TO_FILE_NAME[templateId];
+                    if (templateName && user) {
+                        // Call the generate-html endpoint
+                        const serverUrl = import.meta.env.VITE_SERVER_URL || '';
+                        const response = await fetch(`${serverUrl}/api/documents/generate-html`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                templateName: templateName,
+                                userId: user.id,
+                            }),
+                        });
+
+                        if (response.ok) {
+                            const html = await response.text();
+                            setCopyableHtmlContent(html);
+                            setIsLoadingHtml(false);
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to generate HTML:', error);
+                }
+            }
+
+            // Fallback: try to fetch as text
+            try {
+                const response = await fetch(url);
+                if (response.ok) {
+                    const text = await response.text();
+                    setCopyableHtmlContent(text);
+                    setIsLoadingHtml(false);
+                    return;
+                }
+            } catch (fetchErr) {
+                console.error('Failed to fetch document content:', fetchErr);
+            }
+
+            // If all else fails, show error
+            toast({
+                variant: "destructive",
+                title: "Could not load document",
+                description: "This document cannot be copied as text.",
+            });
+            setIsLoadingHtml(false);
+            setCopyableDoc(null);
+        } catch (error) {
+            console.error('Copy as text failed', error);
+            toast({
+                variant: "destructive",
+                title: "Could not load document",
+                description: "An error occurred while trying to load the document.",
+            });
+            setIsLoadingHtml(false);
+            setCopyableDoc(null);
         }
     };
 
@@ -538,7 +730,9 @@ export const DashboardHome: React.FC = () => {
                                         userAnswers={answers}
                                         onUploadClick={() => navigate('/wellness/dashboard/documents')}
                                         onUploadWithType={(type, label) => navigate('/wellness/dashboard/documents')}
-                                        onViewDocument={(doc) => navigate('/wellness/dashboard/documents')}
+                                        onViewDocument={handleViewDocument}
+                                        onDownloadDocument={handleDownloadDocument}
+                                        onCopyAsText={handleCopyAsText}
                                     />
                                 </div>
                             )}
@@ -645,6 +839,34 @@ export const DashboardHome: React.FC = () => {
                     </div>
                 </div>
             </div >
+
+            {/* Document Viewer Modal */}
+            {viewerDoc && (
+                <DocumentViewerModal
+                    isOpen={!!viewerDoc}
+                    onClose={() => {
+                        setViewerDoc(null);
+                        setViewerContent('');
+                    }}
+                    title={viewerDoc.title}
+                    content={viewerContent}
+                    onDownload={() => handleDownloadDocument(viewerDoc)}
+                />
+            )}
+
+            {/* Copyable Document Modal */}
+            {copyableDoc && (
+                <CopyableDocumentModal
+                    isOpen={!!copyableDoc}
+                    onClose={() => {
+                        setCopyableDoc(null);
+                        setCopyableHtmlContent('');
+                    }}
+                    title={copyableDoc.title}
+                    htmlContent={copyableHtmlContent}
+                    isLoading={isLoadingHtml}
+                />
+            )}
         </div >
     );
 };

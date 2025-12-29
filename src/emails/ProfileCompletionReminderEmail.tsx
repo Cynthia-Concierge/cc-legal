@@ -109,7 +109,7 @@ export const ProfileCompletionReminderEmail = ({
                         </Section>
 
                         <Text className="text-black text-[14px] leading-[24px]">
-                            If you have any questions, <Link href="mailto:chad@consciouscounsel.ca" className="text-teal-600 no-underline">email us here</Link>. We're here to help.
+                            If you have any questions, <Link href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" className="text-teal-600 no-underline">speak to us</Link>. We're here to help.
                         </Text>
 
                         <Text className="text-black text-[14px] leading-[24px] mt-[24px]">

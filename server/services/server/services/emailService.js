@@ -1,42 +1,69 @@
+"use strict";
 /**
  * Email Service
  * Handles sending transactional emails using Resend
  */
-
-import { Resend } from 'resend';
-
-export class EmailService {
-  private resend: Resend;
-  private fromEmail: string;
-  private adminEmail: string;
-
-  constructor(apiKey: string, fromEmail: string = 'onboarding@resend.dev', adminEmail: string = 'rickibodner@gmail.com') {
-    this.resend = new Resend(apiKey);
-    this.fromEmail = fromEmail || 'onboarding@resend.dev';
-    this.adminEmail = process.env.ADMIN_EMAIL || adminEmail;
-
-    // Log configuration on initialization
-    console.log(`[EmailService] Initialized with fromEmail: ${this.fromEmail}`);
-    if (this.fromEmail === 'onboarding@resend.dev') {
-      console.warn(`[EmailService] ⚠️ WARNING: Using default 'onboarding@resend.dev' - this can only send TO the Resend account owner's email.`);
-      console.warn(`[EmailService] ⚠️ To send to other users, you must verify a domain in Resend and set EMAIL_FROM_ADDRESS to an email on that domain.`);
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
     }
-  }
-
-  /**
-   * Send a welcome email to a new user
-   */
-  async sendWelcomeEmail(email: string, name: string = ''): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending welcome email:`);
-      console.log(`[EmailService]   From: ${this.fromEmail}`);
-      console.log(`[EmailService]   To: ${email}`);
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: 'Welcome to Conscious Counsel! 🛡️',
-        html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><!--$-->
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EmailService = void 0;
+const resend_1 = require("resend");
+class EmailService {
+    constructor(apiKey, fromEmail = 'onboarding@resend.dev', adminEmail = 'rickibodner@gmail.com') {
+        this.resend = new resend_1.Resend(apiKey);
+        this.fromEmail = fromEmail || 'onboarding@resend.dev';
+        this.adminEmail = process.env.ADMIN_EMAIL || adminEmail;
+        // Log configuration on initialization
+        console.log(`[EmailService] Initialized with fromEmail: ${this.fromEmail}`);
+        if (this.fromEmail === 'onboarding@resend.dev') {
+            console.warn(`[EmailService] ⚠️ WARNING: Using default 'onboarding@resend.dev' - this can only send TO the Resend account owner's email.`);
+            console.warn(`[EmailService] ⚠️ To send to other users, you must verify a domain in Resend and set EMAIL_FROM_ADDRESS to an email on that domain.`);
+        }
+    }
+    /**
+     * Send a welcome email to a new user
+     */
+    async sendWelcomeEmail(email, name = '') {
+        try {
+            console.log(`[EmailService] Sending welcome email:`);
+            console.log(`[EmailService]   From: ${this.fromEmail}`);
+            console.log(`[EmailService]   To: ${email}`);
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: 'Welcome to Conscious Counsel! 🛡️',
+                html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><!--$-->
 <html dir="ltr" lang="en">
   <head>
     <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
@@ -242,256 +269,205 @@ export class EmailService {
   </body>
 </html>
 <!--/$-->`
-      });
-
-      console.log('[EmailService] Email sent successfully:', result);
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] ===== ERROR SENDING WELCOME EMAIL =====');
-      console.error('[EmailService] Error details:', {
-        message: error?.message,
-        name: error?.name,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        response: error?.response,
-      });
-
-      // Log full error object if available
-      if (error?.response) {
-        console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
-      }
-
-      // Check for common Resend errors
-      if (error?.message?.includes('403') || error?.status === 403 || error?.statusCode === 403) {
-        console.error('[EmailService] ⚠️ 403 Forbidden Error - This usually means:');
-        console.error('[EmailService]   1. The FROM domain is not verified in Resend');
-        console.error('[EmailService]   2. You are using "onboarding@resend.dev" which can only send TO the account owner');
-        console.error('[EmailService]   3. The API key does not have permission to send from this domain');
-        console.error('[EmailService]   Solution: Verify your domain in Resend Dashboard → Domains');
-        console.error('[EmailService]   Then set EMAIL_FROM_ADDRESS to an email on the verified domain (e.g., hello@yourdomain.com)');
-      }
-
-      console.error('[EmailService] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-      throw error;
+            });
+            console.log('[EmailService] Email sent successfully:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] ===== ERROR SENDING WELCOME EMAIL =====');
+            console.error('[EmailService] Error details:', {
+                message: error?.message,
+                name: error?.name,
+                status: error?.status,
+                statusCode: error?.statusCode,
+                response: error?.response,
+            });
+            // Log full error object if available
+            if (error?.response) {
+                console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
+            }
+            // Check for common Resend errors
+            if (error?.message?.includes('403') || error?.status === 403 || error?.statusCode === 403) {
+                console.error('[EmailService] ⚠️ 403 Forbidden Error - This usually means:');
+                console.error('[EmailService]   1. The FROM domain is not verified in Resend');
+                console.error('[EmailService]   2. You are using "onboarding@resend.dev" which can only send TO the account owner');
+                console.error('[EmailService]   3. The API key does not have permission to send from this domain');
+                console.error('[EmailService]   Solution: Verify your domain in Resend Dashboard → Domains');
+                console.error('[EmailService]   Then set EMAIL_FROM_ADDRESS to an email on the verified domain (e.g., hello@yourdomain.com)');
+            }
+            console.error('[EmailService] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+            throw error;
+        }
     }
-  }
-
-  /**
-   * Send a profile completion reminder email
-   */
-  async sendProfileCompletionReminder(email: string, name?: string): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending profile completion reminder:`);
-      console.log(`[EmailService]   From: ${this.fromEmail}`);
-      console.log(`[EmailService]   To: ${email}`);
-
-      // Import and render the React Email component
-      const { render } = await import('@react-email/render');
-      const { ProfileCompletionReminderEmail } = await import('../../src/emails/ProfileCompletionReminderEmail.js');
-
-      const profileLink = process.env.DASHBOARD_URL ||
-        (process.env.NODE_ENV === 'production'
-          ? 'https://free.consciouscounsel.ca/wellness/dashboard/profile'
-          : 'http://localhost:5173/wellness/dashboard/profile');
-
-      const emailHtml = await render(
-        ProfileCompletionReminderEmail({
-          name: name, // Template will use 'there' as fallback if name is undefined
-          profileLink: profileLink
-        })
-      );
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: 'Quick question about your business...',
-        html: emailHtml,
-      });
-
-      console.log('[EmailService] Profile completion reminder sent successfully:', result);
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] ===== ERROR SENDING PROFILE COMPLETION REMINDER =====');
-      console.error('[EmailService] Error details:', {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        response: error?.response,
-      });
-      if (error?.response) {
-        console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
-      }
-      throw error;
+    /**
+     * Send a profile completion reminder email
+     */
+    async sendProfileCompletionReminder(email, name) {
+        try {
+            console.log(`[EmailService] Sending profile completion reminder:`);
+            console.log(`[EmailService]   From: ${this.fromEmail}`);
+            console.log(`[EmailService]   To: ${email}`);
+            // Import and render the React Email component
+            const { render } = await Promise.resolve().then(() => __importStar(require('@react-email/render')));
+            const { ProfileCompletionReminderEmail } = await Promise.resolve().then(() => __importStar(require('../../src/emails/ProfileCompletionReminderEmail.js')));
+            const profileLink = process.env.DASHBOARD_URL ||
+                (process.env.NODE_ENV === 'production'
+                    ? 'https://free.consciouscounsel.ca/wellness/dashboard/profile'
+                    : 'http://localhost:5173/wellness/dashboard/profile');
+            const emailHtml = await render(ProfileCompletionReminderEmail({
+                name: name, // Template will use 'there' as fallback if name is undefined
+                profileLink: profileLink
+            }));
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: 'Quick question about your business...',
+                html: emailHtml,
+            });
+            console.log('[EmailService] Profile completion reminder sent successfully:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] ===== ERROR SENDING PROFILE COMPLETION REMINDER =====');
+            console.error('[EmailService] Error details:', {
+                message: error?.message,
+                status: error?.status,
+                statusCode: error?.statusCode,
+                response: error?.response,
+            });
+            if (error?.response) {
+                console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
+            }
+            throw error;
+        }
     }
-  }
-
-  /**
-   * Send a website scan reminder email
-   */
-  async sendWebsiteScanReminder(email: string, name?: string): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending website scan reminder:`);
-      console.log(`[EmailService]   From: ${this.fromEmail}`);
-      console.log(`[EmailService]   To: ${email}`);
-
-      // Import and render the React Email component
-      const { render } = await import('@react-email/render');
-      const { WebsiteScanReminderEmail } = await import('../../src/emails/WebsiteScanReminderEmail.js');
-
-      const scanLink = process.env.DASHBOARD_URL ||
-        (process.env.NODE_ENV === 'production'
-          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
-          : 'http://localhost:5173/wellness/dashboard');
-
-      const emailHtml = await render(
-        WebsiteScanReminderEmail({
-          name: name, // Template will use 'there' as fallback if name is undefined
-          scanLink: scanLink
-        })
-      );
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: 'Found something on your website...',
-        html: emailHtml,
-      });
-
-      console.log('[EmailService] Website scan reminder sent successfully:', result);
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] ===== ERROR SENDING WEBSITE SCAN REMINDER =====');
-      console.error('[EmailService] Error details:', {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        response: error?.response,
-      });
-      if (error?.response) {
-        console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
-      }
-      throw error;
+    /**
+     * Send a website scan reminder email
+     */
+    async sendWebsiteScanReminder(email, name) {
+        try {
+            console.log(`[EmailService] Sending website scan reminder:`);
+            console.log(`[EmailService]   From: ${this.fromEmail}`);
+            console.log(`[EmailService]   To: ${email}`);
+            // Import and render the React Email component
+            const { render } = await Promise.resolve().then(() => __importStar(require('@react-email/render')));
+            const { WebsiteScanReminderEmail } = await Promise.resolve().then(() => __importStar(require('../../src/emails/WebsiteScanReminderEmail.js')));
+            const scanLink = process.env.DASHBOARD_URL ||
+                (process.env.NODE_ENV === 'production'
+                    ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+                    : 'http://localhost:5173/wellness/dashboard');
+            const emailHtml = await render(WebsiteScanReminderEmail({
+                name: name, // Template will use 'there' as fallback if name is undefined
+                scanLink: scanLink
+            }));
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: 'Found something on your website...',
+                html: emailHtml,
+            });
+            console.log('[EmailService] Website scan reminder sent successfully:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] ===== ERROR SENDING WEBSITE SCAN REMINDER =====');
+            console.error('[EmailService] Error details:', {
+                message: error?.message,
+                status: error?.status,
+                statusCode: error?.statusCode,
+                response: error?.response,
+            });
+            if (error?.response) {
+                console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
+            }
+            throw error;
+        }
     }
-  }
-
-  /**
-   * Send an admin alert when a new user signs up
-   */
-  async sendAdminAlert(userEmail: string, userName?: string): Promise<any> {
-    // Disabled per user request
-    console.log(`[EmailService] Admin alert disabled. Not sending alert for: ${userEmail}`);
-    return Promise.resolve({ id: 'skipped_disabled', message: 'Admin alert disabled' });
-  }
-
-  /**
-   * Send personalized Legal Health Score email
-   */
-  async sendLegalHealthScoreEmail(
-    email: string,
-    userData: {
-      name?: string;
-      businessName?: string;
-      businessType?: string;
-      score: number;
-      riskLevel: 'Low' | 'Moderate' | 'High';
-      hasPhysicalMovement?: boolean;
-      hostsRetreats?: boolean;
-      hiresStaff?: boolean;
-      collectsOnline?: boolean;
-      usesPhotos?: boolean;
+    /**
+     * Send an admin alert when a new user signs up
+     */
+    async sendAdminAlert(userEmail, userName) {
+        // Disabled per user request
+        console.log(`[EmailService] Admin alert disabled. Not sending alert for: ${userEmail}`);
+        return Promise.resolve({ id: 'skipped_disabled', message: 'Admin alert disabled' });
     }
-  ): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending Legal Health Score email:`);
-      console.log(`[EmailService]   From: ${this.fromEmail}`);
-      console.log(`[EmailService]   To: ${email}`);
-      console.log(`[EmailService]   Score: ${userData.score}, Risk: ${userData.riskLevel}`);
-
-      // Import and render the React Email component
-      const { render } = await import('@react-email/render');
-      const { LegalHealthScoreEmail } = await import('../../src/emails/LegalHealthScoreEmail.js');
-
-      const dashboardLink = process.env.DASHBOARD_URL ||
-        (process.env.NODE_ENV === 'production'
-          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
-          : 'http://localhost:5173/wellness/dashboard');
-
-      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
-
-      const emailHtml = await render(
-        LegalHealthScoreEmail({
-          name: userData.name,
-          businessName: userData.businessName,
-          businessType: userData.businessType,
-          score: userData.score,
-          riskLevel: userData.riskLevel,
-          hasPhysicalMovement: userData.hasPhysicalMovement,
-          hostsRetreats: userData.hostsRetreats,
-          hiresStaff: userData.hiresStaff,
-          collectsOnline: userData.collectsOnline,
-          usesPhotos: userData.usesPhotos,
-          dashboardLink: dashboardLink,
-          calendlyLink: calendlyLink,
-        })
-      );
-
-      // Dynamic subject line based on risk level
-      let subject = 'Your Legal Health Score is ready';
-      if (userData.riskLevel === 'High') {
-        subject = `${userData.name || 'Hi'}, your business has ${userData.score} risk points`;
-      } else if (userData.riskLevel === 'Moderate') {
-        subject = `Your Legal Health Score: ${userData.score}/100`;
-      } else {
-        subject = 'Good news about your legal protection';
-      }
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: subject,
-        html: emailHtml,
-      });
-
-      console.log('[EmailService] Legal Health Score email sent successfully:', result);
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] ===== ERROR SENDING LEGAL HEALTH SCORE EMAIL =====');
-      console.error('[EmailService] Error details:', {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        response: error?.response,
-      });
-      if (error?.response) {
-        console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
-      }
-      throw error;
+    /**
+     * Send personalized Legal Health Score email
+     */
+    async sendLegalHealthScoreEmail(email, userData) {
+        try {
+            console.log(`[EmailService] Sending Legal Health Score email:`);
+            console.log(`[EmailService]   From: ${this.fromEmail}`);
+            console.log(`[EmailService]   To: ${email}`);
+            console.log(`[EmailService]   Score: ${userData.score}, Risk: ${userData.riskLevel}`);
+            // Import and render the React Email component
+            const { render } = await Promise.resolve().then(() => __importStar(require('@react-email/render')));
+            const { LegalHealthScoreEmail } = await Promise.resolve().then(() => __importStar(require('../../src/emails/LegalHealthScoreEmail.js')));
+            const dashboardLink = process.env.DASHBOARD_URL ||
+                (process.env.NODE_ENV === 'production'
+                    ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+                    : 'http://localhost:5173/wellness/dashboard');
+            const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+            const emailHtml = await render(LegalHealthScoreEmail({
+                name: userData.name,
+                businessName: userData.businessName,
+                businessType: userData.businessType,
+                score: userData.score,
+                riskLevel: userData.riskLevel,
+                hasPhysicalMovement: userData.hasPhysicalMovement,
+                hostsRetreats: userData.hostsRetreats,
+                hiresStaff: userData.hiresStaff,
+                collectsOnline: userData.collectsOnline,
+                usesPhotos: userData.usesPhotos,
+                dashboardLink: dashboardLink,
+                calendlyLink: calendlyLink,
+            }));
+            // Dynamic subject line based on risk level
+            let subject = 'Your Legal Health Score is ready';
+            if (userData.riskLevel === 'High') {
+                subject = `${userData.name || 'Hi'}, your business has ${userData.score} risk points`;
+            }
+            else if (userData.riskLevel === 'Moderate') {
+                subject = `Your Legal Health Score: ${userData.score}/100`;
+            }
+            else {
+                subject = 'Good news about your legal protection';
+            }
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: subject,
+                html: emailHtml,
+            });
+            console.log('[EmailService] Legal Health Score email sent successfully:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] ===== ERROR SENDING LEGAL HEALTH SCORE EMAIL =====');
+            console.error('[EmailService] Error details:', {
+                message: error?.message,
+                status: error?.status,
+                statusCode: error?.statusCode,
+                response: error?.response,
+            });
+            if (error?.response) {
+                console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
+            }
+            throw error;
+        }
     }
-  }
-
-  /**
-   * Send trademark risk report to user with PDF attachment
-   */
-  async sendTrademarkRiskReport(
-    email: string,
-    name: string,
-    businessName: string,
-    riskLevel: string,
-    score: number,
-    pdfBuffer?: Buffer
-  ): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending trademark risk report:`);
-      console.log(`[EmailService]   To: ${email}`);
-
-      const subject = `Your Trademark Risk Snapshot for ${businessName}`;
-
-      const riskLevelColor = riskLevel.includes('HIGH') ? '#ef4444' :
-        riskLevel.includes('MODERATE') ? '#f59e0b' : '#10b981';
-
-      const riskIcon = riskLevel.includes('HIGH') ? '⚠️' : riskLevel.includes('MODERATE') ? '⚡' : '✅';
-
-      const html = `
+    /**
+     * Send trademark risk report to user with PDF attachment
+     */
+    async sendTrademarkRiskReport(email, name, businessName, riskLevel, score, pdfBuffer) {
+        try {
+            console.log(`[EmailService] Sending trademark risk report:`);
+            console.log(`[EmailService]   To: ${email}`);
+            const subject = `Your Trademark Risk Snapshot for ${businessName}`;
+            const riskLevelColor = riskLevel.includes('HIGH') ? '#ef4444' :
+                riskLevel.includes('MODERATE') ? '#f59e0b' : '#10b981';
+            const riskIcon = riskLevel.includes('HIGH') ? '⚠️' : riskLevel.includes('MODERATE') ? '⚡' : '✅';
+            const html = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #ffffff;">
           <h1 style="color: #1a1a1a; font-size: 24px; margin-bottom: 20px;">Hi ${name || 'there'},</h1>
 
@@ -558,60 +534,52 @@ export class EmailService {
           </div>
         </div>
       `;
-
-      // Format from address with brand name
-      const fromAddress = this.fromEmail.includes('@')
-        ? `Conscious Counsel <${this.fromEmail}>`
-        : this.fromEmail;
-
-      const emailOptions: any = {
-        from: fromAddress,
-        to: email,
-        subject: subject,
-        html: html,
-      };
-
-      // Add PDF attachment if provided
-      if (pdfBuffer) {
-        emailOptions.attachments = [
-          {
-            filename: `Trademark-Risk-Report-${businessName.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`,
-            content: pdfBuffer,
-          }
-        ];
-      }
-
-      const result = await this.resend.emails.send(emailOptions);
-
-      console.log('[EmailService] Trademark risk report sent:', result);
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] Error sending trademark risk report:', error);
-      // Don't throw, just log
+            // Format from address with brand name
+            const fromAddress = this.fromEmail.includes('@')
+                ? `Conscious Counsel <${this.fromEmail}>`
+                : this.fromEmail;
+            const emailOptions = {
+                from: fromAddress,
+                to: email,
+                subject: subject,
+                html: html,
+            };
+            // Add PDF attachment if provided
+            if (pdfBuffer) {
+                emailOptions.attachments = [
+                    {
+                        filename: `Trademark-Risk-Report-${businessName.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`,
+                        content: pdfBuffer,
+                    }
+                ];
+            }
+            const result = await this.resend.emails.send(emailOptions);
+            console.log('[EmailService] Trademark risk report sent:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] Error sending trademark risk report:', error);
+            // Don't throw, just log
+        }
     }
-  }
-
-
-  /**
-   * Send trademark search confirmation to user (legacy method - kept for backward compatibility)
-   */
-  async sendTrademarkConfirmation(email: string, name: string, businessName: string, riskLevel: string, score: number): Promise<any> {
-    // Redirect to new method
-    return this.sendTrademarkRiskReport(email, name, businessName, riskLevel, score);
-  }
-
-  /**
-   * Send admin alert for new trademark request
-   */
-  async sendAdminTrademarkAlert(userEmail: string, businessName: string, riskLevel: string, score: number): Promise<any> {
-    if (!this.adminEmail) {
-      console.log('[EmailService] No admin email configured, skipping alert');
-      return;
+    /**
+     * Send trademark search confirmation to user (legacy method - kept for backward compatibility)
+     */
+    async sendTrademarkConfirmation(email, name, businessName, riskLevel, score) {
+        // Redirect to new method
+        return this.sendTrademarkRiskReport(email, name, businessName, riskLevel, score);
     }
-
-    try {
-      const subject = `[NEW LEAD] Trademark Risk Report: ${businessName}`;
-      const html = `
+    /**
+     * Send admin alert for new trademark request
+     */
+    async sendAdminTrademarkAlert(userEmail, businessName, riskLevel, score) {
+        if (!this.adminEmail) {
+            console.log('[EmailService] No admin email configured, skipping alert');
+            return;
+        }
+        try {
+            const subject = `[NEW LEAD] Trademark Risk Report: ${businessName}`;
+            const html = `
             <div style="font-family: sans-serif;">
               <h2>New Trademark Risk Report Request</h2>
               <p><strong>Business Name:</strong> ${businessName}</p>
@@ -622,252 +590,185 @@ export class EmailService {
               <p><a href="mailto:${userEmail}">Click to email user</a></p>
             </div>
           `;
-
-      const result = await this.resend.emails.send({
-        from: 'admin-alerts@consciouscounsel.ca', // Or use fromEmail if domain verified, but often alerts come from system
-        to: this.adminEmail,
-        subject: subject,
-        html: html,
-      });
-
-      console.log('[EmailService] Admin trademark alert sent:', result);
-      return result;
-    } catch (error) {
-      console.error('[EmailService] Error sending admin trademark alert:', error);
+            const result = await this.resend.emails.send({
+                from: 'admin-alerts@consciouscounsel.ca', // Or use fromEmail if domain verified, but often alerts come from system
+                to: this.adminEmail,
+                subject: subject,
+                html: html,
+            });
+            console.log('[EmailService] Admin trademark alert sent:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] Error sending admin trademark alert:', error);
+        }
     }
-  }
-
-  /**
-   * Send Case Study Email (Day 1 of nurture sequence - 24 hours after signup)
-   */
-  async sendCaseStudyEmail(
-    email: string,
-    userData: {
-      name?: string;
-      businessType?: string;
+    /**
+     * Send Case Study Email (Day 1 of nurture sequence - 24 hours after signup)
+     */
+    async sendCaseStudyEmail(email, userData) {
+        try {
+            console.log(`[EmailService] Sending Case Study email to: ${email}`);
+            const { render } = await Promise.resolve().then(() => __importStar(require('@react-email/render')));
+            const { CaseStudyEmail } = await Promise.resolve().then(() => __importStar(require('../../src/emails/CaseStudyEmail.js')));
+            const dashboardLink = process.env.DASHBOARD_URL ||
+                (process.env.NODE_ENV === 'production'
+                    ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+                    : 'http://localhost:5173/wellness/dashboard');
+            const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+            const emailHtml = await render(CaseStudyEmail({
+                name: userData.name,
+                businessType: userData.businessType,
+                dashboardLink: dashboardLink,
+                calendlyLink: calendlyLink,
+            }));
+            const subject = `How a ${userData.businessType || 'wellness business'} avoided a $50K lawsuit`;
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: subject,
+                html: emailHtml,
+            });
+            console.log('[EmailService] Case Study email sent successfully');
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] Error sending Case Study email:', error);
+            throw error;
+        }
     }
-  ): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending Case Study email to: ${email}`);
-
-      const { render } = await import('@react-email/render');
-      const { CaseStudyEmail } = await import('../../src/emails/CaseStudyEmail.js');
-
-      const dashboardLink = process.env.DASHBOARD_URL ||
-        (process.env.NODE_ENV === 'production'
-          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
-          : 'http://localhost:5173/wellness/dashboard');
-
-      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
-
-      const emailHtml = await render(
-        CaseStudyEmail({
-          name: userData.name,
-          businessType: userData.businessType,
-          dashboardLink: dashboardLink,
-          calendlyLink: calendlyLink,
-        })
-      );
-
-      const subject = `How a ${userData.businessType || 'wellness business'} avoided a $50K lawsuit`;
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: subject,
-        html: emailHtml,
-      });
-
-      console.log('[EmailService] Case Study email sent successfully');
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] Error sending Case Study email:', error);
-      throw error;
+    /**
+     * Send Risk Scenario Email (Day 2 of nurture sequence - 48 hours after signup)
+     */
+    async sendRiskScenarioEmail(email, userData) {
+        try {
+            console.log(`[EmailService] Sending Risk Scenario email to: ${email}`);
+            const { render } = await Promise.resolve().then(() => __importStar(require('@react-email/render')));
+            const { RiskScenarioEmail } = await Promise.resolve().then(() => __importStar(require('../../src/emails/RiskScenarioEmail.js')));
+            const dashboardLink = process.env.DASHBOARD_URL ||
+                (process.env.NODE_ENV === 'production'
+                    ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+                    : 'http://localhost:5173/wellness/dashboard');
+            const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+            const emailHtml = await render(RiskScenarioEmail({
+                name: userData.name,
+                businessType: userData.businessType,
+                hasPhysicalMovement: userData.hasPhysicalMovement,
+                hostsRetreats: userData.hostsRetreats,
+                hiresStaff: userData.hiresStaff,
+                collectsOnline: userData.collectsOnline,
+                dashboardLink: dashboardLink,
+                calendlyLink: calendlyLink,
+            }));
+            // Dynamic subject based on business type
+            let subject = 'What happens if something goes wrong?';
+            if (userData.hostsRetreats) {
+                subject = 'What happens if a client gets injured at your retreat?';
+            }
+            else if (userData.hasPhysicalMovement) {
+                subject = 'What happens if a client gets injured during class?';
+            }
+            else if (userData.collectsOnline) {
+                subject = 'What happens if a client disputes a charge?';
+            }
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: subject,
+                html: emailHtml,
+            });
+            console.log('[EmailService] Risk Scenario email sent successfully');
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] Error sending Risk Scenario email:', error);
+            throw error;
+        }
     }
-  }
-
-  /**
-   * Send Risk Scenario Email (Day 2 of nurture sequence - 48 hours after signup)
-   */
-  async sendRiskScenarioEmail(
-    email: string,
-    userData: {
-      name?: string;
-      businessType?: string;
-      hasPhysicalMovement?: boolean;
-      hostsRetreats?: boolean;
-      hiresStaff?: boolean;
-      collectsOnline?: boolean;
+    /**
+     * Send Social Proof Email (Day 3 of nurture sequence - 72 hours after signup)
+     */
+    async sendSocialProofEmail(email, userData) {
+        try {
+            console.log(`[EmailService] Sending Social Proof email to: ${email}`);
+            const { render } = await Promise.resolve().then(() => __importStar(require('@react-email/render')));
+            const { SocialProofEmail } = await Promise.resolve().then(() => __importStar(require('../../src/emails/SocialProofEmail.js')));
+            const dashboardLink = process.env.DASHBOARD_URL ||
+                (process.env.NODE_ENV === 'production'
+                    ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+                    : 'http://localhost:5173/wellness/dashboard');
+            const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+            const emailHtml = await render(SocialProofEmail({
+                name: userData.name,
+                businessType: userData.businessType,
+                totalProtected: userData.totalProtected || 1247,
+                recentSignups: userData.recentSignups || 34,
+                dashboardLink: dashboardLink,
+                calendlyLink: calendlyLink,
+            }));
+            const subject = `${userData.totalProtected || 1247}+ wellness businesses trust Conscious Counsel for legal protection`;
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: subject,
+                html: emailHtml,
+            });
+            console.log('[EmailService] Social Proof email sent successfully');
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] Error sending Social Proof email:', error);
+            throw error;
+        }
     }
-  ): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending Risk Scenario email to: ${email}`);
-
-      const { render } = await import('@react-email/render');
-      const { RiskScenarioEmail } = await import('../../src/emails/RiskScenarioEmail.js');
-
-      const dashboardLink = process.env.DASHBOARD_URL ||
-        (process.env.NODE_ENV === 'production'
-          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
-          : 'http://localhost:5173/wellness/dashboard');
-
-      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
-
-      const emailHtml = await render(
-        RiskScenarioEmail({
-          name: userData.name,
-          businessType: userData.businessType,
-          hasPhysicalMovement: userData.hasPhysicalMovement,
-          hostsRetreats: userData.hostsRetreats,
-          hiresStaff: userData.hiresStaff,
-          collectsOnline: userData.collectsOnline,
-          dashboardLink: dashboardLink,
-          calendlyLink: calendlyLink,
-        })
-      );
-
-      // Dynamic subject based on business type
-      let subject = 'What happens if something goes wrong?';
-      if (userData.hostsRetreats) {
-        subject = 'What happens if a client gets injured at your retreat?';
-      } else if (userData.hasPhysicalMovement) {
-        subject = 'What happens if a client gets injured during class?';
-      } else if (userData.collectsOnline) {
-        subject = 'What happens if a client disputes a charge?';
-      }
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: subject,
-        html: emailHtml,
-      });
-
-      console.log('[EmailService] Risk Scenario email sent successfully');
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] Error sending Risk Scenario email:', error);
-      throw error;
+    /**
+     * Send Final Reminder Email (Day 4 of nurture sequence - 96 hours after signup)
+     */
+    async sendFinalReminderEmail(email, userData) {
+        try {
+            console.log(`[EmailService] Sending Final Reminder email to: ${email}`);
+            const { render } = await Promise.resolve().then(() => __importStar(require('@react-email/render')));
+            const { FinalReminderEmail } = await Promise.resolve().then(() => __importStar(require('../../src/emails/FinalReminderEmail.js')));
+            const dashboardLink = process.env.DASHBOARD_URL ||
+                (process.env.NODE_ENV === 'production'
+                    ? 'https://free.consciouscounsel.ca/wellness/dashboard'
+                    : 'http://localhost:5173/wellness/dashboard');
+            const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
+            const emailHtml = await render(FinalReminderEmail({
+                name: userData.name,
+                businessType: userData.businessType,
+                dashboardLink: dashboardLink,
+                calendlyLink: calendlyLink,
+            }));
+            const subject = 'Last chance: Free consultation expires in 48 hours';
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: subject,
+                html: emailHtml,
+            });
+            console.log('[EmailService] Final Reminder email sent successfully');
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] Error sending Final Reminder email:', error);
+            throw error;
+        }
     }
-  }
-
-  /**
-   * Send Social Proof Email (Day 3 of nurture sequence - 72 hours after signup)
-   */
-  async sendSocialProofEmail(
-    email: string,
-    userData: {
-      name?: string;
-      businessType?: string;
-      totalProtected?: number;
-      recentSignups?: number;
-    }
-  ): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending Social Proof email to: ${email}`);
-
-      const { render } = await import('@react-email/render');
-      const { SocialProofEmail } = await import('../../src/emails/SocialProofEmail.js');
-
-      const dashboardLink = process.env.DASHBOARD_URL ||
-        (process.env.NODE_ENV === 'production'
-          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
-          : 'http://localhost:5173/wellness/dashboard');
-
-      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
-
-      const emailHtml = await render(
-        SocialProofEmail({
-          name: userData.name,
-          businessType: userData.businessType,
-          totalProtected: userData.totalProtected || 1247,
-          recentSignups: userData.recentSignups || 34,
-          dashboardLink: dashboardLink,
-          calendlyLink: calendlyLink,
-        })
-      );
-
-      const subject = `${userData.totalProtected || 1247}+ wellness businesses trust Conscious Counsel for legal protection`;
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: subject,
-        html: emailHtml,
-      });
-
-      console.log('[EmailService] Social Proof email sent successfully');
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] Error sending Social Proof email:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Send Final Reminder Email (Day 4 of nurture sequence - 96 hours after signup)
-   */
-  async sendFinalReminderEmail(
-    email: string,
-    userData: {
-      name?: string;
-      businessType?: string;
-    }
-  ): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending Final Reminder email to: ${email}`);
-
-      const { render } = await import('@react-email/render');
-      const { FinalReminderEmail } = await import('../../src/emails/FinalReminderEmail.js');
-
-      const dashboardLink = process.env.DASHBOARD_URL ||
-        (process.env.NODE_ENV === 'production'
-          ? 'https://free.consciouscounsel.ca/wellness/dashboard'
-          : 'http://localhost:5173/wellness/dashboard');
-
-      const calendlyLink = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad';
-
-      const emailHtml = await render(
-        FinalReminderEmail({
-          name: userData.name,
-          businessType: userData.businessType,
-          dashboardLink: dashboardLink,
-          calendlyLink: calendlyLink,
-        })
-      );
-
-      const subject = 'Last chance: Free consultation expires in 48 hours';
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: subject,
-        html: emailHtml,
-      });
-
-      console.log('[EmailService] Final Reminder email sent successfully');
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] Error sending Final Reminder email:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Send a magic link email via Resend
-   */
-  async sendMagicLinkEmail(email: string, magicLinkUrl: string, name: string = ''): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending magic link email:`);
-      console.log(`[EmailService]   From: ${this.fromEmail}`);
-      console.log(`[EmailService]   To: ${email}`);
-      console.log(`[EmailService]   Magic Link URL: ${magicLinkUrl.substring(0, 50)}...`);
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: 'Sign in to your dashboard',
-        html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    /**
+     * Send a magic link email via Resend
+     */
+    async sendMagicLinkEmail(email, magicLinkUrl, name = '') {
+        try {
+            console.log(`[EmailService] Sending magic link email:`);
+            console.log(`[EmailService]   From: ${this.fromEmail}`);
+            console.log(`[EmailService]   To: ${email}`);
+            console.log(`[EmailService]   Magic Link URL: ${magicLinkUrl.substring(0, 50)}...`);
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: 'Sign in to your dashboard',
+                html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html dir="ltr" lang="en">
   <head>
     <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
@@ -944,40 +845,38 @@ export class EmailService {
     </table>
   </body>
 </html>`
-      });
-
-      console.log('[EmailService] Magic link email sent successfully:', result);
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] ===== ERROR SENDING MAGIC LINK EMAIL =====');
-      console.error('[EmailService] Error details:', {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        response: error?.response,
-      });
-      if (error?.response) {
-        console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
-      }
-      throw error;
+            });
+            console.log('[EmailService] Magic link email sent successfully:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] ===== ERROR SENDING MAGIC LINK EMAIL =====');
+            console.error('[EmailService] Error details:', {
+                message: error?.message,
+                status: error?.status,
+                statusCode: error?.statusCode,
+                response: error?.response,
+            });
+            if (error?.response) {
+                console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
+            }
+            throw error;
+        }
     }
-  }
-
-  /**
-   * Send an email when a new contact is created
-   */
-  async sendContactCreatedEmail(email: string, firstName: string = '', magicLinkUrl: string = ''): Promise<any> {
-    try {
-      console.log(`[EmailService] Sending contact created email:`);
-      console.log(`[EmailService]   From: ${this.fromEmail}`);
-      console.log(`[EmailService]   To: ${email}`);
-      console.log(`[EmailService]   Magic Link URL: ${magicLinkUrl.substring(0, 50)}...`);
-
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: email,
-        subject: 'Your personalized legal documents are ready! 🛡️',
-        html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    /**
+     * Send an email when a new contact is created
+     */
+    async sendContactCreatedEmail(email, firstName = '', magicLinkUrl = '') {
+        try {
+            console.log(`[EmailService] Sending contact created email:`);
+            console.log(`[EmailService]   From: ${this.fromEmail}`);
+            console.log(`[EmailService]   To: ${email}`);
+            console.log(`[EmailService]   Magic Link URL: ${magicLinkUrl.substring(0, 50)}...`);
+            const result = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: email,
+                subject: 'Your personalized legal documents are ready! 🛡️',
+                html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html dir="ltr" lang="en">
   <head>
     <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
@@ -1076,22 +975,23 @@ export class EmailService {
     </table>
   </body>
 </html>`
-      });
-
-      console.log('[EmailService] Contact created email sent successfully:', result);
-      return result;
-    } catch (error: any) {
-      console.error('[EmailService] ===== ERROR SENDING CONTACT CREATED EMAIL =====');
-      console.error('[EmailService] Error details:', {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        response: error?.response,
-      });
-      if (error?.response) {
-        console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
-      }
-      throw error;
+            });
+            console.log('[EmailService] Contact created email sent successfully:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('[EmailService] ===== ERROR SENDING CONTACT CREATED EMAIL =====');
+            console.error('[EmailService] Error details:', {
+                message: error?.message,
+                status: error?.status,
+                statusCode: error?.statusCode,
+                response: error?.response,
+            });
+            if (error?.response) {
+                console.error('[EmailService] Resend API error response:', JSON.stringify(error.response, null, 2));
+            }
+            throw error;
+        }
     }
-  }
 }
+exports.EmailService = EmailService;

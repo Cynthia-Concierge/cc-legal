@@ -108,7 +108,7 @@ export const WelcomeEmail = ({
                         <Hr className="border border-solid border-[#eaeaea] my-[26px] mx-0 w-full" />
 
                         <Text className="text-[#666666] text-[12px] leading-[24px] text-center">
-                            Need help? <Link href="mailto:chad@consciouscounsel.ca" className="text-teal-600 underline">Email us here</Link> (chad@consciouscounsel.ca)
+                            Need help? <Link href="https://calendly.com/chad-consciouscounsel/connection-call-with-chad" className="text-teal-600 underline">speak to us</Link>
                         </Text>
 
                         <Text className="text-[#666666] text-[12px] leading-[24px] text-center">

@@ -16,7 +16,6 @@ import {
 
 interface LegalHealthScoreEmailProps {
     name?: string;
-    businessName?: string;
     businessType?: string;
     score: number;
     riskLevel: 'Low' | 'Moderate' | 'High';
@@ -33,7 +32,6 @@ interface LegalHealthScoreEmailProps {
 
 export const LegalHealthScoreEmail = ({
     name,
-    businessName = "your business",
     businessType = "wellness business",
     score,
     riskLevel,
@@ -81,7 +79,7 @@ export const LegalHealthScoreEmail = ({
     // Dynamic headline
     const getHeadline = () => {
         if (riskLevel === 'High') {
-            return `Your ${businessType} has a ${score}/100 risk score`;
+            return `Your business has a ${score}/100 risk score`;
         }
         if (riskLevel === 'Moderate') {
             return `Your business is moderately exposed (${score}/100)`;
@@ -92,12 +90,12 @@ export const LegalHealthScoreEmail = ({
     // Dynamic explanation
     const getExplanation = () => {
         if (riskLevel === 'High') {
-            return `Based on your business profile, ${businessName} has significant legal exposure. This doesn't mean you're in trouble—it means your business activities involve higher liability risks that require robust legal protection.`;
+            return `Based on your business profile, your business has significant legal exposure. This doesn't mean you're in trouble—it means your business activities involve higher liability risks that require robust legal protection.`;
         }
         if (riskLevel === 'Moderate') {
-            return `${businessName} has moderate legal exposure. You're doing some things right, but there are gaps in your protection that could leave you vulnerable if something goes wrong.`;
+            return `Your business has moderate legal exposure. You're doing some things right, but there are gaps in your protection that could leave you vulnerable if something goes wrong.`;
         }
-        return `Great news! ${businessName} has relatively low legal exposure. However, even low-risk businesses need proper legal documentation to protect against unexpected situations.`;
+        return `Great news! Your business has relatively low legal exposure. However, even low-risk businesses need proper legal documentation to protect against unexpected situations.`;
     };
 
     // What this means section

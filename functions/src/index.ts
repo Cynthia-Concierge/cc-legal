@@ -811,9 +811,16 @@ async function initializeRoutes() {
                 console.error(`[Onboarding Package] Error saving to vault for ${tmpl.id}:`, saveErr);
               }
 
-            } catch (err) {
-              console.error(`[Onboarding Package] Failed to generate ${tmpl.id}:`, err);
-              // Continue with others
+            } catch (err: any) {
+              console.error(`[Onboarding Package] ❌ Failed to generate ${tmpl.id}:`, err);
+              console.error(`[Onboarding Package] Error details:`, {
+                templateId: tmpl.id,
+                templateName: tmpl.name,
+                errorMessage: err?.message,
+                errorStack: err?.stack,
+                profileDataKeys: Object.keys(profileData)
+              });
+              // Continue with other documents - don't fail the entire batch
             }
           }
 
@@ -821,14 +828,21 @@ async function initializeRoutes() {
             return res.status(500).json({ error: "Failed to generate any documents" });
           }
 
-          console.log(`[Onboarding Package] Total documents generated: ${templates.length}`);
+          console.log(`[Onboarding Package] Total documents to generate: ${templates.length}`);
           console.log(`[Onboarding Package] Documents successfully generated: ${attachments.length}`);
+          
+          if (attachments.length < templates.length) {
+            const failedCount = templates.length - attachments.length;
+            console.warn(`[Onboarding Package] ⚠️ ${failedCount} document(s) failed to generate out of ${templates.length} total`);
+          }
 
-          console.log(`[Onboarding Package] Successfully generated ${attachments.length} documents for ${email}`);
+          console.log(`[Onboarding Package] ✅ Successfully generated ${attachments.length} documents for ${email}`);
 
           return res.json({
             success: true,
-            generatedCount: attachments.length
+            generatedCount: attachments.length,
+            totalCount: templates.length,
+            failedCount: templates.length - attachments.length
           });
 
         } catch (error: any) {

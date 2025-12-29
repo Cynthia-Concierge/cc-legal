@@ -37,7 +37,6 @@
     "node-fetch": "^3.3.2",
     "pdf-lib": "^1.17.1",
     "playwright": "^1.48.0",
-    "puppeteer": "^24.3.0",
     "resend": "^6.5.2"
   },
   "devDependencies": {

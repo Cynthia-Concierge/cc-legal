@@ -258,6 +258,9 @@ export const Login = () => {
                   <p className="text-xs text-green-700 mt-1">
                     Check your inbox at {email} and click the link to sign in. The link will take you directly to your dashboard.
                   </p>
+                  <p className="text-xs text-green-700 mt-1">
+                    Make sure to check your spam if you don't see it in your inbox.
+                  </p>
                 </div>
               </div>
             ) : resetSuccess ? (

@@ -16,7 +16,6 @@ import {
 
 interface SocialProofEmailProps {
     name?: string;
-    businessName?: string;
     businessType?: string;
     totalProtected?: number;
     recentSignups?: number;
@@ -26,7 +25,6 @@ interface SocialProofEmailProps {
 
 export const SocialProofEmail = ({
     name,
-    businessName = "your business",
     businessType = "wellness business",
     totalProtected = 1247,
     recentSignups = 34,
@@ -145,7 +143,7 @@ export const SocialProofEmail = ({
                         </Section>
 
                         <Text className="text-black text-[14px] leading-[24px]">
-                            {businessName} deserves the same protection. Join the {totalProtected}+ wellness businesses who chose legal peace of mind.
+                            Your business deserves the same protection. Join the {totalProtected}+ wellness businesses who chose legal peace of mind.
                         </Text>
 
                         {/* CTA Section */}

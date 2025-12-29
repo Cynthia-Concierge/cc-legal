@@ -16,7 +16,6 @@ import {
 
 interface CaseStudyEmailProps {
     name?: string;
-    businessName?: string;
     businessType?: string;
     dashboardLink?: string;
     calendlyLink?: string;
@@ -24,7 +23,6 @@ interface CaseStudyEmailProps {
 
 export const CaseStudyEmail = ({
     name,
-    businessName = "your business",
     businessType = "wellness business",
     dashboardLink = "https://free.consciouscounsel.ca/wellness/dashboard",
     calendlyLink = "https://calendly.com/chad-consciouscounsel/connection-call-with-chad",

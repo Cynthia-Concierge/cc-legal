@@ -16,7 +16,6 @@ import {
 
 interface RiskScenarioEmailProps {
     name?: string;
-    businessName?: string;
     businessType?: string;
     hasPhysicalMovement?: boolean;
     hostsRetreats?: boolean;
@@ -28,7 +27,6 @@ interface RiskScenarioEmailProps {
 
 export const RiskScenarioEmail = ({
     name,
-    businessName = "your business",
     businessType = "wellness business",
     hasPhysicalMovement = false,
     hostsRetreats = false,
@@ -69,7 +67,7 @@ export const RiskScenarioEmail = ({
         if (hasPhysicalMovement) {
             return {
                 title: "What happens if a client gets injured during class?",
-                scenario: `A client at ${businessName} claims they were injured during a session. They say you didn't warn them about the risks, and now they're demanding compensation for medical bills, lost income, and pain and suffering.`,
+                scenario: `A client at your business claims they were injured during a session. They say you didn't warn them about the risks, and now they're demanding compensation for medical bills, lost income, and pain and suffering.`,
                 costs: [
                     "Medical expenses: $10,000-$50,000",
                     "Legal defense costs: $40,000-$120,000",
@@ -87,7 +85,7 @@ export const RiskScenarioEmail = ({
         if (collectsOnline) {
             return {
                 title: "What happens if a client disputes a charge?",
-                scenario: `A client books an online course through ${businessName}, completes it, then disputes the charge with their credit card company. They claim the course wasn't as described, and now you're facing a chargeback plus potential legal action.`,
+                scenario: `A client books an online course through your business, completes it, then disputes the charge with their credit card company. They claim the course wasn't as described, and now you're facing a chargeback plus potential legal action.`,
                 costs: [
                     "Chargeback fees: $25-$100 per dispute",
                     "Lost revenue from refunded course",
@@ -105,7 +103,7 @@ export const RiskScenarioEmail = ({
         // Default scenario
         return {
             title: "What happens if something goes wrong?",
-            scenario: `Imagine a situation where a client is unhappy with your services at ${businessName}. They feel they didn't get what they paid for, or something didn't go as expected. Without proper legal protection, you could be vulnerable.`,
+            scenario: `Imagine a situation where a client is unhappy with your services. They feel they didn't get what they paid for, or something didn't go as expected. Without proper legal protection, you could be vulnerable.`,
             costs: [
                 "Legal fees: $5,000-$50,000",
                 "Potential settlements or refunds",
@@ -229,7 +227,7 @@ export const RiskScenarioEmail = ({
                         </Text>
 
                         <Text className="text-black text-[14px] leading-[24px] mt-[24px]">
-                            I'm here to help you protect {businessName}. Let's make sure you're covered.
+                            I'm here to help you protect your business. Let's make sure you're covered.
                         </Text>
 
                         <Text className="text-black text-[14px] leading-[24px] mt-[24px]">

@@ -9,7 +9,6 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import puppeteer from 'puppeteer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,27 +66,7 @@ export class DocumentGenerationService {
     profileData: BusinessProfileData
   ): Promise<Buffer> {
     try {
-      // Check for HTML template first
-      // In dev environment, we need to look in the source directory structure
-      // Adjust path to point to server/templates/html
-      const htmlTemplatePath = path.join(__dirname, '../templates/html', `${templateName}.html`);
-      console.log('[DocGen] Checking for HTML template at:', htmlTemplatePath);
-
-      let useHtml = false;
-      try {
-        await fs.access(htmlTemplatePath);
-        useHtml = true;
-      } catch (e) {
-        console.log('[DocGen] HTML template not found, falling back to PDF template');
-      }
-
-      if (useHtml) {
-        // Generate from HTML using Puppeteer
-        console.log('[DocGen] Using HTML template for generation');
-        return await this.generateFromHtml(htmlTemplatePath, profileData);
-      }
-
-      // Fallback to PDF template
+      // Use PDF template
       const templatePath = path.join(this.templatesPath, `${templateName}.pdf`);
       console.log('[DocGen] Loading PDF template from:', templatePath);
 
@@ -256,141 +235,6 @@ export class DocumentGenerationService {
     return coordinateMaps[templateName] || null;
   }
 
-  /**
-   * Generate PDF from HTML template using Puppeteer
-   */
-  private async generateFromHtml(
-    templatePath: string,
-    profileData: BusinessProfileData
-  ): Promise<Buffer> {
-    try {
-      // 1. Read HTML template
-      const htmlContent = await fs.readFile(templatePath, 'utf-8');
-
-      // 2. Replace placeholders
-      // Simple string replacement for now using handlebars-style placeholders
-      // This matches {{placeholder}} syntax
-      let populatedHtml = htmlContent;
-
-      const replacements: Record<string, string> = {
-        // New Template Placeholders (Uppercase based on user request)
-        '{{BusinessName}}': profileData.businessName || '[Business Name]',
-        '{{BusinessType}}': profileData.businessType || 'Business',
-        '{{BusinessAddress}}': profileData.businessAddress || '[Address]',
-        '{{Email}}': profileData.email || '',
-        '{{SocialLinks}}': `${profileData.website || ''} ${profileData.instagram ? `| IG: ${profileData.instagram}` : ''}`,
-        '{{Jurisdiction}}': profileData.state || '[Jurisdiction]',
-        '{{date}}': new Date().toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }),
-
-        // NEW: Additional placeholders for advanced templates
-        '{{LegalEntityName}}': profileData.legalEntityName || profileData.businessName || '[Legal Entity Name]',
-        '{{EntityType}}': profileData.entityType || '[Entity Type]',
-        '{{State}}': profileData.state || '[State]',
-        '{{OwnerName}}': profileData.ownerName || '[Business Owner]',
-        '{{Phone}}': profileData.phone || '[Phone Number]',
-        '{{Website}}': profileData.website || '',
-        '{{Instagram}}': profileData.instagram || '',
-        '{{Services}}': Array.isArray(profileData.services) ? profileData.services.join(', ') : '',
-
-        // Backward compatibility / extra fields if needed
-        '{{businessName}}': profileData.businessName || '[Business Name]',
-        '{{legalEntityName}}': profileData.legalEntityName || profileData.businessName || '[Legal Name]',
-        '{{entityType}}': profileData.entityType || '',
-        '{{businessAddress}}': profileData.businessAddress || '[Address]',
-        '{{ownerName}}': profileData.ownerName || '',
-        '{{phone}}': profileData.phone || '',
-        '{{email}}': profileData.email || '',
-        '{{website}}': profileData.website || '',
-        '{{instagram}}': profileData.instagram || '',
-        '{{businessType}}': profileData.businessType || '',
-        
-        // Trademark risk report placeholders
-        '{{riskLevel}}': profileData.riskLevel || 'MODERATE RISK',
-        '{{score}}': profileData.score?.toString() || '0',
-        '{{riskLevelClass}}': (profileData.riskLevel || '').toLowerCase().replace(/\s+/g, '-'),
-        '{{riskFactor1}}': profileData.riskFactor1 || 'No federal trademark registration',
-        '{{riskFactor2}}': profileData.riskFactor2 || 'Similar name search not fully completed',
-        '{{riskFactor3}}': profileData.riskFactor3 || 'Expansion beyond current location planned',
-        '{{riskFactor4}}': profileData.riskFactor4 || 'Domain availability uncertain',
-        // New improved PDF fields
-        '{{verdict}}': profileData.verdict || 'Based on your responses, your brand shows moderate trademark risk. Additional protection is recommended before expansion or major brand investment.',
-        '{{trademarkRegistered}}': profileData.trademarkRegistered || 'No',
-        '{{trademarkRegisteredIcon}}': profileData.trademarkRegisteredIcon || '❌',
-        '{{expansionPlanned}}': profileData.expansionPlanned || 'No',
-        '{{expansionPlannedIcon}}': profileData.expansionPlannedIcon || '❌',
-        '{{similarNameSearch}}': profileData.similarNameSearch || 'No',
-        '{{similarNameSearchIcon}}': profileData.similarNameSearchIcon || '❌',
-        '{{domainOwnership}}': profileData.domainOwnership || 'Unchecked',
-        '{{translationText}}': profileData.translationText || 'These factors don\'t indicate a current conflict, but they increase exposure as your brand grows.',
-        // New question fields
-        '{{brandNameOrigin}}': profileData.brandNameOrigin || 'Not specified',
-        '{{includesLocation}}': profileData.includesLocation || 'No',
-        '{{brandUsageDuration}}': profileData.brandUsageDuration || 'Not specified',
-        '{{brandUsageLocations}}': profileData.brandUsageLocations || 'Not specified',
-        '{{expansionPlans}}': profileData.expansionPlans || 'Not specified',
-        '{{brandingInvestments}}': profileData.brandingInvestments || 'Not specified',
-        '{{receivedConfusion}}': profileData.receivedConfusion || 'No',
-        '{{differentFromLegalName}}': profileData.differentFromLegalName || 'Not sure',
-        '{{workedWithLawyer}}': profileData.workedWithLawyer || 'No',
-
-        // Lead magnet PDF placeholders (NEW)
-        '{{riskIcon}}': profileData.riskIcon || this.getRiskIconFromLevel(profileData.riskLevel),
-        '{{riskClass}}': profileData.riskClass || (profileData.riskLevel || '').toLowerCase().replace(/\s+/g, '-'),
-        '{{urgencyMessage}}': profileData.urgencyMessage || this.getUrgencyMessageFromLevel(profileData.riskLevel),
-        '{{totalConflicts}}': profileData.totalConflicts?.toString() || '0',
-        '{{conflictsSection}}': profileData.conflictsSection || '<div class="conflict-count-box"><p>No exact trademark matches found in our preliminary scan.</p></div>',
-        '{{year}}': new Date().getFullYear().toString(),
-      };
-
-      // Perform all replacements
-      for (const [placeholder, value] of Object.entries(replacements)) {
-        // Global replace of all instances
-        // Using replace literal strings technique
-        populatedHtml = populatedHtml.split(placeholder).join(value);
-      }
-
-      console.log('[DocGen] HTML populated with profile data');
-
-      // 3. Launch Puppeteer to generate PDF
-      // Use no-sandbox for better compatibility in container/server environments
-      const browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        headless: true
-      });
-
-      const page = await browser.newPage();
-
-      // Set content
-      await page.setContent(populatedHtml, {
-        waitUntil: 'networkidle0'
-      });
-
-      // Generate PDF
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '0px',
-          right: '0px',
-          bottom: '0px',
-          left: '0px'
-        }
-      });
-
-      await browser.close();
-
-      console.log('[DocGen] HTML converted to PDF successfully');
-      return Buffer.from(pdfBuffer);
-
-    } catch (error: any) {
-      console.error('[DocGen] Error generating from HTML:', error);
-      throw error;
-    }
-  }
 
   /**
    * Generate populated HTML (without converting to PDF)

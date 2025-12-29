@@ -16,7 +16,6 @@ import {
 
 interface FinalReminderEmailProps {
     name?: string;
-    businessName?: string;
     businessType?: string;
     dashboardLink?: string;
     calendlyLink?: string;
@@ -24,7 +23,6 @@ interface FinalReminderEmailProps {
 
 export const FinalReminderEmail = ({
     name,
-    businessName = "your business",
     businessType = "wellness business",
     dashboardLink = "https://free.consciouscounsel.ca/wellness/dashboard",
     calendlyLink = "https://calendly.com/chad-consciouscounsel/connection-call-with-chad",
@@ -87,7 +85,7 @@ export const FinalReminderEmail = ({
                         </Section>
 
                         <Text className="text-black text-[14px] leading-[24px]">
-                            I know you're busy running {businessName}, but I don't want you to miss out on this opportunity to get personalized legal protection—completely free.
+                            I know you're busy running your business, but I don't want you to miss out on this opportunity to get personalized legal protection—completely free.
                         </Text>
 
                         {/* What You Get */}
@@ -100,7 +98,7 @@ export const FinalReminderEmail = ({
                                     <strong>15-30 minute consultation</strong> with a legal expert
                                 </li>
                                 <li style={{ marginBottom: '8px', color: '#1f2937', fontSize: '14px', lineHeight: '1.6' }}>
-                                    <strong>Personalized risk assessment</strong> for {businessName}
+                                    <strong>Personalized risk assessment</strong> for your business
                                 </li>
                                 <li style={{ marginBottom: '8px', color: '#1f2937', fontSize: '14px', lineHeight: '1.6' }}>
                                     <strong>Custom document recommendations</strong> based on your business
@@ -154,12 +152,12 @@ export const FinalReminderEmail = ({
 
                         <Section className="bg-red-50 rounded-lg p-[20px] my-[24px] border-l-4" style={{ borderLeftColor: '#dc2626' }}>
                             <Text className="text-black text-[13px] leading-[20px]">
-                                <strong>⚠️ Don't wait until it's too late.</strong> Every day you delay is another day {businessName} is exposed to legal risks. Get protected today—it's free and takes just 15 minutes.
+                                <strong>⚠️ Don't wait until it's too late.</strong> Every day you delay is another day your business is exposed to legal risks. Get protected today—it's free and takes just 15 minutes.
                             </Text>
                         </Section>
 
                         <Text className="text-black text-[14px] leading-[24px]">
-                            I'd love to help you protect {businessName}. Book your free consultation before the offer expires.
+                            I'd love to help you protect your business. Book your free consultation before the offer expires.
                         </Text>
 
                         <Text className="text-black text-[14px] leading-[24px] mt-[24px]">

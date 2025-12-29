@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, AlertCircle, XCircle, FileText, ChevronDown, ChevronRight, ArrowRight, Eye, Trash2, Download, Copy } from 'lucide-react';
 import { UserDocument, UserAnswers, DocumentItem } from '../../../types/wellness';
 import { getRecommendedDocuments } from '../../../lib/wellness/documentEngine';
@@ -86,6 +87,44 @@ const FREE_TEMPLATE_IDS = new Set([
   'template-retreat-waiver', 'template-travel'
 ]);
 
+interface MissingField {
+  field: string;
+  displayName: string;
+  section: 'identity' | 'legal' | 'structure' | 'security';
+}
+
+function validateProfileFieldsForDocumentGeneration(
+  userAnswers: UserAnswers | null | undefined,
+  userEmail: string | null | undefined
+): MissingField[] {
+  const missing: MissingField[] = [];
+  
+  // Critical fields for document generation
+  if (!userEmail || !userEmail.trim()) {
+    missing.push({ field: 'email', displayName: 'email address', section: 'security' });
+  }
+  
+  if (!userAnswers?.businessName || !userAnswers.businessName.trim()) {
+    missing.push({ field: 'businessName', displayName: 'business name', section: 'identity' });
+  }
+  
+  // Legal entity fields (important for legal documents)
+  if (!userAnswers?.ownerName || !userAnswers.ownerName.trim()) {
+    missing.push({ field: 'ownerName', displayName: 'owner/representative name', section: 'legal' });
+  }
+  
+  if (!userAnswers?.businessAddress || !userAnswers.businessAddress.trim()) {
+    missing.push({ field: 'businessAddress', displayName: 'business address', section: 'legal' });
+  }
+  
+  // Business type is needed for document recommendations
+  if (!userAnswers?.businessType || !userAnswers.businessType.trim()) {
+    missing.push({ field: 'businessType', displayName: 'business type', section: 'structure' });
+  }
+  
+  return missing;
+}
+
 export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = ({
   documents,
   userAnswers,
@@ -95,6 +134,7 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
   onCopyAsText,
   formatDate
 }) => {
+  const navigate = useNavigate();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [generatingDocs, setGeneratingDocs] = useState<Set<string>>(new Set());
   // Get recommended documents based on user answers
@@ -413,15 +453,37 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
         return;
       }
 
-      // Check if profile is complete
-      if (!userAnswers?.isProfileComplete) {
-        toast.info('Please complete your business profile first');
+      // Get user email from auth
+      const userEmail = user.email;
+
+      // Validate specific fields
+      const missingFields = validateProfileFieldsForDocumentGeneration(userAnswers, userEmail);
+      
+      if (missingFields.length > 0) {
+        // Get the first missing field (most critical)
+        const firstMissing = missingFields[0];
+        
+        // Create specific error message
+        const message = `You're missing your ${firstMissing.displayName}. Complete your business profile to generate personalized documents.`;
+        
+        toast.info(message, {
+          duration: 4000
+        });
+        
+        // Navigate to the specific section
+        navigate(`/wellness/dashboard/profile#${firstMissing.section}`);
         return;
       }
 
       // Call backend API to generate personalized document
       const serverUrl = import.meta.env.VITE_SERVER_URL || '';
-      const response = await fetch(`${serverUrl}/api/documents/generate`, {
+      const apiUrl = `${serverUrl}/api/documents/generate`;
+      
+      console.log('[Document Generation] Calling API:', apiUrl);
+      console.log('[Document Generation] Template:', templateFileName);
+      console.log('[Document Generation] User ID:', user.id);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -433,7 +495,36 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to generate document: ${response.statusText}`);
+        // Try to get the actual error message from the response
+        let errorMessage = `Failed to generate document: ${response.statusText}`;
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+            console.error('[Document Generation] API Error:', errorData);
+          } else {
+            const errorText = await response.text();
+            if (errorText) {
+              errorMessage = errorText;
+            }
+          }
+        } catch (parseError) {
+          console.error('[Document Generation] Failed to parse error response:', parseError);
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Check if response is actually a PDF
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/pdf')) {
+        // If not a PDF, it's probably an error
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.message || errorData.error || 'Server returned an error instead of a PDF');
+        } catch (parseError) {
+          throw new Error('Server did not return a valid PDF document');
+        }
       }
 
       // Get the generated PDF blob
@@ -456,8 +547,28 @@ export const LegalInventoryChecklist: React.FC<LegalInventoryChecklistProps> = (
       // Trigger a custom event to refresh documents in parent component
       window.dispatchEvent(new CustomEvent('documents-updated'));
     } catch (error: any) {
-      console.error('Error generating document:', error);
-      toast.error(error?.message || 'Failed to generate document. Please try again.');
+      console.error('[Document Generation] Error:', error);
+      console.error('[Document Generation] Error details:', {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name
+      });
+      
+      // Provide user-friendly error message
+      let userMessage = 'Failed to generate document. Please try again.';
+      if (error?.message) {
+        if (error.message.includes('fetch')) {
+          userMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+        } else if (error.message.includes('Server did not return')) {
+          userMessage = 'The server returned an error. Please try again in a moment.';
+        } else {
+          userMessage = error.message;
+        }
+      }
+      
+      toast.error(userMessage, {
+        duration: 5000
+      });
     } finally {
       setGeneratingDocs(prev => {
         const next = new Set(prev);

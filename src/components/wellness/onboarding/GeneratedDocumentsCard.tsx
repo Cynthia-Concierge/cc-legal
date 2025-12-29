@@ -1,10 +1,11 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { CheckCircle2, FileText, ArrowRight } from 'lucide-react';
+import { CheckCircle2, FileText, ArrowRight, Loader2 } from 'lucide-react';
 import { UserAnswers } from '../../../types/wellness';
 import { getRecommendedDocuments } from '../../../lib/wellness/documentEngine';
+import { useToast } from '../../../hooks/use-toast';
 
 interface GeneratedDocumentsCardProps {
     answers: UserAnswers;
@@ -19,6 +20,11 @@ export const GeneratedDocumentsCard: React.FC<GeneratedDocumentsCardProps> = ({
     onGenerate,
     onSkip
 }) => {
+    const { toast } = useToast();
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generationComplete, setGenerationComplete] = useState(false);
+    const [generationError, setGenerationError] = useState<string | null>(null);
+
     // Calculate counts - ALL documents are now free and customizable
     const stats = useMemo(() => {
         const { freeTemplates } = getRecommendedDocuments(answers);
@@ -27,119 +33,74 @@ export const GeneratedDocumentsCard: React.FC<GeneratedDocumentsCardProps> = ({
         return { total, freeTemplates };
     }, [answers]);
 
-    // Trigger email sending on mount
-    const hasSentRef = useRef(false);
-
+    // Automatically trigger document generation when component mounts
     useEffect(() => {
-        const sendDocuments = async () => {
-            if (hasSentRef.current) return;
-            
-            // Check localStorage to avoid duplicate sends across reloads
-            const hasSentStorage = sessionStorage.getItem('wellness_onboarding_package_sent');
-            if (hasSentStorage) {
-                console.log('Documents already sent this session');
+        const generateDocuments = async () => {
+            // Check if already generated (avoid duplicate calls)
+            if (generationComplete || isGenerating) {
                 return;
             }
 
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) {
-                    console.log('No user logged in, cannot send documents yet.');
+                    console.warn('[GeneratedDocumentsCard] No user found, skipping document generation');
                     return;
                 }
 
-                // CRITICAL: Wait for business profile to exist before sending email
-                // The backend endpoint requires a business_profiles record
-                const waitForProfile = async (maxRetries = 10, delayMs = 500): Promise<boolean> => {
-                    for (let i = 0; i < maxRetries; i++) {
-                        try {
-                            const { data: profile, error } = await supabase
-                                .from('business_profiles')
-                                .select('id')
-                                .eq('user_id', user.id)
-                                .maybeSingle(); // Use maybeSingle() to avoid throwing on not found
+                setIsGenerating(true);
+                setGenerationError(null);
 
-                            if (profile && !error) {
-                                console.log('✅ Business profile found, proceeding with email...');
-                                return true;
-                            }
+                console.log('[GeneratedDocumentsCard] Triggering document generation for user:', user.id);
 
-                            // If we get a specific error (not just "not found"), log it
-                            if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-                                console.warn(`⚠️ Error checking for profile:`, error);
-                            }
-                        } catch (err) {
-                            console.warn(`⚠️ Exception checking for profile:`, err);
-                        }
-
-                        if (i < maxRetries - 1) {
-                            console.log(`⏳ Waiting for business profile... (attempt ${i + 1}/${maxRetries})`);
-                            await new Promise(resolve => setTimeout(resolve, delayMs));
-                        }
-                    }
-                    console.error('❌ Business profile not found after retries. Email will not be sent.');
-                    return false;
-                };
-
-                const profileExists = await waitForProfile();
-                if (!profileExists) {
-                    console.error('Cannot send onboarding package: business profile does not exist');
-                    // Don't mark as sent so it can retry later
-                    return;
-                }
-
-                // Mark as attempting to send
-                hasSentRef.current = true;
-
-                console.log('📧 Triggering onboarding document package email...');
-                console.log('📧 User ID:', user.id);
-                console.log('📧 Server URL:', import.meta.env.VITE_SERVER_URL || '');
-                
                 const serverUrl = import.meta.env.VITE_SERVER_URL || '';
-                const apiUrl = `${serverUrl}/api/documents/onboarding-package`;
-                
-                console.log('📧 API Endpoint:', apiUrl);
-
-                // Fire and forget - don't block UI
-                const response = await fetch(apiUrl, {
+                const response = await fetch(`${serverUrl}/api/documents/onboarding-package`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: user.id })
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId: user.id,
+                    }),
                 });
 
-                console.log('📧 API Response Status:', response.status, response.statusText);
-
-                if (response.ok) {
-                    const result = await response.json();
-                    console.log('✅ Onboarding package email request sent successfully.', result);
-                    sessionStorage.setItem('wellness_onboarding_package_sent', 'true');
-                } else {
-                    const errorText = await response.text();
-                    console.error('❌ FAILED to send onboarding package email');
-                    console.error('❌ Status:', response.status);
-                    console.error('❌ Error Response:', errorText);
-                    
-                    // If it's a 404, the profile doesn't exist - this is the main issue
-                    if (response.status === 404) {
-                        console.error('❌ CRITICAL: Business profile not found in database. Email service was never called.');
-                        console.error('❌ This means Resend will show NO attempt because the email service is never invoked.');
-                    }
-                    
-                    // Reset flag so it can retry
-                    hasSentRef.current = false;
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                    throw new Error(errorData.message || errorData.error || `Failed to generate documents: ${response.status}`);
                 }
 
-            } catch (err) {
-                console.error('❌ Failed to send onboarding package:', err);
-                // Reset flag so it can retry
-                hasSentRef.current = false;
+                const result = await response.json();
+                console.log('[GeneratedDocumentsCard] Document generation result:', result);
+
+                setGenerationComplete(true);
+                setIsGenerating(false);
+
+                if (onGenerate) {
+                    onGenerate();
+                }
+
+                toast({
+                    title: "Documents Generated!",
+                    description: `Successfully generated ${result.generatedCount || stats.total} documents. They're now in your vault.`,
+                });
+
+            } catch (error: any) {
+                console.error('[GeneratedDocumentsCard] Error generating documents:', error);
+                setGenerationError(error.message || 'Failed to generate documents');
+                setIsGenerating(false);
+                
+                toast({
+                    variant: "destructive",
+                    title: "Document Generation Error",
+                    description: error.message || "Some documents may not have been generated. You can try again from your dashboard.",
+                });
             }
         };
 
-        // Small delay to ensure profile creation from previous step has time to complete
-        const timeoutId = setTimeout(sendDocuments, 500);
-        return () => clearTimeout(timeoutId);
-    }, []);
+        // Trigger generation automatically
+        generateDocuments();
+    }, []); // Only run once on mount
+
 
     return (
         <div className="w-full max-w-md mx-auto flex flex-col min-h-[calc(100vh-100px)] md:min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -155,6 +116,43 @@ export const GeneratedDocumentsCard: React.FC<GeneratedDocumentsCardProps> = ({
 
                 <CardContent className="p-8 space-y-8 flex-1 pb-24 md:pb-8">
                     <div className="space-y-6">
+                        {isGenerating && (
+                            <div className="bg-blue-50 rounded-xl p-5 border border-blue-100 flex flex-col items-center gap-3">
+                                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                                <p className="text-sm text-blue-800 font-medium">
+                                    Generating your {stats.total} documents...
+                                </p>
+                                <p className="text-xs text-blue-600">
+                                    This may take a minute. Please don't close this page.
+                                </p>
+                            </div>
+                        )}
+
+                        {generationError && (
+                            <div className="bg-red-50 rounded-xl p-5 border border-red-100">
+                                <p className="text-sm text-red-800 font-medium mb-2">
+                                    ⚠️ Generation Error
+                                </p>
+                                <p className="text-xs text-red-600">
+                                    {generationError}
+                                </p>
+                                <p className="text-xs text-red-600 mt-2">
+                                    Don't worry - you can generate documents from your dashboard.
+                                </p>
+                            </div>
+                        )}
+
+                        {generationComplete && (
+                            <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
+                                <p className="text-sm text-emerald-800 font-medium mb-1">
+                                    ✅ Documents Generated Successfully!
+                                </p>
+                                <p className="text-xs text-emerald-600">
+                                    All documents have been saved to your vault and are ready to use.
+                                </p>
+                            </div>
+                        )}
+
                         <p className="text-lg text-slate-600 leading-relaxed text-center">
                             Based on your answers, we've prepared <span className="font-bold text-emerald-600">{stats.total} legal documents</span> fully customized for your business.
                         </p>
