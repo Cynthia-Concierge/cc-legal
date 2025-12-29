@@ -61,6 +61,30 @@ export const BusinessProfile = () => {
   const [hasExistingAccount, setHasExistingAccount] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
+  // Handle URL hash navigation to specific sections
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1); // Remove #
+      if (hash && ['security', 'identity', 'legal', 'structure', 'risk', 'goal'].includes(hash)) {
+        setActiveSection(hash as SectionId);
+        // Scroll to section if needed
+        setTimeout(() => {
+          const element = document.getElementById(`section-${hash}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+      }
+    };
+
+    // Handle initial hash
+    handleHashChange();
+
+    // Listen for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   useEffect(() => {
     const loadProfileData = async () => {
       // First, try to load from localStorage (for backward compatibility)
@@ -125,13 +149,14 @@ export const BusinessProfile = () => {
         try {
           const { data: { user: authUser } } = await supabase.auth.getUser();
 
-          if (authUser) {
+            if (authUser) {
             setHasExistingAccount(true);
 
             // Should we skip the password section if they already have an account?
             // Maybe not, allowing them to change it is good. 
             // But we might want to default activeSection to 'identity' if they are logged in.
-            if (authUser.email_confirmed_at || authUser.last_sign_in_at) {
+            // Only set default if no hash is present (hash navigation takes precedence)
+            if (!window.location.hash && (authUser.email_confirmed_at || authUser.last_sign_in_at)) {
               setActiveSection('identity');
             }
 
@@ -577,12 +602,33 @@ export const BusinessProfile = () => {
       // Users are added to 'users' table when they create password, but business_profiles only when they save profile
       if (user && supabase && formData.businessName && formData.businessName.trim().length > 0) {
         try {
+          // SYNC WEBSITE FROM CONTACTS TABLE IF MISSING
+          // If website wasn't entered in the form, check if it exists in contacts table
+          let websiteUrl = formData.website || '';
+          if (!websiteUrl && user.email) {
+            try {
+              const { data: contactData } = await supabase
+                .from('contacts')
+                .select('website')
+                .eq('email', user.email.trim().toLowerCase())
+                .single();
+              
+              if (contactData?.website && contactData.website.trim()) {
+                websiteUrl = contactData.website.trim();
+                console.log('✅ Synced website from contacts table:', websiteUrl);
+              }
+            } catch (contactError) {
+              console.warn('⚠️ Could not fetch website from contacts:', contactError);
+              // Continue without website - not a critical error
+            }
+          }
+
           const { error: profileError } = await supabase
             .from('business_profiles')
             .upsert({
               user_id: user.id,
               business_name: formData.businessName.trim(),
-              website_url: formData.website,
+              website_url: websiteUrl,
               instagram: formData.instagram,
               business_type: formData.businessType,
               team_size: formData.staffCount,
@@ -860,7 +906,7 @@ export const BusinessProfile = () => {
             <div className="space-y-6">
 
               {activeSection === 'security' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                <div id="section-security" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
                   {/* For existing users who haven't clicked 'Change Password' yet, show a secured state */}
                   {hasExistingAccount && !showChangePassword ? (
                     <div className="bg-green-50 p-6 rounded-xl border border-green-100 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -953,7 +999,7 @@ export const BusinessProfile = () => {
               )}
 
               {activeSection === 'identity' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                <div id="section-identity" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Business Name</label>
                     <input
@@ -990,7 +1036,7 @@ export const BusinessProfile = () => {
               )}
 
               {activeSection === 'legal' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                <div id="section-legal" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
                   <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
                     This information is used to <strong>auto-fill your legal documents</strong>. Fill this out once to generate personalized agreements instantly.
                   </p>
@@ -1086,7 +1132,7 @@ export const BusinessProfile = () => {
               )}
 
               {activeSection === 'structure' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                <div id="section-structure" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Primary Business Type</label>
                     <select
@@ -1147,7 +1193,7 @@ export const BusinessProfile = () => {
               )}
 
               {activeSection === 'risk' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                <div id="section-risk" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
                   <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
                     <div>
                       <p className="font-medium text-slate-900">Do you use client photos or videos?</p>
@@ -1210,7 +1256,7 @@ export const BusinessProfile = () => {
               )}
 
               {activeSection === 'goal' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                <div id="section-goal" className="space-y-6 animate-in slide-in-from-right-4 duration-500">
                   <label className="block text-sm font-medium text-slate-700 mb-3">Which of these feels most urgent right now?</label>
                   <div className="grid gap-3">
                     {[

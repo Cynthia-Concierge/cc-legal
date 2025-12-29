@@ -90,14 +90,35 @@ export const Onboarding: React.FC = () => {
         answers.primaryBusinessType === 'Coaching'
       );
 
+      // SYNC WEBSITE FROM CONTACTS TABLE IF MISSING
+      // If website wasn't entered during onboarding, check if it exists in contacts table
+      let websiteUrl = answers.website || '';
+      if (!websiteUrl && user.email && supabase) {
+        try {
+          const { data: contactData } = await supabase
+            .from('contacts')
+            .select('website')
+            .eq('email', user.email.trim().toLowerCase())
+            .single();
+          
+          if (contactData?.website && contactData.website.trim()) {
+            websiteUrl = contactData.website.trim();
+            console.log('✅ Synced website from contacts table:', websiteUrl);
+          }
+        } catch (contactError) {
+          console.warn('⚠️ Could not fetch website from contacts:', contactError);
+          // Continue without website - not a critical error
+        }
+      }
+
       // PREPARE DATA PAYLOAD
       const profilePayload = {
         user_id: user.id,
-        website_url: answers.website || '',
+        website_url: websiteUrl,
 
         // Website scan step removed - these fields will be empty/false for new onboarding users
-        has_scanned_website: !!(answers.website && answers.website.length > 3),
-        website_scan_completed_at: answers.website ? new Date().toISOString() : null,
+        has_scanned_website: !!(websiteUrl && websiteUrl.length > 3),
+        website_scan_completed_at: websiteUrl ? new Date().toISOString() : null,
 
         business_type: mappedBusinessType,
         // Map boolean flags
