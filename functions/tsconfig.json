@@ -14,11 +14,11 @@
   },
   "compileOnSave": true,
   "include": [
-    "src/**/*",
-    "lib/server/**/*"
+    "src/**/*"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "lib/server/**/*.ts"
   ]
 }
 
