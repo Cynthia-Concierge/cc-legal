@@ -683,6 +683,7 @@ async function initializeRoutes() {
           }
 
           console.log(`[Onboarding Package] Processing for user ${userId}`);
+          console.log(`[Onboarding Package] Request received at: ${new Date().toISOString()}`);
 
           if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
             return res.status(500).json({ error: "Server configuration error" });
@@ -692,27 +693,46 @@ async function initializeRoutes() {
           const { createClient } = await import("@supabase/supabase-js");
           const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-          // Get Profile Data
-          const { data: profile, error } = await supabaseAdmin
-            .from('business_profiles')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
-
-          if (error || !profile) {
-            console.error('[Onboarding Package] Profile not found:', error);
-            // Try fallback to local answers if passed? No, enforce DB for security
-            return res.status(404).json({ error: "Profile not found" });
-          }
-
           // Get User Email
           const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
           const email = authUser?.user?.email;
-          const name = profile.business_name || authUser?.user?.user_metadata?.name || 'there';
 
           if (!email) {
+            console.error('[Onboarding Package] ❌ User email not found');
             return res.status(404).json({ error: "User email not found" });
           }
+
+          // Load profile with fallback to contacts table
+          const profile = await loadProfileWithFallback(userId, email);
+
+          if (!profile) {
+            console.error('[Onboarding Package] ❌ PROFILE NOT FOUND (even after fallback)');
+            console.error('[Onboarding Package] User ID:', userId);
+            return res.status(404).json({
+              error: "Profile not found",
+              message: "Business profile does not exist. Please complete your business profile before generating documents.",
+              userId: userId,
+              needsProfileCompletion: true
+            });
+          }
+
+          // Validate profile data has required fields
+          const validation = validateProfileDataForGeneration(profile, email);
+
+          if (!validation.isValid) {
+            console.error('[Onboarding Package] ❌ PROFILE INCOMPLETE');
+            console.error('[Onboarding Package] Missing fields:', validation.missingFields);
+            return res.status(400).json({
+              error: "Profile incomplete",
+              message: "Please complete all required fields in your business profile before generating documents.",
+              missingFields: validation.missingFields,
+              needsProfileCompletion: true
+            });
+          }
+
+          console.log(`[Onboarding Package] ✅ Profile validated, proceeding with document generation...`);
+
+          const name = profile.business_name || authUser?.user?.user_metadata?.name || 'there';
 
           // Prepare Profile Data for DocGen
           const profileData = {
@@ -2454,6 +2474,85 @@ async function initializeRoutes() {
         }
       });
 
+      // Save book a call funnel lead endpoint
+      app.post("/api/book-call-funnel/save", async (req, res) => {
+        try {
+          console.log("[Book Call Funnel] Request received:", req.body);
+
+          const { name, email, phone, meta_lead_event_id, utm_source, utm_medium, utm_campaign, referrer } = req.body;
+
+          if (!email || !name || !phone) {
+            return res.status(400).json({
+              error: "email, name, and phone are required",
+            });
+          }
+
+          // Get referrer from headers if not provided
+          const finalReferrer = referrer || req.headers.referer || null;
+
+          const leadData = {
+            name,
+            email,
+            phone,
+            meta_lead_event_id: meta_lead_event_id || null,
+            utm_source: utm_source || null,
+            utm_medium: utm_medium || null,
+            utm_campaign: utm_campaign || null,
+            referrer: finalReferrer,
+          };
+
+          console.log("[Book Call Funnel] Saving lead:", leadData);
+          const result = await supabaseService.saveBookCallFunnelLead(leadData);
+          console.log("[Book Call Funnel] Successfully saved lead:", result);
+
+          return res.json({
+            success: true,
+            data: result,
+          });
+        } catch (error: any) {
+          console.error("[Book Call Funnel] Error saving lead:", error);
+          return res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to save lead to book_a_call_funnel",
+          });
+        }
+      });
+
+      // Update book a call funnel lead when Calendly booking is completed
+      app.post("/api/book-call-funnel/update-booking", async (req, res) => {
+        try {
+          console.log("[Book Call Funnel] Update booking request received:", req.body);
+
+          const { email, calendly_event_uri, meta_schedule_event_id } = req.body;
+
+          if (!email) {
+            return res.status(400).json({
+              error: "email is required",
+            });
+          }
+
+          const bookingData = {
+            calendly_event_uri: calendly_event_uri || null,
+            meta_schedule_event_id: meta_schedule_event_id || null,
+          };
+
+          console.log("[Book Call Funnel] Updating booking for:", email);
+          const result = await supabaseService.updateBookCallFunnelBooking(email, bookingData);
+          console.log("[Book Call Funnel] Successfully updated booking:", result);
+
+          return res.json({
+            success: true,
+            data: result,
+          });
+        } catch (error: any) {
+          console.error("[Book Call Funnel] Error updating booking:", error);
+          return res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to update booking in book_a_call_funnel",
+          });
+        }
+      });
+
       // Get contacts endpoint (handle both /api/contacts and /contacts paths)
       const contactsHandler = async (req: any, res: any) => {
         try {
@@ -3461,8 +3560,204 @@ Keep it brief and practical. Focus on the most important problems.`;
       }
 
       // ============================================
+      // Document Generation Helpers
+      // ============================================
+
+      /**
+       * Validates that profile data has all required fields for document generation
+       * @param profile - Business profile data from database
+       * @param email - User email
+       * @returns Validation result with missing fields if any
+       */
+      function validateProfileDataForGeneration(profile: any, email: string | null | undefined): {
+        isValid: boolean;
+        missingFields: Array<{ field: string; displayName: string }>;
+      } {
+        const missingFields: Array<{ field: string; displayName: string }> = [];
+
+        // Critical fields for document generation
+        if (!email || !email.trim()) {
+          missingFields.push({ field: 'email', displayName: 'email address' });
+        }
+
+        if (!profile) {
+          // If profile doesn't exist at all, all fields are missing
+          missingFields.push(
+            { field: 'business_name', displayName: 'business name' },
+            { field: 'owner_name', displayName: 'owner/representative name' },
+            { field: 'business_address', displayName: 'business address' },
+            { field: 'business_type', displayName: 'business type' }
+          );
+          return { isValid: false, missingFields };
+        }
+
+        if (!profile.business_name || !profile.business_name.trim()) {
+          missingFields.push({ field: 'business_name', displayName: 'business name' });
+        }
+
+        if (!profile.owner_name || !profile.owner_name.trim()) {
+          missingFields.push({ field: 'owner_name', displayName: 'owner/representative name' });
+        }
+
+        if (!profile.business_address || !profile.business_address.trim()) {
+          missingFields.push({ field: 'business_address', displayName: 'business address' });
+        }
+
+        if (!profile.business_type || !profile.business_type.trim()) {
+          missingFields.push({ field: 'business_type', displayName: 'business type' });
+        }
+
+        return {
+          isValid: missingFields.length === 0,
+          missingFields
+        };
+      }
+
+      /**
+       * Attempts to load or create business profile with fallback to contacts table
+       * @param userId - User ID
+       * @param userEmail - User email for fallback lookup
+       * @returns Profile data or null
+       */
+      async function loadProfileWithFallback(userId: string, userEmail: string | null): Promise<any> {
+        const supabaseAdmin = createClient(
+          process.env.SUPABASE_URL || "",
+          process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+        );
+
+        // Try to load existing business profile
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from('business_profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        if (!profileError && profile) {
+          console.log('[Profile] Loaded existing business_profiles record');
+          return profile;
+        }
+
+        console.log('[Profile] No business_profiles record found, attempting fallback...');
+
+        // Fallback: Try to load from contacts table and create business_profile
+        if (userEmail) {
+          try {
+            const { data: contact, error: contactError } = await supabaseAdmin
+              .from('contacts')
+              .select('*')
+              .eq('email', userEmail.trim().toLowerCase())
+              .single();
+
+            if (!contactError && contact) {
+              console.log('[Profile] Found contact record, creating business_profile from contact data');
+
+              // Create business_profile from contact data
+              const newProfile = {
+                user_id: userId,
+                business_name: contact.business_name || contact.company || null,
+                website_url: contact.website || null,
+                owner_name: contact.name || null,
+                phone: contact.phone || null,
+                business_address: contact.address || null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
+
+              const { data: createdProfile, error: createError } = await supabaseAdmin
+                .from('business_profiles')
+                .insert(newProfile)
+                .select()
+                .single();
+
+              if (!createError && createdProfile) {
+                console.log('[Profile] ✅ Successfully created business_profile from contact data');
+                return createdProfile;
+              } else {
+                console.error('[Profile] ❌ Failed to create business_profile:', createError);
+              }
+            }
+          } catch (fallbackError) {
+            console.error('[Profile] ❌ Fallback to contacts table failed:', fallbackError);
+          }
+        }
+
+        return null;
+      }
+
+      // ============================================
       // Document Generation API Endpoints
       // ============================================
+
+      // Validate profile completeness for document generation
+      app.post("/api/profile/validate", async (req, res) => {
+        try {
+          const { userId } = req.body;
+
+          if (!userId) {
+            return res.status(400).json({
+              error: "userId is required",
+            });
+          }
+
+          console.log(`[Profile Validation] Checking profile for user: ${userId}`);
+
+          // Get user email
+          const supabaseAdmin = createClient(
+            process.env.SUPABASE_URL || "",
+            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+          );
+
+          const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(userId);
+          const userEmail = user?.email || null;
+
+          // Load profile with fallback to contacts table
+          const profile = await loadProfileWithFallback(userId, userEmail);
+
+          // Validate profile data
+          const validation = validateProfileDataForGeneration(profile, userEmail);
+
+          if (!validation.isValid) {
+            console.log(`[Profile Validation] ❌ Profile incomplete for user ${userId}`);
+            return res.status(200).json({
+              isComplete: false,
+              missingFields: validation.missingFields,
+              profile: null
+            });
+          }
+
+          console.log(`[Profile Validation] ✅ Profile complete for user ${userId}`);
+
+          // Return profile data if valid
+          const profileData = {
+            businessName: profile.business_name,
+            legalEntityName: profile.legal_entity_name,
+            entityType: profile.entity_type,
+            state: profile.state,
+            businessAddress: profile.business_address,
+            ownerName: profile.owner_name,
+            phone: profile.phone,
+            email: userEmail,
+            website: profile.website_url,
+            instagram: profile.instagram,
+            businessType: profile.business_type,
+            services: profile.services || [],
+          };
+
+          res.status(200).json({
+            isComplete: true,
+            missingFields: [],
+            profile: profileData
+          });
+          return;
+        } catch (error: any) {
+          console.error("[Profile Validation] ❌ Error:", error);
+          res.status(500).json({
+            error: "Internal server error",
+            message: error.message || "Failed to validate profile",
+          });
+          return;
+        }
+      });
 
       // Generate personalized document from template
       app.post("/api/documents/generate", async (req, res) => {
@@ -3475,61 +3770,67 @@ Keep it brief and practical. Focus on the most important problems.`;
             });
           }
 
-          console.log(`[API] Generating document: ${templateName} for user: ${userId || 'anonymous'}`);
-
-          // Get user's business profile data
-          let profileData: any = {};
-
-          if (userId && process.env.SUPABASE_URL) {
-            try {
-              const { data: profile, error: profileError } = await createClient(
-                process.env.SUPABASE_URL || "",
-                process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
-              )
-                .from('business_profiles')
-                .select('*')
-                .eq('user_id', userId)
-                .single();
-
-              if (!profileError && profile) {
-                console.log('[API] Loaded business profile from database');
-                profileData = {
-                  businessName: profile.business_name,
-                  legalEntityName: profile.legal_entity_name,
-                  entityType: profile.entity_type,
-                  state: profile.state,
-                  businessAddress: profile.business_address,
-                  ownerName: profile.owner_name,
-                  phone: profile.phone,
-                  website: profile.website_url,
-                  instagram: profile.instagram,
-                  businessType: profile.business_type,
-                  services: profile.services || [],
-                };
-
-                // Also get user's email
-                const { data: { user } } = await createClient(
-                  process.env.SUPABASE_URL || "",
-                  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
-                ).auth.admin.getUserById(userId);
-
-                if (user) {
-                  profileData.email = user.email;
-                }
-              } else {
-                console.log('[API] No business profile found for user, using empty data');
-              }
-            } catch (err) {
-              console.error('[API] Error loading business profile:', err);
-              // Continue with empty profile data
-            }
+          if (!userId) {
+            return res.status(400).json({
+              error: "userId is required",
+            });
           }
 
+          console.log(`[Document Generation] Template: ${templateName}, User: ${userId}`);
+
+          // Get user email
+          const supabaseAdmin = createClient(
+            process.env.SUPABASE_URL || "",
+            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+          );
+
+          const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(userId);
+          const userEmail = user?.email || null;
+
+          // Load profile with fallback to contacts table
+          const profile = await loadProfileWithFallback(userId, userEmail);
+
+          // Validate profile data
+          const validation = validateProfileDataForGeneration(profile, userEmail);
+
+          if (!validation.isValid) {
+            console.error(`[Document Generation] ❌ Validation failed for user ${userId}`);
+            console.error(`[Document Generation] Missing fields:`, validation.missingFields);
+
+            return res.status(400).json({
+              error: "Profile incomplete",
+              message: "Please complete your business profile before generating documents.",
+              missingFields: validation.missingFields,
+              needsProfileCompletion: true
+            });
+          }
+
+          console.log(`[Document Generation] ✅ Validation passed`);
+
+          // Build profile data for document generation
+          const profileData = {
+            businessName: profile.business_name,
+            legalEntityName: profile.legal_entity_name,
+            entityType: profile.entity_type,
+            state: profile.state,
+            businessAddress: profile.business_address,
+            ownerName: profile.owner_name,
+            phone: profile.phone,
+            email: userEmail,
+            website: profile.website_url,
+            instagram: profile.instagram,
+            businessType: profile.business_type,
+            services: profile.services || [],
+          };
+
           // Generate the document
+          console.log(`[Document Generation] Generating PDF...`);
           const pdfBuffer = await documentGenerationService.generateDocument(
             templateName,
             profileData
           );
+
+          console.log(`[Document Generation] ✅ PDF generated successfully (${pdfBuffer.length} bytes)`);
 
           // Set response headers for PDF download
           res.setHeader('Content-Type', 'application/pdf');
@@ -3540,12 +3841,12 @@ Keep it brief and practical. Focus on the most important problems.`;
           res.send(pdfBuffer);
           return;
         } catch (error: any) {
-          console.error("[API] Error generating document:", error);
-          console.error("[API] Error stack:", error.stack);
+          console.error("[Document Generation] ❌ Error:", error);
+          console.error("[Document Generation] Stack:", error.stack);
           res.status(500).json({
             error: "Internal server error",
             message: error.message || "Failed to generate document",
-            stack: error.stack,
+            details: error.stack,
           });
           return;
         }
@@ -3562,64 +3863,79 @@ Keep it brief and practical. Focus on the most important problems.`;
             });
           }
 
-          console.log(`[API] Generating HTML: ${templateName} for user: ${userId || 'anonymous'}`);
-
-          // Get user's business profile data
-          let profileData: any = {};
-
-          if (userId && process.env.SUPABASE_URL) {
-            try {
-              const { data: profile, error: profileError } = await createClient(
-                process.env.SUPABASE_URL || "",
-                process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
-              )
-                .from('business_profiles')
-                .select('*')
-                .eq('user_id', userId)
-                .single();
-
-              if (!profileError && profile) {
-                profileData = {
-                  businessName: profile.business_name,
-                  legalEntityName: profile.legal_entity_name,
-                  entityType: profile.entity_type,
-                  state: profile.state,
-                  businessAddress: profile.business_address,
-                  ownerName: profile.owner_name,
-                  phone: profile.phone,
-                  email: profile.email,
-                  website: profile.website,
-                  instagram: profile.instagram,
-                  businessType: profile.business_type,
-                  services: profile.services,
-                };
-                console.log('[API] Loaded business profile data for personalization');
-              } else {
-                console.log('[API] No business profile found, using defaults');
-              }
-            } catch (err) {
-              console.error('[API] Error loading business profile:', err);
-              // Continue with empty profile data
-            }
+          if (!userId) {
+            return res.status(400).json({
+              error: "userId is required",
+            });
           }
 
+          console.log(`[HTML Generation] Template: ${templateName}, User: ${userId}`);
+
+          // Get user email
+          const supabaseAdmin = createClient(
+            process.env.SUPABASE_URL || "",
+            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ""
+          );
+
+          const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(userId);
+          const userEmail = user?.email || null;
+
+          // Load profile with fallback to contacts table
+          const profile = await loadProfileWithFallback(userId, userEmail);
+
+          // Validate profile data
+          const validation = validateProfileDataForGeneration(profile, userEmail);
+
+          if (!validation.isValid) {
+            console.error(`[HTML Generation] ❌ Validation failed for user ${userId}`);
+            console.error(`[HTML Generation] Missing fields:`, validation.missingFields);
+
+            return res.status(400).json({
+              error: "Profile incomplete",
+              message: "Please complete your business profile before generating documents.",
+              missingFields: validation.missingFields,
+              needsProfileCompletion: true
+            });
+          }
+
+          console.log(`[HTML Generation] ✅ Validation passed`);
+
+          // Build profile data for document generation
+          const profileData = {
+            businessName: profile.business_name,
+            legalEntityName: profile.legal_entity_name,
+            entityType: profile.entity_type,
+            state: profile.state,
+            businessAddress: profile.business_address,
+            ownerName: profile.owner_name,
+            phone: profile.phone,
+            email: userEmail,
+            website: profile.website_url,
+            instagram: profile.instagram,
+            businessType: profile.business_type,
+            services: profile.services || [],
+          };
+
           // Generate the HTML
+          console.log(`[HTML Generation] Generating HTML...`);
           const html = await documentGenerationService.generateHtmlOnly(
             templateName,
             profileData
           );
+
+          console.log(`[HTML Generation] ✅ HTML generated successfully`);
 
           // Set response headers for HTML
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
           res.send(html);
           return;
         } catch (error: any) {
-          console.error("[API] Error generating HTML:", error);
-          console.error("[API] Error stack:", error.stack);
+          console.error("[HTML Generation] ❌ Error:", error);
+          console.error("[HTML Generation] Stack:", error.stack);
           res.status(500).json({
             error: "Internal server error",
             message: error.message || "Failed to generate HTML",
-            stack: error.stack,
+            details: error.stack,
           });
           return;
         }
@@ -3748,7 +4064,7 @@ app.use(async (req, res, next) => {
 export const api = functions.https.onRequest(
   {
     timeoutSeconds: 540,
-    memory: "1GiB",
+    memory: "2GiB",
     secrets: [
       "SUPABASE_URL",
       "SUPABASE_SERVICE_ROLE_KEY",
