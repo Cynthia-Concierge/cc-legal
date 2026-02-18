@@ -46,6 +46,15 @@ const Index = () => {
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [monthlyPlan, setMonthlyPlan] = useState<PricingPlan | null>(null);
   const [isLoadingPricing, setIsLoadingPricing] = useState(true);
+  
+  // Capture UTM parameters from URL for ad attribution
+  const [utmParams] = useState(() => ({
+    utm_source: searchParams.get('utm_source') || null,
+    utm_medium: searchParams.get('utm_medium') || null,
+    utm_campaign: searchParams.get('utm_campaign') || null,
+    utm_content: searchParams.get('utm_content') || null,
+    utm_term: searchParams.get('utm_term') || null,
+  }));
 
   // Check if user is already logged in -> Redirect to Dashboard
   useEffect(() => {
@@ -169,7 +178,13 @@ const Index = () => {
             email: formData.email,
             phone: formData.phone,
             website: normalizedWebsite,
-            source: 'wellness'
+            source: 'wellness',
+            // Pass UTM parameters for ad attribution tracking
+            utm_source: utmParams.utm_source,
+            utm_medium: utmParams.utm_medium,
+            utm_campaign: utmParams.utm_campaign,
+            utm_content: utmParams.utm_content,
+            utm_term: utmParams.utm_term,
           }),
         });
 

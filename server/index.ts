@@ -1908,7 +1908,7 @@ app.post("/api/save-contact", async (req, res) => {
     console.log("[Save Contact] Request received:", req.body);
     console.log("[Save Contact] Using Supabase key type:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "service_role" : "anon");
 
-    const { name, email, phone, website, source } = req.body;
+    const { name, email, phone, website, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term } = req.body;
 
     if (!email || !name) {
       return res.status(400).json({
@@ -1939,6 +1939,13 @@ app.post("/api/save-contact", async (req, res) => {
       phone: normalizedPhone || "",
       website: normalizedWebsite,
       source: source || "wellness", // Default if not provided
+      // UTM parameters for ad attribution
+      utm_source: utm_source || null,
+      utm_medium: utm_medium || null,
+      utm_campaign: utm_campaign || null,
+      utm_content: utm_content || null,
+      utm_term: utm_term || null,
+      ad_attributed: !!(utm_source || utm_medium || utm_campaign), // Set true if any UTM param exists
     };
 
     console.log("[Save Contact] Attempting to save:", contactData);

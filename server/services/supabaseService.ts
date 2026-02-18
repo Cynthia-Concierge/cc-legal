@@ -13,6 +13,13 @@ export interface ContactData {
   first_name?: string;
   last_name?: string;
   source?: string;
+  // UTM parameters for ad attribution
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_content?: string | null;
+  utm_term?: string | null;
+  ad_attributed?: boolean;
 }
 
 export class SupabaseService {
@@ -51,6 +58,11 @@ export class SupabaseService {
             website: contactData.website?.trim() || "",
             source: contactData.source || "wellness", // Default to 'wellness' if not provided
             created_at: new Date().toISOString(),
+            // UTM parameters for ad attribution
+            utm_source: contactData.utm_source || null,
+            utm_medium: contactData.utm_medium || null,
+            utm_campaign: contactData.utm_campaign || null,
+            ad_attributed: contactData.ad_attributed || false,
           },
         ])
         .select();
