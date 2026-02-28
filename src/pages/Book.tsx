@@ -96,25 +96,28 @@ const Book = () => {
       }
     })();
 
-    // Save lead to book_a_call_funnel table - THIS MUST COMPLETE BEFORE NAVIGATION
+    // Capture UTM parameters from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const utm_source = urlParams.get('utm_source');
+    const utm_medium = urlParams.get('utm_medium');
+    const utm_campaign = urlParams.get('utm_campaign');
+
+    // Save lead to contacts table
     let saveSuccess = false;
     try {
       const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : '');
-      
-      // Get UTM parameters from URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const utm_source = urlParams.get('utm_source');
-      const utm_medium = urlParams.get('utm_medium');
-      const utm_campaign = urlParams.get('utm_campaign');
 
-      console.log('[Book] Attempting to save lead to Supabase...', {
-        apiUrl: `${API_BASE_URL}/api/book-call-funnel/save`,
+      console.log('[Book] Attempting to save lead to contacts...', {
+        apiUrl: `${API_BASE_URL}/api/save-contact`,
         email: formData.email,
         name: formData.name,
-        phone: formData.phone
+        phone: formData.phone,
+        utm_source,
+        utm_medium,
+        utm_campaign
       });
 
-      const response = await fetch(`${API_BASE_URL}/api/book-call-funnel/save`, {
+      const response = await fetch(`${API_BASE_URL}/api/save-contact`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -123,11 +126,11 @@ const Book = () => {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
-          meta_lead_event_id: eventId,
+          website: '',
+          source: 'book_call',
           utm_source: utm_source || null,
           utm_medium: utm_medium || null,
           utm_campaign: utm_campaign || null,
-          referrer: document.referrer || null,
         }),
       });
 
@@ -139,32 +142,30 @@ const Book = () => {
         } catch {
           errorData = { message: errorText };
         }
-        console.error('[Book] Failed to save lead to book_a_call_funnel:', {
+        console.error('[Book] Failed to save lead to contacts:', {
           status: response.status,
           statusText: response.statusText,
           error: errorData
         });
-        // Show error to user
         toast.error('Unable to save your information', {
           description: 'Please try again or contact support if the issue persists.',
           duration: 5000,
         });
         setIsSubmitting(false);
-        return; // Don't navigate if save fails
+        return;
       } else {
         const result = await response.json();
-        console.log('[Book] Lead saved to book_a_call_funnel successfully:', result);
+        console.log('[Book] Lead saved to contacts successfully:', result);
         saveSuccess = true;
       }
     } catch (error) {
-      console.error('[Book] Error saving lead to book_a_call_funnel:', error);
-      // Show error to user
+      console.error('[Book] Error saving lead to contacts:', error);
       toast.error('Unable to save your information', {
         description: 'Please check your connection and try again.',
         duration: 5000,
       });
       setIsSubmitting(false);
-      return; // Don't navigate if save fails
+      return;
     }
 
     // Only navigate if save was successful

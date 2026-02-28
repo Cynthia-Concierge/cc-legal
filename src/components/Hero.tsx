@@ -54,7 +54,7 @@ interface HeroProps {
     name: string;
     email: string;
     phone: string;
-    website: string;
+    instagram_handle: string;
   }) => void;
 }
 

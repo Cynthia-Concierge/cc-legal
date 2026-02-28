@@ -135,28 +135,29 @@ const Index = () => {
     name: string;
     email: string;
     phone: string;
-    website: string;
+    instagram_handle: string;
   }) => {
     // Store email in sessionStorage for autofill in onboarding
     if (formData.email) {
       sessionStorage.setItem('wellness_form_email', formData.email.trim().toLowerCase());
     }
 
-    // Normalize website URL
-    let normalizedWebsite = formData.website.trim();
-    if (normalizedWebsite && !normalizedWebsite.startsWith("http")) {
-      normalizedWebsite = `https://${normalizedWebsite}`;
-    }
+    // Use Instagram handle as-is (no URL normalization)
+    const instagramHandle = formData.instagram_handle.trim();
 
     // Generate a unique event_id for deduplication
     const eventId = `lead_${crypto.randomUUID()}`;
+
+    // Capture UTM parameters from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const utm_source = urlParams.get('utm_source');
+    const utm_medium = urlParams.get('utm_medium');
+    const utm_campaign = urlParams.get('utm_campaign');
 
     try {
       const API_BASE_URL =
         import.meta.env.VITE_API_URL ||
         (import.meta.env.DEV ? "" : "");
-
-
 
       // Save to Supabase contacts table (primary action - must succeed)
       try {
@@ -164,7 +165,10 @@ const Index = () => {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
-          website: normalizedWebsite,
+          instagram_handle: instagramHandle,
+          utm_source,
+          utm_medium,
+          utm_campaign,
           apiUrl: `${API_BASE_URL}/api/save-contact`
         });
 
@@ -177,14 +181,13 @@ const Index = () => {
             name: formData.name,
             email: formData.email,
             phone: formData.phone,
-            website: normalizedWebsite,
+            instagram_handle: instagramHandle,
             source: 'wellness',
-            // Pass UTM parameters for ad attribution tracking
-            utm_source: utmParams.utm_source,
-            utm_medium: utmParams.utm_medium,
-            utm_campaign: utmParams.utm_campaign,
-            utm_content: utmParams.utm_content,
-            utm_term: utmParams.utm_term,
+            utm_source: utm_source || null,
+            utm_medium: utm_medium || null,
+            utm_campaign: utm_campaign || null,
+            utm_content: urlParams.get('utm_content') || null,
+            utm_term: urlParams.get('utm_term') || null,
           }),
         });
 
@@ -240,7 +243,7 @@ const Index = () => {
             phone: formData.phone,
             firstName: formData.name?.split(" ")[0] || "",
             lastName: formData.name?.split(" ").slice(1).join(" ") || "",
-            website: normalizedWebsite,
+            website: instagramHandle,
             eventSourceUrl: window.location.href,
             eventId: eventId, // Send event_id to backend for deduplication
           }),
@@ -271,13 +274,8 @@ const Index = () => {
       // Continue to show thank you page even if services fail
     }
 
-    // Redirect to onboarding (Skip Thank You page)
-    const params = new URLSearchParams({
-      skipWelcome: 'true',
-      email: formData.email,
-      eventId: eventId
-    });
-    navigate(`/wellness/onboarding?${params.toString()}`);
+    // Go straight to thank you page (no onboarding)
+    navigate('/thank-you');
   };
 
   // Handle scroll to form

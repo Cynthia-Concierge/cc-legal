@@ -10,6 +10,11 @@ import BusinessWidget from "./pages/BusinessWidget";
 import ThankYou from "./pages/ThankYou";
 import NotFound from "./pages/NotFound";
 import GymLandingPage from "./pages/GymLandingPage";
+import Book from "./pages/Book";
+import BookCall from "./pages/BookCall";
+import BookThankYou from "./pages/BookThankYou";
+import Booking from "./pages/Booking";
+import ScheduleDemo from "./pages/ScheduleDemo";
 import { Onboarding } from "./pages/wellness/Onboarding";
 import { BusinessProfile } from "./pages/wellness/BusinessProfile";
 import { DashboardLayout } from "./components/wellness/layout/DashboardLayout";
@@ -34,6 +39,11 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/gyms" element={<GymLandingPage />} />
+            <Route path="/book" element={<Book />} />
+            <Route path="/booking" element={<Booking />} />
+            <Route path="/schedule-demo" element={<ScheduleDemo />} />
+            <Route path="/book-call" element={<BookCall />} />
+            <Route path="/book-thank-you" element={<BookThankYou />} />
             <Route path="/thank-you" element={<ThankYou />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/lead-scraper" element={<Dashboard />} />
