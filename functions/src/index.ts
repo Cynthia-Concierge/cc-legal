@@ -77,6 +77,9 @@ async function initializeRoutes() {
 
   initPromise = (async () => {
     try {
+      // When set to 'false', no Resend emails are sent (contact created, welcome, magic link, nurture, reminders)
+      const RESEND_EMAILS_ENABLED = process.env.RESEND_EMAILS_ENABLED !== "false";
+
       // Import services - files are copied to lib/server/services during build
       // In Firebase Functions, __dirname points to /workspace/lib
       const path = require("path");
@@ -471,6 +474,11 @@ async function initializeRoutes() {
             return res.status(400).json({ error: "Email is required" });
           }
 
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[Firebase Functions] Resend emails disabled - skipping welcome email");
+            return res.json({ success: true, data: { skipped: true } });
+          }
+
           if (!process.env.RESEND_API_KEY) {
             console.error("[Firebase Functions] RESEND_API_KEY is not set");
             return res.status(500).json({
@@ -514,6 +522,11 @@ async function initializeRoutes() {
             return res.status(400).json({
               error: "Email is required",
             });
+          }
+
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[Firebase Functions] Resend emails disabled - skipping magic link email");
+            return res.json({ success: true, data: { emailSent: false, skipped: true } });
           }
 
           if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -945,6 +958,11 @@ async function initializeRoutes() {
             return res.status(400).json({ error: "userId required" });
           }
 
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[Worker] Resend emails disabled - skipping website scan reminder");
+            return res.json({ success: true, skipped: true });
+          }
+
           console.log(`[Worker] Processing scan reminder for user ${userId}`);
 
           if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -1087,6 +1105,11 @@ async function initializeRoutes() {
             return res.status(400).json({ error: "userId required" });
           }
 
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[Profile Reminder Worker] Resend emails disabled - skipping");
+            return res.json({ success: true, skipped: true });
+          }
+
           console.log(`[Profile Reminder Worker] Processing profile completion reminder for user ${userId}`);
 
           if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -1163,6 +1186,11 @@ async function initializeRoutes() {
 
           if (!userId && !contactId) {
             return res.status(400).json({ error: "userId or contactId is required" });
+          }
+
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[schedule-nurture-sequence] Resend emails disabled - skipping");
+            return res.json({ success: true, skipped: true });
           }
 
           const recipientType = userId ? 'user' : 'contact';
@@ -1329,6 +1357,11 @@ async function initializeRoutes() {
             return res.status(400).json({ error: "recipientType must be 'user' or 'contact'" });
           }
 
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[Case Study Worker] Resend emails disabled - skipping");
+            return res.json({ success: true, skipped: true });
+          }
+
           console.log(`[Case Study Worker] Processing email for ${recipientType} ${recipientId}`);
 
           if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -1471,6 +1504,11 @@ async function initializeRoutes() {
 
           if (recipientType !== 'user' && recipientType !== 'contact') {
             return res.status(400).json({ error: "recipientType must be 'user' or 'contact'" });
+          }
+
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[Risk Scenario Worker] Resend emails disabled - skipping");
+            return res.json({ success: true, skipped: true });
           }
 
           console.log(`[Risk Scenario Worker] Processing email for ${recipientType} ${recipientId}`);
@@ -1632,6 +1670,11 @@ async function initializeRoutes() {
 
           if (recipientType !== 'user' && recipientType !== 'contact') {
             return res.status(400).json({ error: "recipientType must be 'user' or 'contact'" });
+          }
+
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[Social Proof Worker] Resend emails disabled - skipping");
+            return res.json({ success: true, skipped: true });
           }
 
           console.log(`[Social Proof Worker] Processing email for ${recipientType} ${recipientId}`);
@@ -1797,6 +1840,11 @@ async function initializeRoutes() {
             return res.status(400).json({ error: "recipientType must be 'user' or 'contact'" });
           }
 
+          if (!RESEND_EMAILS_ENABLED) {
+            console.log("[Final Reminder Worker] Resend emails disabled - skipping");
+            return res.json({ success: true, skipped: true });
+          }
+
           console.log(`[Final Reminder Worker] Processing email for ${recipientType} ${recipientId}`);
 
           if (!process.env.RESEND_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -1952,7 +2000,7 @@ async function initializeRoutes() {
             usingKeyType: process.env.SUPABASE_SERVICE_ROLE_KEY ? "service_role" : "anon",
           });
 
-          const { name, email, phone, website, source } = req.body;
+          const { name, email, phone, website, instagram_handle, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term } = req.body;
 
           if (!email || !name) {
             console.error("[Save Contact] Missing required fields:", { email, name });
@@ -1962,28 +2010,38 @@ async function initializeRoutes() {
           }
 
           // Normalize phone number to E.164 format
-          // Be lenient - if phone validation fails, just use the original value
-          // This ensures we don't reject leads due to invalid phone numbers
           const { normalizePhone } = require("./utils/phoneNormalization");
           let normalizedPhone = phone ? normalizePhone(phone, 'US') : null;
 
           if (phone && !normalizedPhone) {
-            // Log warning but don't reject - use original phone value
             console.warn("[Save Contact] Invalid phone format, using original:", phone);
-            normalizedPhone = phone; // Use original value instead of rejecting
+            normalizedPhone = phone;
           }
 
-          let normalizedWebsite = website?.trim() || "";
-          if (normalizedWebsite && !normalizedWebsite.startsWith("http")) {
-            normalizedWebsite = `https://${normalizedWebsite}`;
+          // Instagram handle from form; website only when provided (legacy/other sources)
+          const hasInstagram = instagram_handle !== undefined && instagram_handle !== null && String(instagram_handle).trim() !== "";
+          const instagramValue = hasInstagram ? String(instagram_handle).trim() : "";
+          let websiteValue = "";
+          if (!hasInstagram && website?.trim()) {
+            websiteValue = website.trim();
+            if (!websiteValue.startsWith("http")) {
+              websiteValue = `https://${websiteValue}`;
+            }
           }
 
           const contactData = {
             name,
             email,
             phone: normalizedPhone || "",
-            website: normalizedWebsite,
-            source,
+            website: websiteValue,
+            instagram_handle: instagramValue || undefined,
+            source: source || "wellness",
+            utm_source: utm_source || null,
+            utm_medium: utm_medium || null,
+            utm_campaign: utm_campaign || null,
+            utm_content: utm_content || null,
+            utm_term: utm_term || null,
+            ad_attributed: !!(utm_source || utm_medium || utm_campaign),
           };
 
           console.log("[Save Contact] Attempting to save:", contactData);
@@ -2006,7 +2064,8 @@ async function initializeRoutes() {
               // Fallback to extracting from name if first_name is not available
               const firstName = contact.first_name || (contact.name ? contact.name.trim().split(/\s+/)[0] : "") || "";
               
-              // Send email asynchronously (fire and forget)
+              // Send contact-created email and schedule nurture only when Resend emails are enabled
+              if (RESEND_EMAILS_ENABLED) {
               (async () => {
                 try {
                   console.log("[Save Contact] Sending contact created email to:", email);
@@ -2058,10 +2117,6 @@ async function initializeRoutes() {
                   // Don't throw - we don't want to break the contact save
                 }
               })();
-            } else {
-              console.log("[Save Contact] Skipping email - contact was created more than 1 minute ago (likely a duplicate)");
-            }
-
             // Schedule nurture sequence emails for new contacts (fire and forget)
             if (isNewContact && contact.id) {
               (async () => {
@@ -2085,6 +2140,12 @@ async function initializeRoutes() {
                   // Don't throw - we don't want to break the contact save
                 }
               })();
+            }
+              } else {
+                console.log("[Save Contact] Resend emails disabled - skipping contact created email and nurture sequence");
+              }
+            } else {
+              console.log("[Save Contact] Skipping email - contact was created more than 1 minute ago (likely a duplicate)");
             }
           }
 
@@ -2178,18 +2239,18 @@ async function initializeRoutes() {
             console.error("[Save Contact] Continuing to Instantly.ai despite GoHighLevel error");
           }
 
-          // STEP 3: Instantly.ai (After GoHighLevel completes)
-          // This runs AFTER GoHighLevel to ensure GoHighLevel gets priority
-          console.log("[Save Contact] ===== STEP 3: INSTANTLY.AI INTEGRATION =====");
+          // STEP 3: Instantly.ai (Post Funnel Nurture campaign)
+          console.log("[Save Contact] ===== STEP 3: INSTANTLY.AI INTEGRATION (Post Funnel Nurture) =====");
           let instantlyResult = null;
           let instantlyError = null;
 
-          // Instantly.ai is less critical than GoHighLevel, but should still run
           if (process.env.INSTANTLY_AI_API_KEY) {
             try {
-              const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
+              const campaignId =
+                process.env.INSTANTLY_POST_FUNNEL_NURTURE_CAMPAIGN_ID ||
+                process.env.INSTANTLY_CAMPAIGN_ID ||
+                "7f93b98c-f8c6-4c2b-b707-3ea4d0df6934";
 
-              // Split name into first and last name
               const nameParts = name.trim().split(/\s+/);
               const firstName = nameParts[0] || "";
               const lastName = nameParts.slice(1).join(" ") || "";
@@ -2198,17 +2259,18 @@ async function initializeRoutes() {
                 first_name: firstName,
                 last_name: lastName,
                 phone: normalizedPhone || "",
-                website: normalizedWebsite || "",
+                website: websiteValue || "",
                 custom_variables: {
-                  // Will be updated later if workflow completes
+                  ...(instagramValue && { instagram: instagramValue }),
                 },
               };
 
-              console.log("[Save Contact] Adding lead to Instantly.ai immediately:", {
+              console.log("[Save Contact] Adding lead to Instantly.ai (post funnel nurture):", {
                 email: email.trim().toLowerCase(),
                 campaignId,
                 firstName,
                 lastName,
+                instagram: instagramValue || "(none)",
               });
 
               instantlyResult = await instantlyService.addLeadToCampaign(
