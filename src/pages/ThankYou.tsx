@@ -87,6 +87,23 @@ const ThankYou = () => {
             Employment Agreement, Independent Contractor Agreement, Service Agreement, Terms &amp; Conditions, Privacy Policy, and more.
           </p>
 
+          {/* Book a call - Calendly widget */}
+          <div className="mt-12 mb-10">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Book a free call</h2>
+            <p className="text-gray-600 text-sm mb-4 max-w-md mx-auto">
+              Want a lawyer to review your specific agreements and business? Schedule a call now.
+            </p>
+            <div className="rounded-xl overflow-hidden border border-gray-200 shadow-lg bg-white" style={{ minHeight: '700px' }}>
+              <iframe
+                title="Book a call with CC Legal"
+                src="https://calendly.com/chad-consciouscounsel/connection-call-with-chad?primary_color=7da69f&background_color=ffffff"
+                width="100%"
+                height="700"
+                className="w-full border-0"
+              />
+            </div>
+          </div>
+
           <Button
             variant="ghost"
             onClick={() => navigate("/")}
