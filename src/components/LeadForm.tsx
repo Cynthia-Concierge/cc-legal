@@ -8,6 +8,8 @@ interface LeadFormProps {
     email: string;
     phone: string;
     instagram_handle: string;
+    consentSms: boolean;
+    consentEmail: boolean;
   }) => void;
 }
 
@@ -20,6 +22,8 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
   const [phone, setPhone] = useState("");
   const [emailError, setEmailError] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const [consentSmsEmail, setConsentSmsEmail] = useState(false);
+  const [consentError, setConsentError] = useState("");
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEmailError(""); // Clear error on input
@@ -49,11 +53,16 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
       return;
     }
 
-    // Clear any previous errors
+    if (!consentSmsEmail) {
+      setConsentError("Please agree to receive email and SMS to continue.");
+      return;
+    }
+
     setEmailError("");
     setPhoneError("");
+    setConsentError("");
 
-    onSubmit({ name, email, phone, instagram_handle });
+    onSubmit({ name, email, phone, instagram_handle, consentSms: true, consentEmail: true });
   };
 
   return (
@@ -132,6 +141,26 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
               }}
               className="w-full px-4 py-3.5 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-slate-900 text-base placeholder:text-slate-400"
             />
+          </div>
+
+          <div className="pt-1">
+            <label className="flex items-start gap-3 cursor-pointer group/check">
+              <input
+                type="checkbox"
+                checked={consentSmsEmail}
+                onChange={(e) => {
+                  setConsentSmsEmail(e.target.checked);
+                  setConsentError("");
+                }}
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0"
+              />
+              <span className="text-xs text-slate-600 group-hover/check:text-slate-700">
+                I agree to receive email and SMS updates and marketing from CC Legal at the contact info provided.
+              </span>
+            </label>
+            {consentError && (
+              <p className="text-xs text-red-600 mt-1.5">{consentError}</p>
+            )}
           </div>
 
           <button type="submit" className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg shadow-emerald-500/30 transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 group mt-4">

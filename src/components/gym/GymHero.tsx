@@ -8,6 +8,8 @@ interface GymHeroProps {
         email: string;
         phone: string;
         website: string;
+        consentSms: boolean;
+        consentEmail: boolean;
     }) => void;
 }
 

@@ -8,6 +8,8 @@ interface GymLeadFormProps {
         email: string;
         phone: string;
         website: string;
+        consentSms: boolean;
+        consentEmail: boolean;
     }) => void;
 }
 
@@ -20,6 +22,8 @@ const GymLeadForm: React.FC<GymLeadFormProps> = ({ onSubmit }) => {
     const [phone, setPhone] = useState("");
     const [emailError, setEmailError] = useState("");
     const [phoneError, setPhoneError] = useState("");
+    const [consentSmsEmail, setConsentSmsEmail] = useState(false);
+    const [consentError, setConsentError] = useState("");
 
     const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setEmailError("");
@@ -47,10 +51,16 @@ const GymLeadForm: React.FC<GymLeadFormProps> = ({ onSubmit }) => {
             return;
         }
 
+        if (!consentSmsEmail) {
+            setConsentError("Please agree to receive email and SMS to continue.");
+            return;
+        }
+
         setEmailError("");
         setPhoneError("");
+        setConsentError("");
 
-        onSubmit({ name, email, phone, website });
+        onSubmit({ name, email, phone, website, consentSms: true, consentEmail: true });
     };
 
     return (
@@ -150,6 +160,26 @@ const GymLeadForm: React.FC<GymLeadFormProps> = ({ onSubmit }) => {
                                 }}
                                 className="w-full px-4 py-3 bg-[#0B0F19] rounded border border-slate-800 focus:border-blue-600 outline-none transition-colors text-white text-base placeholder:text-slate-600"
                             />
+                        </div>
+
+                        <div className="pt-2">
+                            <label className="flex items-start gap-3 cursor-pointer group/check">
+                                <input
+                                    type="checkbox"
+                                    checked={consentSmsEmail}
+                                    onChange={(e) => {
+                                        setConsentSmsEmail(e.target.checked);
+                                        setConsentError("");
+                                    }}
+                                    className="mt-1 w-4 h-4 rounded border-slate-600 bg-[#0B0F19] text-blue-600 focus:ring-blue-600 focus:ring-offset-0"
+                                />
+                                <span className="text-sm text-slate-400 group-hover/check:text-slate-300">
+                                    I agree to receive email and SMS updates and marketing from CC Legal at the contact info provided.
+                                </span>
+                            </label>
+                            {consentError && (
+                                <p className="text-xs text-red-500 mt-1.5">{consentError}</p>
+                            )}
                         </div>
 
                         <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold py-4 px-6 rounded shadow-lg shadow-blue-500/20 transform active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 group mt-6 uppercase tracking-wider text-sm">

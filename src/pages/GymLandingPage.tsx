@@ -26,6 +26,8 @@ const GymLandingPage = () => {
         email: string;
         phone: string;
         website: string;
+        consentSms: boolean;
+        consentEmail: boolean;
     }) => {
         // Store email in sessionStorage for autofill in onboarding
         if (formData.email) {

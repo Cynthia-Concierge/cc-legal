@@ -136,6 +136,8 @@ const Index = () => {
     email: string;
     phone: string;
     instagram_handle: string;
+    consentSms: boolean;
+    consentEmail: boolean;
   }) => {
     // Store email in sessionStorage for autofill in onboarding
     if (formData.email) {

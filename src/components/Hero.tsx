@@ -55,6 +55,8 @@ interface HeroProps {
     email: string;
     phone: string;
     instagram_handle: string;
+    consentSms: boolean;
+    consentEmail: boolean;
   }) => void;
 }
 
