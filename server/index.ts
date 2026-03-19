@@ -723,7 +723,7 @@ app.post("/api/add-lead", async (req, res) => {
 // Track Meta Lead event
 app.post("/api/track-meta-lead", async (req, res) => {
   try {
-    const { email, phone, firstName, lastName, website, eventSourceUrl, eventId } = req.body;
+    const { email, phone, firstName, lastName, website, eventSourceUrl, eventId, fbc, fbp } = req.body;
 
     // Check if Meta credentials are configured
     if (!process.env.META_ACCESS_TOKEN || !process.env.META_PIXEL_ID) {
@@ -750,6 +750,8 @@ app.post("/api/track-meta-lead", async (req, res) => {
         firstName,
         lastName,
         website,
+        fbc: fbc || undefined,
+        fbp: fbp || undefined,
       },
       {
         eventName: "Lead",
@@ -788,7 +790,7 @@ app.post("/api/track-meta-lead", async (req, res) => {
 // Track Meta Schedule event (when someone schedules a call/appointment)
 app.post("/api/track-meta-schedule", async (req, res) => {
   try {
-    const { email, phone, firstName, lastName, eventSourceUrl, eventId } = req.body;
+    const { email, phone, firstName, lastName, eventSourceUrl, eventId, fbc, fbp } = req.body;
 
     // Check if Meta credentials are configured
     if (!process.env.META_ACCESS_TOKEN || !process.env.META_PIXEL_ID) {
@@ -814,6 +816,8 @@ app.post("/api/track-meta-schedule", async (req, res) => {
         phone: normalizedPhone,
         firstName,
         lastName,
+        fbc: fbc || undefined,
+        fbp: fbp || undefined,
       },
       {
         eventSourceUrl: eventSourceUrl || req.headers.referer || undefined,
@@ -5030,17 +5034,22 @@ app.get("/api/widget.js", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/widget.js"));
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📋 Health check: http://localhost:${PORT}/health`);
-}).on('error', (error: any) => {
-  console.error(`❌ Server failed to start on port ${PORT}:`, error);
-  if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. Please kill the process using that port.`);
-  }
-  process.exit(1);
-});
+// Export app for Vercel serverless
+export default app;
+
+// Start server (only when running standalone, not on Vercel)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📋 Health check: http://localhost:${PORT}/health`);
+  }).on('error', (error: any) => {
+    console.error(`❌ Server failed to start on port ${PORT}:`, error);
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Please kill the process using that port.`);
+    }
+    process.exit(1);
+  });
+}
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {

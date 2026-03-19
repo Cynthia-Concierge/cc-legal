@@ -62,6 +62,23 @@ const Book = () => {
       // Continue even if tracking fails
     }
 
+    // Capture UTM + fbc/fbp params from URL
+    const urlParams = new URLSearchParams(window.location.search);
+
+    // Capture fbc/fbp cookies for Meta CAPI attribution
+    const getCookie = (n: string): string | null => {
+      const match = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
+      return match ? decodeURIComponent(match[1]) : null;
+    };
+    let fbc = getCookie('_fbc');
+    const fbp = getCookie('_fbp');
+
+    // If _fbc cookie doesn't exist but fbclid is in URL, construct fbc value
+    const fbclid = urlParams.get('fbclid');
+    if (!fbc && fbclid) {
+      fbc = `fb.1.${Date.now()}.${fbclid}`;
+    }
+
     // Track Lead event via Meta Conversions API (server-side) for deduplication
     // This is non-blocking - we don't wait for it
     const metaTrackingPromise = (async () => {
@@ -83,6 +100,8 @@ const Book = () => {
             lastName: lastName,
             eventSourceUrl: window.location.href,
             eventId: eventId, // Same event_id for deduplication
+            fbc: fbc || undefined,
+            fbp: fbp || undefined,
           }),
         });
 
@@ -96,8 +115,6 @@ const Book = () => {
       }
     })();
 
-    // Capture UTM parameters from URL
-    const urlParams = new URLSearchParams(window.location.search);
     const utm_source = urlParams.get('utm_source');
     const utm_medium = urlParams.get('utm_medium');
     const utm_campaign = urlParams.get('utm_campaign');

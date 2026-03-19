@@ -2615,6 +2615,106 @@ async function initializeRoutes() {
         }
       });
 
+      // ==========================================
+      // Meta Conversions API Tracking Endpoints
+      // ==========================================
+
+      // Helper: SHA-256 hash for Meta PII fields
+      const hashForMeta = async (data: string): Promise<string> => {
+        const crypto = require("crypto");
+        return crypto.createHash("sha256").update(data).digest("hex");
+      };
+
+      // Helper: Send event to Meta CAPI
+      const sendMetaEvent = async (eventName: string, userData: any, eventData: any) => {
+        const accessToken = process.env.META_ACCESS_TOKEN;
+        const pixelId = process.env.META_PIXEL_ID;
+        if (!accessToken || !pixelId) throw new Error("META_ACCESS_TOKEN or META_PIXEL_ID not configured");
+
+        const userDataObj: any = {};
+        if (userData.email) userDataObj.em = await hashForMeta(userData.email.toLowerCase().trim());
+        if (userData.phone) userDataObj.ph = await hashForMeta(userData.phone.trim());
+        if (userData.firstName) userDataObj.fn = await hashForMeta(userData.firstName.toLowerCase().trim());
+        if (userData.lastName) userDataObj.ln = await hashForMeta(userData.lastName.toLowerCase().trim());
+        if (userData.fbc) userDataObj.fbc = userData.fbc;
+        if (userData.fbp) userDataObj.fbp = userData.fbp;
+
+        const event: any = {
+          event_name: eventName,
+          event_time: Math.floor(Date.now() / 1000),
+          action_source: "website",
+          user_data: userDataObj,
+        };
+        if (eventData.eventId) event.event_id = eventData.eventId;
+        if (eventData.eventSourceUrl) event.event_source_url = eventData.eventSourceUrl;
+
+        const response = await fetch(`https://graph.facebook.com/v21.0/${pixelId}/events`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: [event], access_token: accessToken }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Meta API error: ${errorText} (Status: ${response.status})`);
+        }
+        return await response.json();
+      };
+
+      // Track Meta Lead event
+      app.post("/api/track-meta-lead", async (req, res) => {
+        try {
+          const { email, phone, firstName, lastName, website, eventSourceUrl, eventId, fbc, fbp } = req.body;
+
+          if (!process.env.META_ACCESS_TOKEN || !process.env.META_PIXEL_ID) {
+            return res.status(500).json({ error: "Configuration error", message: "Meta API credentials not configured." });
+          }
+
+          const { normalizePhone } = require("./utils/phoneNormalization");
+          const normalizedPhone = phone ? normalizePhone(phone, 'US') : undefined;
+
+          const result = await sendMetaEvent("Lead", {
+            email, phone: normalizedPhone, firstName, lastName,
+            fbc: fbc || undefined, fbp: fbp || undefined,
+          }, {
+            eventSourceUrl: eventSourceUrl || req.headers.referer || undefined,
+            eventId,
+          });
+
+          return res.json({ success: true, data: result });
+        } catch (error: any) {
+          console.error("Error tracking Meta lead:", error);
+          return res.status(500).json({ error: "Internal server error", message: error.message });
+        }
+      });
+
+      // Track Meta Schedule event
+      app.post("/api/track-meta-schedule", async (req, res) => {
+        try {
+          const { email, phone, firstName, lastName, eventSourceUrl, eventId, fbc, fbp } = req.body;
+
+          if (!process.env.META_ACCESS_TOKEN || !process.env.META_PIXEL_ID) {
+            return res.status(500).json({ error: "Configuration error", message: "Meta API credentials not configured." });
+          }
+
+          const { normalizePhone } = require("./utils/phoneNormalization");
+          const normalizedPhone = phone ? normalizePhone(phone, 'US') : undefined;
+
+          const result = await sendMetaEvent("Schedule", {
+            email, phone: normalizedPhone, firstName, lastName,
+            fbc: fbc || undefined, fbp: fbp || undefined,
+          }, {
+            eventSourceUrl: eventSourceUrl || req.headers.referer || undefined,
+            eventId,
+          });
+
+          return res.json({ success: true, data: result });
+        } catch (error: any) {
+          console.error("Error tracking Meta schedule:", error);
+          return res.status(500).json({ error: "Internal server error", message: error.message });
+        }
+      });
+
       // Get contacts endpoint (handle both /api/contacts and /contacts paths)
       const contactsHandler = async (req: any, res: any) => {
         try {
@@ -4137,6 +4237,8 @@ export const api = functions.https.onRequest(
       "RESEND_API_KEY",
       "EMAIL_FROM_ADDRESS",
       "CALENDLY_API_TOKEN",
+      "META_ACCESS_TOKEN",
+      "META_PIXEL_ID",
     ],
     region: "us-central1",
   },

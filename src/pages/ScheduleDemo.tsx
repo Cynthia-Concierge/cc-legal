@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar } from 'lucide-react';
 
@@ -9,34 +9,37 @@ declare global {
   }
 }
 
+const GHL_BOOKING_URL = 'https://api.leadconnectorhq.com/widget/booking/XAdTLy6ZSKzcQ2VcszVh';
+
 const ScheduleDemo = () => {
   const navigate = useNavigate();
   const [appointmentScheduled, setAppointmentScheduled] = useState(false);
   const [calendarLoaded, setCalendarLoaded] = useState(false);
+  const hasTrackedBooking = useRef(false);
 
-  // Calendly URL - using iframe method which is 100% reliable
-  // background_color=ffffff sets the widget background to white
-  const calendlyUrl = 'https://calendly.com/chad-consciouscounsel/connection-call-with-chad?primary_color=7da69f&background_color=ffffff';
+  // Load GHL form embed script
+  useEffect(() => {
+    const existing = document.querySelector('script[src="https://link.msgsndr.com/js/form_embed.js"]');
+    if (!existing) {
+      const script = document.createElement('script');
+      script.src = 'https://link.msgsndr.com/js/form_embed.js';
+      script.type = 'text/javascript';
+      document.body.appendChild(script);
+    }
+  }, []);
 
   // Set body and html background to white on mount
   useEffect(() => {
-    // Store original backgrounds
     const originalBodyBackground = document.body.style.backgroundColor;
     const originalHtmlBackground = document.documentElement.style.backgroundColor;
-
-    // Force white background on both html and body
     document.body.style.backgroundColor = '#ffffff';
     document.documentElement.style.backgroundColor = '#ffffff';
-
-    // Also add to body classes to override Tailwind
     document.body.classList.add('!bg-white');
 
-    // Track calendar load time
     const loadTimer = setTimeout(() => {
       setCalendarLoaded(true);
-    }, 30000); // 30 seconds
+    }, 30000);
 
-    // Cleanup: restore original backgrounds on unmount
     return () => {
       document.body.style.backgroundColor = originalBodyBackground;
       document.documentElement.style.backgroundColor = originalHtmlBackground;
@@ -45,120 +48,86 @@ const ScheduleDemo = () => {
     };
   }, []);
 
-  // Listen for Calendly events to detect when appointment is scheduled
+  // Listen for GHL booking widget events
   useEffect(() => {
-    // Function to check if message is from Calendly
-    const isCalendlyEvent = (e: MessageEvent) => {
-      return e.origin === "https://calendly.com" &&
-             e.data?.event &&
-             e.data.event.startsWith("calendly.");
-    };
+    const handleMessage = async (e: MessageEvent) => {
+      const data = typeof e.data === 'string' ? (() => { try { return JSON.parse(e.data); } catch { return null; } })() : e.data;
+      if (!data) return;
 
-    // Event handler for Calendly messages
-    const handleCalendlyMessage = async (e: MessageEvent) => {
-      if (isCalendlyEvent(e)) {
-        // Detect when an event is scheduled
-        if (e.data.event === "calendly.event_scheduled") {
-          console.log('[ScheduleDemo] Appointment scheduled:', e.data.payload);
-          setAppointmentScheduled(true);
+      const isBookingEvent =
+        data.action === 'set-sticky-contacts' ||
+        (typeof e.data === 'string' && e.data.includes('booked')) ||
+        (data.type === 'booked') ||
+        (data.event === 'booked');
 
-          // Track "Schedule" event in Meta Pixel when appointment is confirmed
-          const eventId = `schedule_${crypto.randomUUID()}`;
-          try {
-            if (typeof window !== 'undefined' && window.fbq) {
-              window.fbq('track', 'Schedule', {
-                content_name: 'Demo Scheduled',
-                content_category: 'Calendly Appointment Confirmed',
-                value: 0,
-                currency: 'USD'
-              }, {
-                eventID: eventId
-              });
-              console.log('[ScheduleDemo] Schedule event tracked with ID:', eventId);
-            }
-          } catch (error) {
-            console.error('[ScheduleDemo] Error tracking Schedule event:', error);
-          }
+      if (!isBookingEvent || hasTrackedBooking.current) return;
+      hasTrackedBooking.current = true;
 
-          // Update book_a_call_funnel record with booking information
-          try {
-            // Get email from form data stored in sessionStorage
-            const formDataStr = sessionStorage.getItem('book_call_form_data');
-            let email = null;
-            
-            if (formDataStr) {
-              try {
-                const formData = JSON.parse(formDataStr);
-                email = formData.email;
-              } catch (e) {
-                console.warn('[ScheduleDemo] Could not parse form data from sessionStorage');
-              }
-            }
+      console.log('[ScheduleDemo] GHL appointment booked:', data);
+      setAppointmentScheduled(true);
 
-            // Also try to get email from Calendly payload
-            if (!email && e.data.payload?.invitee?.email) {
-              email = e.data.payload.invitee.email;
-            }
-
-            if (email) {
-              const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : '');
-              const calendlyEventUri = e.data.payload?.event?.uri || null;
-
-              const response = await fetch(`${API_BASE_URL}/api/book-call-funnel/update-booking`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  email: email,
-                  calendly_event_uri: calendlyEventUri,
-                  meta_schedule_event_id: eventId,
-                }),
-              });
-
-              if (!response.ok) {
-                const errorText = await response.text();
-                console.error('[ScheduleDemo] Failed to update booking in book_a_call_funnel:', errorText);
-              } else {
-                const result = await response.json();
-                console.log('[ScheduleDemo] Booking updated in book_a_call_funnel:', result);
-              }
-            } else {
-              console.warn('[ScheduleDemo] No email found to update book_a_call_funnel record');
-            }
-          } catch (error) {
-            console.error('[ScheduleDemo] Error updating booking in book_a_call_funnel:', error);
-            // Don't block navigation if update fails
-          }
-
-          // Redirect to thank you page after 2 seconds
-          setTimeout(() => {
-            navigate('/book-thank-you');
-          }, 2000);
+      const eventId = `schedule_${crypto.randomUUID()}`;
+      try {
+        if (typeof window !== 'undefined' && window.fbq) {
+          window.fbq('track', 'Schedule', {
+            content_name: 'Demo Scheduled',
+            content_category: 'GHL Appointment Confirmed',
+            value: 0,
+            currency: 'USD'
+          }, {
+            eventID: eventId
+          });
+          console.log('[ScheduleDemo] Schedule event tracked with ID:', eventId);
         }
+      } catch (error) {
+        console.error('[ScheduleDemo] Error tracking Schedule event:', error);
       }
+
+      // Update booking record
+      try {
+        const formDataStr = sessionStorage.getItem('book_call_form_data');
+        let email: string | null = null;
+        if (formDataStr) {
+          try {
+            email = JSON.parse(formDataStr).email;
+          } catch (e) {
+            console.warn('[ScheduleDemo] Could not parse form data');
+          }
+        }
+        if (!email && data.data?.email) email = data.data.email;
+
+        if (email) {
+          const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : '');
+          fetch(`${API_BASE_URL}/api/book-call-funnel/update-booking`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, meta_schedule_event_id: eventId }),
+          }).catch(err => console.error('[ScheduleDemo] Error updating booking:', err));
+        }
+      } catch (error) {
+        console.error('[ScheduleDemo] Error processing booking:', error);
+      }
+
+      setTimeout(() => {
+        navigate('/book-thank-you');
+      }, 2000);
     };
 
-    // Add event listener
-    window.addEventListener("message", handleCalendlyMessage);
-
-    // Cleanup
+    window.addEventListener("message", handleMessage);
     return () => {
-      window.removeEventListener("message", handleCalendlyMessage);
+      window.removeEventListener("message", handleMessage);
     };
   }, [navigate]);
 
   return (
     <div className="bg-white min-h-screen w-full" style={{ backgroundColor: '#ffffff' }}>
       <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
-        {/* Main Title */}
         <div className="text-center mb-8 md:mb-12">
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-tight mb-4">
             Step 2: Schedule a Demo
           </h1>
         </div>
 
-        {/* Instructions Banner - Similar to guarantee banner */}
         <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-2xl p-6 mb-8 md:mb-12 text-center shadow-sm">
           <p className="text-lg md:text-xl font-bold text-slate-900 mb-2">
             Please allow 30 seconds for the calendar to load.
@@ -166,9 +135,9 @@ const ScheduleDemo = () => {
           {!calendarLoaded && (
             <p className="text-sm md:text-base text-slate-700">
               If the calendar has still not loaded after 30 seconds,{' '}
-              <a 
-                href={calendlyUrl} 
-                target="_blank" 
+              <a
+                href="https://api.leadconnectorhq.com/widget/bookings/chadconnectioncall"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="text-emerald-600 hover:text-emerald-700 underline font-semibold"
               >
@@ -178,7 +147,6 @@ const ScheduleDemo = () => {
           )}
         </div>
 
-        {/* Calendly Widget */}
         <div className="relative w-full bg-white" style={{ backgroundColor: '#ffffff' }}>
           {appointmentScheduled && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/95 z-30 backdrop-blur-sm">
@@ -187,7 +155,7 @@ const ScheduleDemo = () => {
                   <Calendar size={32} />
                 </div>
                 <h3 className="text-xl font-semibold text-slate-900 mb-2">
-                  Appointment Scheduled! 🎉
+                  Appointment Scheduled!
                 </h3>
                 <p className="text-slate-600 mb-4">
                   Redirecting you to thank you page...
@@ -196,17 +164,14 @@ const ScheduleDemo = () => {
               </div>
             </div>
           )}
-          
-          {/* Use iframe - most reliable method, works 100% of the time */}
+
           <iframe
-            src={calendlyUrl}
+            src={GHL_BOOKING_URL}
             width="100%"
-            height="1000"
-            frameBorder="0"
-            className="w-full border-0"
+            style={{ width: '100%', border: 'none', overflow: 'hidden', display: 'block', minHeight: '1000px', backgroundColor: '#ffffff' }}
+            scrolling="no"
             title="Schedule a demo"
-            allow="camera; microphone; geolocation"
-            style={{ display: 'block', minHeight: '1000px', backgroundColor: '#ffffff' }}
+            id="XAdTLy6ZSKzcQ2VcszVh_schedule"
             onLoad={() => setCalendarLoaded(true)}
           />
         </div>
@@ -216,4 +181,3 @@ const ScheduleDemo = () => {
 };
 
 export default ScheduleDemo;
-

@@ -46,6 +46,7 @@ const Index = () => {
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [monthlyPlan, setMonthlyPlan] = useState<PricingPlan | null>(null);
   const [isLoadingPricing, setIsLoadingPricing] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Capture UTM parameters from URL for ad attribution
   const [utmParams] = useState(() => ({
@@ -139,10 +140,38 @@ const Index = () => {
     consentSms: boolean;
     consentEmail: boolean;
   }) => {
+    if (isSubmitting) return; // Prevent double-submit
+    setIsSubmitting(true);
+
     // Store email in sessionStorage for autofill in onboarding
     if (formData.email) {
       sessionStorage.setItem('wellness_form_email', formData.email.trim().toLowerCase());
     }
+
+    // Capture fbc/fbp cookies for Meta CAPI attribution
+    const getCookie = (name: string): string | null => {
+      const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+      return match ? decodeURIComponent(match[1]) : null;
+    };
+
+    let fbc = getCookie('_fbc');
+    const fbp = getCookie('_fbp');
+
+    // If _fbc cookie doesn't exist but fbclid is in URL, construct fbc value
+    const urlParams = new URLSearchParams(window.location.search);
+    const fbclid = urlParams.get('fbclid');
+    if (!fbc && fbclid) {
+      fbc = `fb.1.${Date.now()}.${fbclid}`;
+    }
+
+    // Persist full form data + fbc/fbp to sessionStorage for ThankYou page tracking
+    sessionStorage.setItem('cc_form_data', JSON.stringify({
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      fbc: fbc || null,
+      fbp: fbp || null,
+    }));
 
     // Use Instagram handle as-is (no URL normalization)
     const instagramHandle = formData.instagram_handle.trim();
@@ -151,133 +180,68 @@ const Index = () => {
     const eventId = `lead_${crypto.randomUUID()}`;
 
     // Capture UTM parameters from URL
-    const urlParams = new URLSearchParams(window.location.search);
     const utm_source = urlParams.get('utm_source');
     const utm_medium = urlParams.get('utm_medium');
     const utm_campaign = urlParams.get('utm_campaign');
 
-    try {
-      const API_BASE_URL =
-        import.meta.env.VITE_API_URL ||
-        (import.meta.env.DEV ? "" : "");
-
-      // Save to Supabase contacts table (primary action - must succeed)
-      try {
-        console.log("Attempting to save contact to Supabase...", {
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          instagram_handle: instagramHandle,
-          utm_source,
-          utm_medium,
-          utm_campaign,
-          apiUrl: `${API_BASE_URL}/api/save-contact`
-        });
-
-        const supabaseResponse = await fetch(`${API_BASE_URL}/api/save-contact`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone,
-            instagram_handle: instagramHandle,
-            source: 'wellness',
-            utm_source: utm_source || null,
-            utm_medium: utm_medium || null,
-            utm_campaign: utm_campaign || null,
-            utm_content: urlParams.get('utm_content') || null,
-            utm_term: urlParams.get('utm_term') || null,
-          }),
-        });
-
-        const responseText = await supabaseResponse.text();
-        console.log("Supabase response status:", supabaseResponse.status);
-        console.log("Supabase response:", responseText);
-
-        if (!supabaseResponse.ok) {
-          let errorData: any = {};
-          try {
-            errorData = JSON.parse(responseText);
-          } catch (e) {
-            errorData = { message: responseText || "Unknown error occurred" };
-          }
-          console.error("Failed to save contact to Supabase:", errorData);
-          console.error("Error details:", {
-            status: supabaseResponse.status,
-            message: errorData.message,
-            code: errorData.code,
-            details: errorData.details,
-            hint: errorData.hint,
-          });
-          // Still continue to show thank you page, but log the error
-        } else {
-          const result = JSON.parse(responseText);
-          console.log("Contact saved to Supabase successfully:", result);
-
-          // Log Instantly.ai result if available
-          if (result.instantly) {
-            console.log("Lead added to Instantly.ai successfully:", result.instantly);
-          } else if (result.instantlyError) {
-            console.warn("Instantly.ai error (non-blocking):", result.instantlyError);
-          }
-        }
-      } catch (supabaseError) {
-        console.error("Error saving contact to Supabase:", supabaseError);
-        // Continue even if Supabase fails - don't block the user experience
-      }
-
-      // Note: Instantly.ai integration is now handled server-side in /api/save-contact
-      // The lead is automatically added to the Instantly.ai campaign/list when saved to Supabase
-
-
-      // Track Lead event via Meta Conversions API (server-side)
-      try {
-        const metaResponse = await fetch(`${API_BASE_URL}/api/track-meta-lead`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: formData.email,
-            phone: formData.phone,
-            firstName: formData.name?.split(" ")[0] || "",
-            lastName: formData.name?.split(" ").slice(1).join(" ") || "",
-            website: instagramHandle,
-            eventSourceUrl: window.location.href,
-            eventId: eventId, // Send event_id to backend for deduplication
-          }),
-        });
-
-        if (!metaResponse.ok) {
-          console.error("Failed to track lead in Meta Conversions API");
-        } else {
-          console.log("Lead tracked in Meta Conversions API successfully");
-        }
-      } catch (metaError) {
-        console.error("Error tracking lead in Meta:", metaError);
-        // Continue even if Meta tracking fails
-      }
-
-      // Track Lead event immediately on form submission (client-side pixel)
-      // Use the same event_id for deduplication
-      if (typeof window !== 'undefined' && window.fbq) {
-        window.fbq('track', 'Lead', {
-          content_name: 'Legal Documents Form Submission',
-          content_category: 'Lead Generation'
-        }, {
-          eventID: eventId // Pass event_id to Pixel for deduplication
-        });
-      }
-    } catch (error) {
-      console.error("Error submitting form:", error);
-      // Continue to show thank you page even if services fail
+    // Fire client-side pixel immediately (instant, no network wait)
+    if (typeof window !== 'undefined' && window.fbq) {
+      window.fbq('track', 'Lead', {
+        content_name: 'Legal Documents Form Submission',
+        content_category: 'Lead Generation'
+      }, {
+        eventID: eventId
+      });
     }
 
-    // Go straight to thank you page (no onboarding)
+    const API_BASE_URL =
+      import.meta.env.VITE_API_URL ||
+      (import.meta.env.DEV ? "" : "");
+
+    // Navigate to thank you page immediately — don't wait for API calls
     navigate('/thank-you');
+
+    // Fire all API calls in background (non-blocking)
+    // Save contact to Supabase
+    fetch(`${API_BASE_URL}/api/save-contact`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        instagram_handle: instagramHandle,
+        source: 'wellness',
+        utm_source: utm_source || null,
+        utm_medium: utm_medium || null,
+        utm_campaign: utm_campaign || null,
+        utm_content: urlParams.get('utm_content') || null,
+        utm_term: urlParams.get('utm_term') || null,
+      }),
+    }).then(r => {
+      if (!r.ok) console.error("Failed to save contact:", r.status);
+      else console.log("Contact saved successfully");
+    }).catch(err => console.error("Error saving contact:", err));
+
+    // Track Lead event via Meta CAPI (server-side)
+    fetch(`${API_BASE_URL}/api/track-meta-lead`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: formData.email,
+        phone: formData.phone,
+        firstName: formData.name?.split(" ")[0] || "",
+        lastName: formData.name?.split(" ").slice(1).join(" ") || "",
+        website: instagramHandle,
+        eventSourceUrl: window.location.href,
+        eventId: eventId,
+        fbc: fbc || undefined,
+        fbp: fbp || undefined,
+      }),
+    }).then(r => {
+      if (!r.ok) console.error("Failed to track lead in Meta CAPI");
+      else console.log("Lead tracked in Meta CAPI successfully");
+    }).catch(err => console.error("Error tracking lead in Meta:", err));
   };
 
   // Handle scroll to form
@@ -372,7 +336,7 @@ const Index = () => {
   // Main landing page with new design
   return (
     <div className="min-h-screen bg-white">
-      <Hero onFormSubmit={handleFormSubmit} />
+      <Hero onFormSubmit={handleFormSubmit} isSubmitting={isSubmitting} />
       <Features />
       <DashboardShowcase />
       <ValueStack onGetDocumentsClick={handleScrollToForm} />

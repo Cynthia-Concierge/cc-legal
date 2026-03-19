@@ -11,6 +11,7 @@ interface LeadFormProps {
     consentSms: boolean;
     consentEmail: boolean;
   }) => void;
+  isSubmitting?: boolean;
 }
 
 // Email validation function
@@ -18,7 +19,7 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
+const LeadForm: React.FC<LeadFormProps> = ({ onSubmit, isSubmitting = false }) => {
   const [phone, setPhone] = useState("");
   const [emailError, setEmailError] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -163,9 +164,18 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSubmit }) => {
             )}
           </div>
 
-          <button type="submit" className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg shadow-emerald-500/30 transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 group mt-4">
-            <Zap className="w-5 h-5 fill-white group-hover:scale-110 transition-transform" />
-            <span className="tracking-wide">Yes! Give Me The Documents!</span>
+          <button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg shadow-emerald-500/30 transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 group mt-4 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none">
+            {isSubmitting ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="tracking-wide">Sending...</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-5 h-5 fill-white group-hover:scale-110 transition-transform" />
+                <span className="tracking-wide">Yes! Give Me The Documents!</span>
+              </>
+            )}
           </button>
 
           <div className="flex items-center justify-center gap-2 text-[10px] text-slate-400 mt-4 font-medium uppercase tracking-wider">

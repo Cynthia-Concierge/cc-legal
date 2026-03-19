@@ -58,9 +58,10 @@ interface HeroProps {
     consentSms: boolean;
     consentEmail: boolean;
   }) => void;
+  isSubmitting?: boolean;
 }
 
-const Hero: React.FC<HeroProps> = ({ onFormSubmit }) => {
+const Hero: React.FC<HeroProps> = ({ onFormSubmit, isSubmitting }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -178,7 +179,7 @@ const Hero: React.FC<HeroProps> = ({ onFormSubmit }) => {
 
           {/* Right Form */}
           <div className="w-full lg:w-2/5 lg:sticky lg:top-8 z-20">
-            <LeadForm onSubmit={onFormSubmit} />
+            <LeadForm onSubmit={onFormSubmit} isSubmitting={isSubmitting} />
           </div>
 
         </div>

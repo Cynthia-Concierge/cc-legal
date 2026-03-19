@@ -23,6 +23,8 @@ export class MetaService {
       firstName?: string;
       lastName?: string;
       website?: string;
+      fbc?: string;
+      fbp?: string;
     },
     eventData?: {
       eventName?: string;
@@ -30,6 +32,56 @@ export class MetaService {
       eventSourceUrl?: string;
       actionSource?: string;
       eventId?: string; // Required for deduplication with Pixel events
+    }
+  ): Promise<any> {
+    return this.sendEvent("Lead", userData, eventData);
+  }
+
+  /**
+   * Send a Schedule event to Meta Conversions API
+   */
+  async sendScheduleEvent(
+    userData: {
+      email?: string;
+      phone?: string;
+      firstName?: string;
+      lastName?: string;
+      fbc?: string;
+      fbp?: string;
+    },
+    eventData?: {
+      eventTime?: number;
+      eventSourceUrl?: string;
+      actionSource?: string;
+      eventId?: string;
+    }
+  ): Promise<any> {
+    return this.sendEvent("Schedule", userData, {
+      ...eventData,
+      eventName: "Schedule",
+    });
+  }
+
+  /**
+   * Internal: send any event type to Meta CAPI
+   */
+  private async sendEvent(
+    defaultEventName: string,
+    userData: {
+      email?: string;
+      phone?: string;
+      firstName?: string;
+      lastName?: string;
+      website?: string;
+      fbc?: string;
+      fbp?: string;
+    },
+    eventData?: {
+      eventName?: string;
+      eventTime?: number;
+      eventSourceUrl?: string;
+      actionSource?: string;
+      eventId?: string;
     }
   ): Promise<any> {
     try {
@@ -49,10 +101,13 @@ export class MetaService {
       if (hashedPhone) userDataObj.ph = hashedPhone;
       if (userData.firstName) userDataObj.fn = await this.hashData(userData.firstName.toLowerCase().trim());
       if (userData.lastName) userDataObj.ln = await this.hashData(userData.lastName.toLowerCase().trim());
+      // fbc and fbp are NOT hashed — they're click/browser IDs, not PII
+      if (userData.fbc) userDataObj.fbc = userData.fbc;
+      if (userData.fbp) userDataObj.fbp = userData.fbp;
 
       // Prepare event data
       const event: any = {
-        event_name: eventData?.eventName || "Lead",
+        event_name: eventData?.eventName || defaultEventName,
         event_time: eventData?.eventTime || Math.floor(Date.now() / 1000),
         action_source: eventData?.actionSource || "website",
         user_data: userDataObj,
@@ -101,7 +156,7 @@ export class MetaService {
       const result = await response.json();
       return result;
     } catch (error: any) {
-      console.error("Error sending lead event to Meta:", error);
+      console.error(`Error sending ${defaultEventName} event to Meta:`, error);
       throw error;
     }
   }
