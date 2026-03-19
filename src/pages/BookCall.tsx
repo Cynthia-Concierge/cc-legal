@@ -180,42 +180,42 @@ const BookCall = () => {
   }, [navigate]);
 
   return (
-    <div className="bg-white min-h-screen w-full" style={{ backgroundColor: '#ffffff' }}>
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 lg:p-8">
-        <div className="container mx-auto px-4">
-          <h1 className="text-2xl lg:text-3xl font-bold mb-2 text-center">Schedule Your Free Legal Protection Call</h1>
-          <p className="text-emerald-50 text-center">Choose a time that works for you. No pressure - 15 minutes - See if this is a fit</p>
+    <div className="bg-slate-50 min-h-screen w-full">
+      <div className="max-w-2xl mx-auto px-4 py-8 md:py-12">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-2">Schedule Your Free Call</h1>
+          <p className="text-slate-600">No pressure &middot; 15 minutes &middot; See if this is a fit</p>
         </div>
-      </div>
 
-      {/* GHL Booking Widget */}
-      <div className="relative w-full bg-white" style={{ backgroundColor: '#ffffff' }}>
-        {appointmentScheduled && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/95 z-30 backdrop-blur-sm">
-            <div className="text-center p-6">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Calendar size={32} />
+        {/* GHL Booking Widget */}
+        <div className="relative bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+          {appointmentScheduled && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/95 z-30 backdrop-blur-sm rounded-2xl">
+              <div className="text-center p-6">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Calendar size={32} />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                  Appointment Scheduled!
+                </h3>
+                <p className="text-slate-600 mb-4">
+                  Redirecting you to thank you page...
+                </p>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600 mx-auto"></div>
               </div>
-              <h3 className="text-xl font-semibold text-slate-900 mb-2">
-                Appointment Scheduled!
-              </h3>
-              <p className="text-slate-600 mb-4">
-                Redirecting you to thank you page...
-              </p>
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600 mx-auto"></div>
             </div>
-          </div>
-        )}
+          )}
 
-        <iframe
-          src={GHL_BOOKING_URL}
-          width="100%"
-          style={{ width: '100%', border: 'none', overflow: 'hidden', display: 'block', minHeight: '1000px', backgroundColor: '#ffffff' }}
-          scrolling="no"
-          title="Schedule a call"
-          id="XAdTLy6ZSKzcQ2VcszVh_1773945607822"
-        />
+          <iframe
+            src={GHL_BOOKING_URL}
+            width="100%"
+            style={{ width: '100%', border: 'none', overflow: 'hidden', display: 'block', minHeight: '700px', backgroundColor: '#ffffff' }}
+            scrolling="no"
+            title="Schedule a call"
+            id="XAdTLy6ZSKzcQ2VcszVh_1773945607822"
+          />
+        </div>
       </div>
     </div>
   );
