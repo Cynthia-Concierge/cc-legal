@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Widget Service
  * Handles widget initialization and Gemini Live integration

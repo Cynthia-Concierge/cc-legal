@@ -1268,7 +1268,7 @@ app.post("/api/documents/onboarding-package", async (req, res) => {
     // Build templates array from recommended IDs
     const templates = recommendedDocIds
       .map(docId => {
-        const mapping = DOCUMENT_TEMPLATE_MAP[docId];
+        const mapping = DOCUMENT_TEMPLATE_MAP[docId as string];
         if (!mapping) {
           console.warn(`[Onboarding Package] No mapping found for document ID: ${docId}`);
           return null;

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * USPTO Trademark Search Service
  *

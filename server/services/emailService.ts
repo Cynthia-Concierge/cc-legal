@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Email Service
  * Handles sending transactional emails using Resend

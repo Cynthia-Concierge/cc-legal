@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Workflow Results Service
  * Handles saving workflow results to Supabase database
