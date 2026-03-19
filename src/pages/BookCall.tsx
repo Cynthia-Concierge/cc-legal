@@ -73,104 +73,21 @@ const BookCall = () => {
       console.log('[BookCall] GHL appointment booked:', data);
       setAppointmentScheduled(true);
 
-      // Track "Schedule" event in Meta Pixel (client-side)
-      const eventId = `schedule_${crypto.randomUUID()}`;
-      try {
-        if (typeof window !== 'undefined' && window.fbq) {
-          window.fbq('track', 'Schedule', {
-            content_name: 'Legal Protection Call Scheduled',
-            content_category: 'GHL Appointment Confirmed',
-            value: 0,
-            currency: 'USD'
-          }, {
-            eventID: eventId
-          });
-          console.log('[BookCall] Schedule event tracked with ID:', eventId);
-        }
-      } catch (error) {
-        console.error('[BookCall] Error tracking Schedule event:', error);
+      // Save any GHL contact data for the thank you page tracking
+      const ghlContact: Record<string, string> = {};
+      if (data.data?.email) ghlContact.email = data.data.email;
+      if (data.data?.phone) ghlContact.phone = data.data.phone;
+      if (data.data?.first_name) ghlContact.firstName = data.data.first_name;
+      if (data.data?.last_name) ghlContact.lastName = data.data.last_name;
+      if (data.data?.name) ghlContact.name = data.data.name;
+      if (Object.keys(ghlContact).length > 0) {
+        sessionStorage.setItem('ghl_booking_contact', JSON.stringify(ghlContact));
       }
 
-      // Track Schedule event via Meta CAPI (server-side)
-      try {
-        const formDataStr = sessionStorage.getItem('book_call_form_data');
-        let email: string | null = null;
-        let phone: string | null = null;
-        let name: string | null = null;
-
-        if (formDataStr) {
-          try {
-            const formData = JSON.parse(formDataStr);
-            email = formData.email;
-            phone = formData.phone;
-            name = formData.name;
-          } catch (e) {
-            console.warn('[BookCall] Could not parse form data from sessionStorage');
-          }
-        }
-
-        // Try GHL sticky contacts data for email
-        if (!email && data.data?.email) {
-          email = data.data.email;
-        }
-
-        if (email) {
-          const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : '');
-
-          // Update booking in database
-          fetch(`${API_BASE_URL}/api/book-call-funnel/update-booking`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email,
-              meta_schedule_event_id: eventId,
-            }),
-          }).then(r => {
-            if (!r.ok) console.error('[BookCall] Failed to update booking');
-            else console.log('[BookCall] Booking updated successfully');
-          }).catch(err => console.error('[BookCall] Error updating booking:', err));
-
-          // Track Schedule event via Meta CAPI
-          if (name && phone) {
-            const nameParts = name.split(' ');
-            const firstName = nameParts[0] || '';
-            const lastName = nameParts.slice(1).join(' ') || '';
-
-            // Read fbc/fbp cookies for attribution
-            const getCookie = (n: string): string | null => {
-              const match = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
-              return match ? decodeURIComponent(match[1]) : null;
-            };
-            const fbc = getCookie('_fbc');
-            const fbp = getCookie('_fbp');
-
-            fetch(`${API_BASE_URL}/api/track-meta-schedule`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email,
-                phone,
-                firstName,
-                lastName,
-                eventSourceUrl: window.location.href,
-                eventId,
-                fbc: fbc || undefined,
-                fbp: fbp || undefined,
-              }),
-            }).then(r => {
-              if (!r.ok) console.error('[BookCall] Failed to track schedule in Meta CAPI');
-              else console.log('[BookCall] Schedule tracked in Meta CAPI successfully');
-            }).catch(err => console.error('[BookCall] Error tracking schedule in Meta CAPI:', err));
-          }
-        }
-      } catch (error) {
-        console.error('[BookCall] Error processing booking:', error);
-      }
-
-      // Redirect to thank you page after 2 seconds
+      // Redirect to thank you page (tracking fires there)
       setTimeout(() => {
         navigate('/book-thank-you');
-      }, 2000);
+      }, 1500);
     };
 
     window.addEventListener("message", handleMessage);
